@@ -1,7 +1,7 @@
 {
   "name": "comprende",
   "owner": {
-    "name": "YOUR_NAME"
+    "name": "Abdulrahman Masoud"
   },
   "description": "Proof of understanding for AI-written code: learn while Claude builds, and make sure every developer owns the code they ship.",
   "plugins": [

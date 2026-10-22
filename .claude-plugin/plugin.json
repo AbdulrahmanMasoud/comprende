@@ -4,10 +4,11 @@
   "version": "0.1.0",
   "description": "Proof of understanding for AI-written code. Claude explains the code it writes, briefly and only where it matters, and an optional ownership gate makes sure the developer who ships a change actually understands it.",
   "author": {
-    "name": "YOUR_NAME"
+    "name": "Abdulrahman Masoud",
+    "url": "https://github.com/AbdulrahmanMasoud"
   },
-  "homepage": "https://github.com/YOUR_GITHUB_USER/comprende",
-  "repository": "https://github.com/YOUR_GITHUB_USER/comprende",
+  "homepage": "https://github.com/AbdulrahmanMasoud/comprende",
+  "repository": "https://github.com/AbdulrahmanMasoud/comprende",
   "license": "MIT",
   "keywords": ["proof-of-understanding", "ai-code", "vibe-coding", "learning", "code-explanation", "onboarding", "code-review", "ownership", "teams"]
 }

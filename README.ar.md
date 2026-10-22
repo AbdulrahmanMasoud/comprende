@@ -15,7 +15,7 @@ Claude بيشرح الكود اللي بيكتبه، باختصار وفي ال�
 جوه Claude Code:
 
 ```
-/plugin marketplace add YOUR_GITHUB_USER/comprende
+/plugin marketplace add AbdulrahmanMasoud/comprende
 /plugin install comprende@comprende
 ```
 

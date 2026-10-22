@@ -24,7 +24,7 @@ AI writes code fast. The risk is a developer who asks for a feature, clicks appr
 In Claude Code:
 
 ```
-/plugin marketplace add YOUR_GITHUB_USER/comprende
+/plugin marketplace add AbdulrahmanMasoud/comprende
 /plugin install comprende@comprende
 ```
 
@@ -141,6 +141,7 @@ hooks/hooks.json      SessionStart (auto-setup) and PreToolUse (block unverified
 src/                  TypeScript source: gate.ts, store.ts, server.ts, learning.ts
 dist/                 the built, dependency-free files the plugin runs (committed)
 test/                 node:test suite against real git repos
+CLAUDE.md             notes for Claude Code when working on this repo (incl. an end-to-end test plan)
 ```
 
 ## Development
