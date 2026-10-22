@@ -1,0 +1,13 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "explain-as-you-build",
+  "version": "0.1.0",
+  "description": "Claude explains the code it writes, briefly and only where it matters, and an optional ownership gate makes sure the developer who ships a change actually understands it.",
+  "author": {
+    "name": "YOUR_NAME"
+  },
+  "homepage": "https://github.com/YOUR_GITHUB_USER/explain-as-you-build",
+  "repository": "https://github.com/YOUR_GITHUB_USER/explain-as-you-build",
+  "license": "MIT",
+  "keywords": ["learning", "code-explanation", "onboarding", "code-review", "ownership", "teams"]
+}

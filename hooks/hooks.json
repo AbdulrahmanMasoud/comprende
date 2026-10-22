@@ -1,0 +1,28 @@
+{
+  "description": "Ownership gate: in repos that use it, reminds Claude to run the ownership check, installs the local pre-push hook, and stops Claude from pushing a change nobody verified. Does nothing in other repos.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/explain-as-you-build/scripts/gate.py\" session-start",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/explain-as-you-build/scripts/gate.py\" claude-hook --from-plugin",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

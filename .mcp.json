@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "explain-as-you-build": {
+      "command": "uvx",
+      "args": ["--from", "${CLAUDE_PLUGIN_ROOT}/mcp", "explain-as-you-build-mcp"]
+    }
+  }
+}
