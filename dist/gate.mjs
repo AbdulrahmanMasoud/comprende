@@ -58,7 +58,7 @@ var DEFAULT_CONFIG = {
 };
 var GATE_FILES = [CONFIG_PATH, GATE_REL, ".github/workflows/ownership-check.yml", ".claude/settings.json", ".github/CODEOWNERS"];
 var PLUMBING_RE = /^\.learning\/(checks\/[^/]+\.md|decisions\/[^/]+\.md|map\.md|[^/]+\.local\.md)$/;
-var CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me" / "\u0627\u062E\u062A\u0628\u0631\u0646\u064A"), then commit the report.';
+var CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
 var GateError = class extends Error {
 };
 var SELF = (() => {

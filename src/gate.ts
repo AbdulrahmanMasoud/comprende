@@ -77,7 +77,8 @@ export const GATE_FILES = [CONFIG_PATH, GATE_REL, ".github/workflows/ownership-c
 // Exact shapes only (no subfolders, markdown only), so nothing executable can hide here.
 const PLUMBING_RE = /^\.learning\/(checks\/[^/]+\.md|decisions\/[^/]+\.md|map\.md|[^/]+\.local\.md)$/;
 
-const CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me" / "اختبرني"), then commit the report.';
+// English only: terminals draw Arabic letters in reverse order. The skill still understands "اختبرني".
+const CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
 
 export class GateError extends Error {}
 

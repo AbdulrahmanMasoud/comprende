@@ -25,6 +25,7 @@
   - The plugin's PreToolUse hook exits 0 when `node` is missing. So does the project-level hook that `install` writes into `.claude/settings.json`; repos installed earlier keep their old command until it's edited. Neither can block Bash by accident.
   - README: what happens on Windows with and without Git Bash.
 - **Fixes:**
+  - The gate's hint says `("check me")` without the Arabic phrase, which terminals draw with its letters reversed. In conversation the skill still understands "اختبرني".
   - `status` and `save` say "1 changed line" and "1 file fingerprinted" instead of "1 changed lines" and "1 files fingerprinted".
   - When the Claude hook blocks a push and a valid report is saved but not committed, it now says so: commit it first, then push as a separate command. The hook checks the branch before a command runs, so `git commit … && git push` in one command used to fail with a confusing "No ownership report". The protocol now tells Claude to push separately.
   - **Saving without the MCP tool** has one documented route. Write the JSON to `.learning/report.local.json` and run `gate.mjs save --input .learning/report.local.json`. Never use a heredoc, which Claude Code's shell checks can block, and never any other file.
