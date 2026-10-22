@@ -2,7 +2,7 @@
 // dist/server.mjs) only through their command lines, against real git repos:
 // a bare "GitHub" remote, a developer clone, CI-style clones.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -158,3 +158,34 @@ export function throwsGate(fn, re) {
   }
   throw new Error(`expected a GateError${re ? ` matching ${re}` : ""}`);
 }
+
+// ---------------------------------------------------------------- used by several topic files
+
+/** A file in a test repo, as text. */
+export const read = (root, rel) => readFileSync(join(root, rel), "utf8");
+
+/** The scratch input for `save --input`. */
+export const INPUT = ".learning/report.local.json";
+
+/** A command's trimmed stdout. */
+export const out = (r) => r.stdout.trim();
+
+/** Change main's config, push it, and merge main into the feature branch. */
+export const setBaseConfig = (dev, mutate) => {
+  git(dev, "checkout", "-q", "main");
+  const p = join(dev, ".learning/config.json");
+  const cfg = JSON.parse(readFileSync(p, "utf8"));
+  mutate(cfg.ownership_check);
+  writeFileSync(p, JSON.stringify(cfg, null, 2));
+  commitAll(dev, "config change on main");
+  git(dev, "push", "-q", "origin", "main");
+  git(dev, "checkout", "-q", "feature/rate-limit");
+  git(dev, "merge", "-q", "--no-edit", "main");
+};
+
+/** The plugin's copy of the gate (dist/gate.mjs). */
+export const plugin = (cwd, args, { input = "", env, timeout = 60_000 } = {}) =>
+  sh(cwd, NODE, [GATE, ...args], { check: false, input, env: env ?? ENV, timeout });
+
+/** The PreToolUse payload for Claude running `git push` in `cwd`. */
+export const pushEvent = (cwd) => JSON.stringify({ tool_name: "Bash", tool_input: { command: "git push" }, cwd });

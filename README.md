@@ -188,11 +188,14 @@ claude plugin validate ./.claude-plugin/plugin.json
 
 `dist/` is committed, because that's what the plugin runs. CI fails if `dist/` doesn't match a fresh build of `src/`, so always run `npm run build` before committing.
 
-The tests cover:
-- real pushes through the hooks
-- a fresh CI-style clone at the PR head
-- the workflow's actual shell step
-- a regression test for every finding from five independent reviews, including one that compared this TypeScript port line by line against the original implementation
+The tests run against real git repos and are grouped by topic, one file each in `test/`:
+- `install`, `config`, `checks`, `report`, `small-changes`
+- `fingerprints`: which files a change touches, and when a verified file still counts as verified
+- `push-detection`, `hooks`, `security`, `ci`
+- `store` and `mcp`, for the memory server
+- `consistency`: manifests, built copies, docs and the demo agree
+
+They include real pushes through the hooks, a fresh CI-style clone at the PR head, the workflow's actual shell step, and a regression test for every bug found so far.
 
 To try a local copy: `claude plugin marketplace add ./` from the repo root.
 

@@ -1,14 +1,16 @@
-// End-to-end: start the real server as a subprocess and talk MCP to it over
-// stdio, exactly like Claude Code or Claude Desktop would.
+// The MCP server end to end: a real stdio session, and the gate tools it exposes.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { callTool, ENV, git, NODE, out, REPO_GATE, SERVER, setup, tmp, write } from "./helpers.mjs";
 
-import { ENV, NODE, SERVER, git, tmp } from "./helpers.mjs";
+/** Node version of impl.code_version_stub / code_write_marker. */
+const codeVersionStub = (version, marker) =>
+  `// ownership-gate-version: ${version}\n` +
+  `import fs from 'node:fs';\nfs.writeFileSync(${JSON.stringify(marker)}, 'x');\n`;
 
 const EXPECTED_TOOLS = new Set([
   "learning_context", "record_topic", "record_checkpoint", "set_preference",
@@ -73,9 +75,21 @@ async function sessionFlow(home, repo) {
   }
 }
 
-test("full session over stdio", async (t) => {
+test("a full MCP session over stdio", async (t) => {
   const tmpPath = tmp(t);
   const repo = join(tmpPath, "repo");
   mkdirSync(repo);
   await sessionFlow(join(tmpPath, "home"), repo);
+});
+
+// The MCP server never executes the repo's own
+//    gate script — a cloned repo could ship anything there — and it says when versions differ.
+test("the MCP server never runs the repo's gate copy and flags a version difference", (t) => {
+  const { dev } = setup(t);
+  const marker = join(tmp(t), "PWNED");
+  writeFileSync(join(dev, REPO_GATE), codeVersionStub(1, marker));
+  write(dev, "src/app.js", "export const app = 2;\n");
+  const out = callTool("gate_status", { repo_root: dev, base: "", branch: "" });
+  assert.ok(!existsSync(marker));
+  assert.ok(out.includes("src/app.js [new]") && out.includes("is v1 but the running gate is"), out);
 });

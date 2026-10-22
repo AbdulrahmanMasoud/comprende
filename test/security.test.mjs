@@ -1,15 +1,13 @@
-// Regression tests for the security review of the plugin layer. The threat:
-// a malicious repo the user clones and opens with the plugin installed.
+// The plugin in repos you don't trust: no repo code runs, nothing is followed out of the repo,
+// and nothing from the environment changes what the gate does.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { callTool, commitAll, ENV, gate, gateCli, git, out, plugin, pushEvent, REPO_GATE, runGate, setup, sh, throwsGate, tmp, write } from "./helpers.mjs";
 
-import { ENV, GATE, NODE, REPO_GATE, callTool, commitAll, gate, git, runGate, setup, sh, throwsGate, write } from "./helpers.mjs";
-
-// Same as gateCli(), plus a timeout (gateCli has none).
-const plugin = (cwd, args, { input = "", env, timeout = 60_000 } = {}) =>
-  sh(cwd, NODE, [GATE, ...args], { check: false, input, env: env ?? ENV, timeout });
+// Gate code that would leave a marker file if it ever ran.
+const codeWriteMarker = (marker) => `import fs from 'node:fs';\nfs.writeFileSync(${JSON.stringify(marker)}, 'x');\n`;
 
 function sessionStart(dev, dir, env) {
   const out = plugin(dir, ["session-start"], { input: JSON.stringify({ cwd: dev }), env }).stdout;
@@ -17,9 +15,6 @@ function sessionStart(dev, dir, env) {
 }
 
 const push = (dev) => sh(dev, "git", ["push", "-u", "origin", "HEAD:refs/heads/feature/x"], { check: false });
-
-// Gate code that would leave a marker file if it ever ran.
-const codeWriteMarker = (marker) => `import fs from 'node:fs';\nfs.writeFileSync(${JSON.stringify(marker)}, 'x');\n`;
 
 function plantShadowModules(root, marker) {
   for (const d of [join(root, ".learning"), root]) {
@@ -33,8 +28,40 @@ function plantShadowModules(root, marker) {
   }
 }
 
-// F1: a module planted next to gate.mjs must never be imported by the hook.
-test("planted stdlib module never runs on push", (t) => {
+test("the plugin's hook never runs the repo's own gate code", (t) => {
+  const { dev, tmp } = setup(t);
+  unlinkSync(join(dev, ".claude/settings.json"));            // repo without the project-level hook
+  const marker = join(tmp, "PWNED");
+  writeFileSync(join(dev, REPO_GATE), codeWriteMarker(marker));
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked + a malicious gate.mjs");
+  const r = plugin(tmp, ["claude-hook", "--from-plugin"], { input: pushEvent(dev) });
+  assert.ok(!existsSync(marker));                            // the repo's code never ran
+  assert.ok(r.status === 2 && r.stderr.includes("No ownership report"));   // the plugin's own logic still blocks
+  const npm = JSON.stringify({ tool_name: "Bash", tool_input: { command: "npm test" }, cwd: dev });
+  assert.equal(plugin(tmp, ["claude-hook", "--from-plugin"], { input: npm }).status, 0);
+});
+
+test("session start never auto installs a hook for unknown gate code", (t) => {
+  const { dev, tmp } = setup(t);
+  unlinkSync(join(dev, ".git/hooks/pre-push"));
+  writeFileSync(join(dev, REPO_GATE), "something else entirely\n");
+  const out = JSON.parse(plugin(tmp, ["session-start"], { input: JSON.stringify({ cwd: dev }) }).stdout);
+  assert.ok(!existsSync(join(dev, ".git/hooks/pre-push")));
+  assert.ok(out.hookSpecificOutput.additionalContext.includes("NOT installed automatically"));
+});
+
+test("session start repins only for trusted code", (t) => {
+  const { dev, tmp } = setup(t);
+  const hook = join(dev, ".git/hooks/pre-push");
+  const before = readFileSync(hook, "utf8");
+  writeFileSync(join(dev, REPO_GATE), "something different\n");
+  assert.ok(sessionStart(dev, tmp).includes("NOT installed automatically"));
+  assert.equal(readFileSync(hook, "utf8"), before);               // still pinned to the trusted copy
+});
+
+// a module planted next to gate.mjs must never be imported by the hook.
+test("a module planted next to gate.mjs never runs on push", (t) => {
   const { dev, tmp } = setup(t);
   const marker = join(tmp, "PWNED-1");
   plantShadowModules(dev, marker);
@@ -47,8 +74,8 @@ test("planted stdlib module never runs on push", (t) => {
   assert.ok(r.status !== 0 && r.stderr.includes("No ownership report"));   // the gate itself still worked
 });
 
-// F2: gate.mjs swapped after the hook was installed is not executed.
-test("gate swapped after install is not executed", (t) => {
+// gate.mjs swapped after the hook was installed is not executed.
+test("a gate.mjs swapped after install is not executed", (t) => {
   const { dev, tmp } = setup(t);
   const marker = join(tmp, "PWNED-2");
   writeFileSync(join(dev, REPO_GATE), codeWriteMarker(marker));
@@ -61,17 +88,24 @@ test("gate swapped after install is not executed", (t) => {
   assert.ok(!gate.installHooks(dev)[0].includes("SKIPPED"));
 });
 
-test("session start repins only for trusted code", (t) => {
-  const { dev, tmp } = setup(t);
-  const hook = join(dev, ".git/hooks/pre-push");
-  const before = readFileSync(hook, "utf8");
-  writeFileSync(join(dev, REPO_GATE), "something different\n");
-  assert.ok(sessionStart(dev, tmp).includes("NOT installed automatically"));
-  assert.equal(readFileSync(hook, "utf8"), before);               // still pinned to the trusted copy
+// NODE_OPTIONS / NODE_PATH from the environment can't inject code into the pinned hook.
+test("the pinned pre-push hook ignores NODE_OPTIONS and NODE_PATH", (t) => {
+  const { dev } = setup(t);
+  const dir = tmp(t);
+  const marker = join(dir, "PWNED");
+  const evil = join(dir, "evil.cjs");
+  writeFileSync(evil, `require("fs").writeFileSync(${JSON.stringify(marker)}, "x");\n`);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  const env = { ...ENV, NODE_OPTIONS: `--require ${evil}`, NODE_PATH: dir };
+  const r = sh(dev, "git", ["push", "-u", "origin", "feature/rate-limit"], { check: false, env });
+  assert.equal(existsSync(marker), false, "NODE_OPTIONS code ran inside the hook");
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /No ownership report/);
 });
 
-// F3: a global/shared core.hooksPath is never written to automatically.
-test("shared hooks path is never touched", (t) => {
+// a global/shared core.hooksPath is never written to automatically.
+test("a shared core.hooksPath is never touched", (t) => {
   const { dev, tmp } = setup(t);
   const shared = join(tmp, "global-hooks");
   mkdirSync(shared);
@@ -84,9 +118,25 @@ test("shared hooks path is never touched", (t) => {
   assert.ok(gate.installHooks(dev)[0].startsWith("installed") && existsSync(join(dev, ".husky/pre-push")));
 });
 
-// F4: hostile config files can't hang or exhaust a session.
+// core.hooksPath that is a symlink to a shared folder is never written to.
+test("a hooksPath symlinked out of the repo is refused", (t) => {
+  const { dev, tmp: dir } = setup(t);
+  const shared = join(dir, "shared-hooks");
+  mkdirSync(shared);
+  symlinkSync(shared, join(dev, "myhooks"));
+  git(dev, "config", "core.hooksPath", "myhooks");
+  const out = gate.installHooks(dev)[0];
+  assert.match(out, /^SKIPPED.*outside this repo/);
+  assert.equal(existsSync(join(shared, "pre-push")), false);
+  // ...but a real folder whose name starts with ".." is inside the repo
+  mkdirSync(join(dev, "..hooks"));
+  git(dev, "config", "core.hooksPath", "..hooks");
+  assert.match(gate.installHooks(dev)[0], /^installed/);
+});
+
+// hostile config files can't hang or exhaust a session.
 for (const kind of ["devzero", "huge", "fifo"]) {
-  test(`hostile config cannot hang session start [${kind}]`, (t) => {
+  test(`a hostile config can't hang session start [${kind}]`, (t) => {
     const { dev, tmp } = setup(t);
     const cfg = join(dev, ".learning/config.json");
     unlinkSync(cfg);
@@ -107,7 +157,7 @@ for (const kind of ["devzero", "huge", "fifo"]) {
   });
 }
 
-test("symlinked report and settings are not followed", (t) => {
+test("a symlinked report or settings file is not followed", (t) => {
   const { dev } = setup(t);
   const rel = join(dev, gate.reportRelpath("feature/rate-limit"));
   mkdirSync(dirname(rel), { recursive: true });
@@ -120,8 +170,8 @@ test("symlinked report and settings are not followed", (t) => {
   assert.ok(gate.mergeClaudeSettings(join(dev, ".claude/settings.json")).includes("SKIPPED"));
 });
 
-// F5: commands from the repo's own .git/config never run while reading changes.
-test("repo local filter commands are refused", (t) => {
+// commands from the repo's own .git/config never run while reading changes.
+test("filter commands from the repo's own git config are refused", (t) => {
   const { dev, tmp } = setup(t);
   const marker = join(tmp, "PWNED-5");
   git(dev, "config", "filter.evil.clean", `sh -c 'touch ${marker}; cat'`);
@@ -134,7 +184,7 @@ test("repo local filter commands are refused", (t) => {
   assert.equal(runGate(dev, ["status"], { env: trusted }).status, 0);   // explicit trust: the user's own setup
 });
 
-test("repo local fsmonitor command never runs", (t) => {
+test("an fsmonitor command from the repo's own git config never runs", (t) => {
   const { dev, tmp } = setup(t);
   const marker = join(tmp, "PWNED-fsmonitor");
   const script = join(tmp, "fsm.sh");
@@ -146,7 +196,7 @@ test("repo local fsmonitor command never runs", (t) => {
   assert.ok(!existsSync(marker));
 });
 
-test("global filters like lfs still work", (t) => {
+test("global filters such as git-lfs still work", (t) => {
   const { dev, tmp } = setup(t);
   const gcfg = join(tmp, "gitconfig");
   writeFileSync(gcfg, '[filter "upper"]\n\tclean = tr a-z A-Z\n\tsmudge = cat\n');
@@ -157,10 +207,13 @@ test("global filters like lfs still work", (t) => {
   assert.ok(r.status === 0 && r.stdout.includes("notes.txt"));
 });
 
-// F6: no links, images, HTML, code spans or table breaks from PR authors.
-test("job summary neutralises author markdown", () => {
-  const s = gate.mdSafe("[click](https://evil.example) ![i](x) <b>|x| `code` **bold**");
-  for (const bad of ["[click](", "![i]", "<b>", "|x|", "`code`", "**bold**"]) {
-    assert.ok(!s.includes(bad), bad);
-  }
+test("an option can't swallow the next option as its value", (t) => {
+  const { dev } = setup(t);
+  const r = gateCli(["status", "--repo", dev, "--base", "--branch", "x"]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /--base needs a value/);
+  assert.equal(gateCli(["status", "--repo", dev, "stray"]).status, 2);
+  const empty = gateCli(["protect", "--repo", dev, "--approvals", ""]);
+  assert.notEqual(empty.status, 0);
+  assert.match(empty.stderr, /--approvals must be between 0 and 10/);
 });

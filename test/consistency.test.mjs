@@ -1,12 +1,28 @@
-// The plugin's moving parts point at files that exist, and the shipped copies agree.
+// The plugin's files agree with each other: manifests, built copies, docs and the demo.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ENV, REPO, sh, tmp } from "./helpers.mjs";
+import { ENV, NODE, out, plugin, REPO, sh, SUMMARY, tmp } from "./helpers.mjs";
 
 const read = (rel) => readFileSync(join(REPO, rel));
+
 const json = (rel) => JSON.parse(read(rel).toString("utf8"));
+
+/** The commands the tape types, in order (each `Type` line up to its `Enter`). */
+function tapeCommands(tape) {
+  const out = [];
+  let current = "";
+  for (const line of tape.split("\n")) {
+    const typed = /^Type\s+(?:"(.*)"|`(.*)`)\s*$/.exec(line);
+    if (typed) current += typed[1] ?? typed[2];
+    else if (/^Enter\b/.test(line)) {
+      out.push(current);
+      current = "";
+    }
+  }
+  return out;
+}
 
 test("the skill's scripts are exact copies of the built files", () => {
   for (const name of ["gate.mjs", "learning.mjs"]) {
@@ -61,21 +77,6 @@ test("both READMEs open with a Quick start for the three kinds of user", () => {
   assert.ok(ar.includes("](docs/demo.gif)"), "the Arabic README embeds the demo GIF too");
 });
 
-/** The commands the tape types, in order (each `Type` line up to its `Enter`). */
-function tapeCommands(tape) {
-  const out = [];
-  let current = "";
-  for (const line of tape.split("\n")) {
-    const typed = /^Type\s+(?:"(.*)"|`(.*)`)\s*$/.exec(line);
-    if (typed) current += typed[1] ?? typed[2];
-    else if (/^Enter\b/.test(line)) {
-      out.push(current);
-      current = "";
-    }
-  }
-  return out;
-}
-
 test("docs/demo.tape runs: the push is blocked, a report is saved, the push goes through", (t) => {
   const tape = read("docs/demo.tape").toString("utf8");
   assert.match(tape, /^Output docs\/demo\.gif$/m);
@@ -92,4 +93,10 @@ test("docs/demo.tape runs: the push is blocked, a report is saved, the push goes
   const saved = out.indexOf("Saved .learning/checks/");
   const pushed = out.indexOf("pushed: feature/sum");
   assert.ok(blocked >= 0 && saved > blocked && pushed > saved, out);
+});
+
+// Sanity: SUMMARY and NODE are what the other suites use.
+test("the shared test fixtures are usable", () => {
+  assert.ok(SUMMARY.length >= 80);
+  assert.ok(NODE);
 });
