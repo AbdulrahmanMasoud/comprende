@@ -298,6 +298,38 @@ test("claude hook blocks only pushes without report", (t) => {
 
 // ------------------------------------------------------------- CI
 
+test("claude hook: no report vs. a report saved but not committed", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  git(dev, "commit", "-qam", "unchecked");
+  const hook = (command) => runGate(dev, ["claude-hook"], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: dev }),
+  });
+  const PENDING = /report \.learning\/checks\/feature%2Frate-limit\.md is saved but not committed\. Commit it first, then push as a separate command/;
+
+  let r = hook("git push");                                    // no report at all
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /No ownership report for branch 'feature\/rate-limit'/);
+  assert.doesNotMatch(r.stderr, /not committed/);
+
+  gate.save(payload(), dev);                                   // saved, not committed:
+  r = hook("git add -A && git commit -qm report && git push"); // the hook runs before the commit
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, PENDING);
+  assert.doesNotMatch(r.stderr, /No ownership report/);
+
+  git(dev, "add", "-A");
+  git(dev, "commit", "-qm", "report");
+  assert.equal(hook("git push").status, 0);
+
+  write(dev, "src/app.js", "export const app = 3;\n");        // stale, and HEAD's report is the old one
+  git(dev, "commit", "-qam", "more");
+  r = hook("git push");
+  assert.ok(r.status === 2 && /Changed after the check/.test(r.stderr) && !PENDING.test(r.stderr), r.stderr);
+  gate.save(payload(), dev);                                   // a newer report, not committed yet
+  assert.match(hook("git push").stderr, PENDING);
+});
+
 test("CI on fresh clone at PR head even after main moves", (t) => {
   const s = setup(t);
   const { dev, tmp: dir } = s;

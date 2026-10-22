@@ -997,8 +997,31 @@ function claudeHook(stdinText, fromPlugin = false) {
     [passed, problems, mode] = [false, [e.message], "required"];
   }
   if (passed || mode !== "required") return 0;
+  const pending = uncommittedReport(root);
+  if (pending) {
+    process.stderr.write(
+      `Blocked by the ownership gate: the report ${pending} is saved but not committed. Commit it first, then push as a separate command. This hook checks the branch before a command runs, so a push in the same command as the commit is blocked too.
+`
+    );
+    return 2;
+  }
   process.stderr.write("Blocked by the ownership gate:\n- " + problems.join("\n- ") + "\n");
   return 2;
+}
+function uncommittedReport(root) {
+  try {
+    const rel = reportRelpath(currentBranch(root));
+    const saved = stableJson(parseReport(readSmall(join(root, rel), MAX_REPORT_BYTES)));
+    if (!hasFile(root, "HEAD", rel)) return rel;
+    let committed = null;
+    try {
+      committed = stableJson(parseReport(showSmall(root, "HEAD", rel, MAX_REPORT_BYTES)));
+    } catch {
+    }
+    return saved === committed ? null : rel;
+  } catch {
+    return null;
+  }
 }
 var MIN_NODE = 20;
 var NODE_NOTE = "Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.";

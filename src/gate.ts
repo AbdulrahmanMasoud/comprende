@@ -1227,8 +1227,38 @@ export function claudeHook(stdinText: string, fromPlugin = false): number {
     [passed, problems, mode] = [false, [e.message], "required"]; // e.g. a broken report
   }
   if (passed || mode !== "required") return 0;
+  // The hook runs before the command, so `git commit … && git push` is checked
+  // against the old HEAD. Say so when the fix is just a separate commit.
+  const pending = uncommittedReport(root);
+  if (pending) {
+    process.stderr.write(
+      `Blocked by the ownership gate: the report ${pending} is saved but not committed. Commit it first, then push as a separate command. ` +
+        "This hook checks the branch before a command runs, so a push in the same command as the commit is blocked too.\n",
+    );
+    return 2;
+  }
   process.stderr.write("Blocked by the ownership gate:\n- " + problems.join("\n- ") + "\n");
   return 2;
+}
+
+/** The report's path if the working tree holds a valid report for the current
+ *  branch that HEAD doesn't have yet (none in HEAD, or a different one). */
+function uncommittedReport(root: string): string | null {
+  try {
+    const rel = reportRelpath(currentBranch(root));
+    const saved = stableJson(parseReport(readSmall(join(root, rel), MAX_REPORT_BYTES)));
+    if (!hasFile(root, "HEAD", rel)) return rel;
+    let committed: string | null = null;
+    try {
+      committed = stableJson(parseReport(showSmall(root, "HEAD", rel, MAX_REPORT_BYTES)));
+    } catch {
+      /* HEAD's copy is broken or outdated: the saved one is what's pending */
+    }
+    // Compare the data, not the bytes: line-ending conversion can change the file text.
+    return saved === committed ? null : rel;
+  } catch {
+    return null;
+  }
 }
 
 const MIN_NODE = 20;

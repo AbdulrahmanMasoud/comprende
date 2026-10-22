@@ -98,6 +98,7 @@ The JSON:
 - Deleting, breaking or outdating the report doesn't reset anything. The gate falls back to the last committed report and asks again about everything that changed since.
 - If code changes after the report is saved, `status` shows those files as `stale`. Ask about the stale files only, then save again.
 - The report lives at `.learning/checks/<branch>.md`. The branch name is URL-encoded, so `feature/x` becomes `feature%2Fx.md`. Commit it along with the code.
+- **Commit, then push as a separate command.** The push hook checks the branch before a command runs, so `git commit … && git push` in one command is blocked even with a saved report.
 - The report is named after the branch the PR comes from. If the user pushes under a different remote name (`git push origin local:other`), pass that name as `branch` to `gate_status` and `save_check_report`, or as `--branch` to the script.
 - Pass `base` when the PR targets something other than the default branch (for example `origin/develop`). In a fork, the gate already prefers `upstream/<branch>` over the fork's own copy.
 - If `status` warns that the base runs a different gate version, have the developer merge the base branch first. Otherwise CI will reject the report.

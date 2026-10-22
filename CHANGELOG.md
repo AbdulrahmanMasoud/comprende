@@ -25,6 +25,7 @@
   - The plugin's PreToolUse hook exits 0 when `node` is missing. So does the project-level hook that `install` writes into `.claude/settings.json`; repos installed earlier keep their old command until it's edited. Neither can block Bash by accident.
   - README: what happens on Windows with and without Git Bash.
 - **Fixes:**
+  - When the Claude hook blocks a push and a valid report is saved but not committed, it now says so: commit it first, then push as a separate command. The hook checks the branch before a command runs, so `git commit … && git push` in one command used to fail with a confusing "No ownership report". The protocol now tells Claude to push separately.
   - The ownership-check protocol now says how to save a report without the MCP tool: write the JSON to a file inside `.git/` and run `gate.mjs save --input <file>`. It must never go through a heredoc (Claude Code's shell checks can block it) or into a working-tree file, which the gate would count as part of the change. A test pins that a file under `.git/` is never part of the change.
   - `learning_context` still returns your profile when a project's `.learning/` folder is refused, for example because it's a symlink. Before, the whole call failed.
   - A symlinked `.learning/` is refused with ".learning/ is a symlink". Before, the message said it "resolves outside the project", which was wrong when the link pointed inside the project.
