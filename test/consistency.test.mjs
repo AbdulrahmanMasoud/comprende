@@ -78,8 +78,12 @@ test("both READMEs open with a Quick start for the three kinds of user", () => {
     "the demo GIF is embedded",
   );
   const ar = read("README.ar.md").toString("utf8");
-  const arQuick = ar.indexOf("## البداية السريعة");
-  assert.ok(arQuick > 0 && arQuick < ar.indexOf("## التسطيب"), "Arabic Quick start comes before التسطيب");
+  // The first section of README.ar.md is its Quick start: the install commands and the demo.
+  const arFirst = ar.slice(ar.indexOf("\n## "), ar.indexOf("\n## ", ar.indexOf("\n## ") + 1));
+  assert.ok(
+    arFirst.includes("/plugin install comprende@comprende") && arFirst.includes("docs/demo.gif"),
+    "README.ar.md opens with its Quick start",
+  );
   assert.ok(ar.includes("/plugin install comprende@comprende"));
   assert.ok(ar.includes("](docs/demo.gif)"), "the Arabic README embeds the demo GIF too");
 });

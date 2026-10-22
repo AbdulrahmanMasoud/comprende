@@ -20,15 +20,15 @@ Each example shows a situation, a bad explanation, a good one, and why. The poin
 
 ---
 
-## 2. Same concept, Egyptian Arabic user
+## 2. Same concept, a user who writes in a dialect
 
-**Bad**
-> في هذا الجزء من الكود قمنا باستخدام دالة debounce، وهي دالة تقوم بتأخير تنفيذ دالة أخرى لحين توقف الأحداث لفترة زمنية محددة...
+When the user writes in a dialect (Egyptian Arabic, say), answer in that dialect, not the formal standard language, and keep technical terms in English.
 
-**Good**
-> `debounce` بتستنى المستخدم يخلص كتابة قبل ما تبحث، زي الأسانسير اللي بيستنى لحد ما مفيش حد داخل. من غيرها كنا هنبعت request مع كل حرف.
+**Bad**: a formal, textbook-register definition in the standard language, along the lines of "In this part of the code we used the debounce function, which is a function that delays the execution of another function until events stop for a set period…"
 
-**Why**: matches the user's dialect instead of formal MSA, keeps `debounce` and `request` in English, and uses one short everyday analogy.
+**Good**: the same idea in the user's everyday dialect, leading with what it does here: "`debounce` waits for the user to finish typing before it searches, like a lift that waits until nobody else is getting in. Without it we'd send a request for every letter."
+
+**Why**: matches the user's dialect instead of the formal register, keeps `debounce` and `request` in English, and uses one short everyday analogy.
 
 ---
 

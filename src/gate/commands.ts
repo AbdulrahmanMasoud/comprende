@@ -20,7 +20,7 @@ import { matches } from "./glob.js";
 import { previousReport, readReport, renderReport, reportPath } from "./report.js";
 import { GATE_REL, GATE_VERSION, GateError, REPORT_INPUT, sorted, VERSION_RE } from "./shared.js";
 
-// English only: terminals draw Arabic letters in reverse order. The skill still understands "اختبرني".
+// English only: terminals draw right-to-left text in reverse order. The skill understands the phrase in any language.
 const CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
 
 /** A summary is measured after trimming blank characters from both ends:

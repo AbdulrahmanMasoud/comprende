@@ -1,6 +1,6 @@
 ---
 name: comprende
-description: "Explain code while building it, so the user ends up understanding what was built, why, and how — without drowning them in text. Use this skill whenever Claude writes, changes, or walks through code and the user wants to learn or understand it, even if they don't say 'explain' — e.g. 'teach me while you build', 'explain as you go', 'I want to understand every line', 'walk me through what you did', 'why did you do it this way', onboarding onto an unfamiliar codebase, or a user who is clearly learning a stack. Also use it in Arabic or any other language ('اشرحلي وانت بتبني', 'عايز افهم الكود'). It auto-calibrates: explains only what is new, non-obvious, risky, or decision-bearing — for juniors and seniors alike — and in large projects it focuses on the diff, not the whole codebase. Also use it for the team ownership gate: quizzing a developer on their change before a PR ('check me', 'اختبرني') or turning the gate on for a repo."
+description: "Explain code while building it, so the user ends up understanding what was built, why, and how — without drowning them in text. Use this skill whenever Claude writes, changes, or walks through code and the user wants to learn or understand it, even if they don't say 'explain' — e.g. 'teach me while you build', 'explain as you go', 'I want to understand every line', 'walk me through what you did', 'why did you do it this way', onboarding onto an unfamiliar codebase, or a user who is clearly learning a stack. Also use it when the user writes in Arabic or any other language. It auto-calibrates: explains only what is new, non-obvious, risky, or decision-bearing — for juniors and seniors alike — and in large projects it focuses on the diff, not the whole codebase. Also use it for the team ownership gate: quizzing a developer on their change before a PR ('check me', in any language) or turning the gate on for a repo."
 ---
 
 # Comprende: explain as you build
@@ -37,8 +37,8 @@ For borderline cases and the full list of signals, read `references/signals.md`.
 
 Start by assuming a competent developer — neither hand-holding nor jargon-dumping — and adjust as evidence arrives:
 
-- **Signals to go deeper**: they ask "what is X", seem confused, mis-use a concept, or say "explain more" / "مش فاهم".
-- **Signals to go lighter**: they use precise terminology, their existing code uses advanced patterns, they ask about trade-offs rather than definitions, or they say "I know" / "عارف" / "كمّل".
+- **Signals to go deeper**: they ask "what is X", seem confused, mis-use a concept, or say "explain more" / "I don't get it".
+- **Signals to go lighter**: they use precise terminology, their existing code uses advanced patterns, they ask about trade-offs rather than definitions, or they say "I know" / "go on".
 
 Calibrate **per topic**, not globally: someone can be expert in React and new to Kubernetes. Track what you've explained or what they've proven they know this session, and don't explain it again — at most refer back ("same debounce idea as before").
 
@@ -94,7 +94,7 @@ A checkpoint is one quick question that checks understanding ("what happens if t
 
 In team settings it's not enough that code works and got approved — the developer shipping it must understand it as if they wrote it. The ownership check adds: an optional "how would you approach this?" before hard parts, one or two questions after meaningful milestones while building, and a **final check that always runs** before commit/PR (whole-flow questions, re-checks in new forms, every sensitive file, and a PR summary the developer writes themselves). The result is a report tied to the exact code by fingerprints, which CI can require.
 
-It is on when `.learning/config.json` says `"mode": "required"`, offered when `suggested`, and always available when the user asks ("check me", "اختبرني"). Read `references/ownership-check.md` before running any part of it. It covers the question types, how to judge answers, the report rules, how to turn the gate on for a repo, and what the team lead sees.
+It is on when `.learning/config.json` says `"mode": "required"`, offered when `suggested`, and always available when the user asks ("check me", in any language). Read `references/ownership-check.md` before running any part of it. It covers the question types, how to judge answers, the report rules, how to turn the gate on for a repo, and what the team lead sees.
 
 When the gate is on, commit the report first, then push in a separate command: the push hook checks the branch before a command runs, so `git commit … && git push` is blocked.
 
@@ -102,11 +102,11 @@ When the gate is on, commit the report first, then push in a separate command: t
 
 Recognize natural phrasing in any language:
 
-- **More**: "explain more", "deeper", "why?", "اشرح أكتر", "مش فاهم" → go one tier deeper on that topic.
-- **Less**: "I know this", "skip", "عارف", "كمّل" → drop a tier, and remember it for that topic.
-- **Silent**: "just build", "silent", "كمّل ساكت" → no explanations until they ask again. (In `required` ownership mode, in-flight questions pause too, but the final check still runs.)
-- **Check me**: "check me", "quiz me on this", "اختبرني" → run the final ownership check on the current diff.
-- **Later**: "later", "بعدين" on a question → defer it to the final check.
+- **More**: "explain more", "deeper", "why?", "I don't get it" → go one tier deeper on that topic.
+- **Less**: "I know this", "skip", "go on" → drop a tier, and remember it for that topic.
+- **Silent**: "just build", "silent", "keep going quietly" → no explanations until they ask again. (In `required` ownership mode, in-flight questions pause too, but the final check still runs.)
+- **Check me**: "check me", "quiz me on this" → run the final ownership check on the current diff.
+- **Later**: "later", "not now" on a question → defer it to the final check.
 
 **Risks are never silent.** Even in silent mode, flag security holes, data loss, and breaking changes in one line — silence must not hide danger.
 

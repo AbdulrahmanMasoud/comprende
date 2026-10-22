@@ -123,11 +123,11 @@ test("the progress report counts levels and checkpoints", (t) => {
   assert.ok(report.includes("Worth revisiting: asyncio"));
 });
 
-test("profile is valid UTF-8 JSON with Arabic", (t) => {
+test("the profile is valid UTF-8 JSON and keeps non-ASCII text as is", (t) => {
   const { store } = isolated(t);
-  store.setPreference("language", "مصري");
+  store.setPreference("language", "Español — ñ, 日本語");
   const raw = readFileSync(join(store.home(), "profile.json"), "utf8");
-  assert.ok(raw.includes("مصري") && JSON.parse(raw).preferences.language === "مصري");
+  assert.ok(raw.includes("Español — ñ, 日本語") && JSON.parse(raw).preferences.language === "Español — ñ, 日本語");
 });
 
 test("a project without .learning/ says so", (t) => {

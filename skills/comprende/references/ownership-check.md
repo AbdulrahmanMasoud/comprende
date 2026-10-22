@@ -9,7 +9,7 @@ This is not an exam and should never feel like surveillance. Frame it as making 
 - **`.learning/config.json` has `ownership_check.mode` = `required`**: run the full protocol for every task that changes code, whether or not the user asks for it.
 - **`suggested`**, or no config: run the in-flight checks lightly, and offer the final check once before a commit or PR. The user may decline.
 - **`off`**: don't run it unless the user asks.
-- **The user asks** ("check me", "quiz me on this", "اختبرني", "اتأكد إني فاهم"): run the final check on the current diff, in any mode.
+- **The user asks** ("check me", "quiz me on this", "make sure I understand it", in any language): run the final check on the current diff, in any mode.
 
 Production emergencies: if the user says it's an incident or hotfix, keep the in-flight checks silent and do the final check after the fix ships. The escape hatch is the PR label named by `skip_label` in the config (default `skip-ownership-check`), which is visible in the PR timeline. Never suggest bypassing the check any other way.
 
@@ -25,7 +25,7 @@ After a meaningful piece is done (a module, a layer, a feature step), ask **one 
 
 - Trigger on milestones, not on time or chunk counts.
 - Ask at a natural pause, at the end of your turn, never mid-output.
-- Never block. If they say "later", "بعدين", or ignore it, keep building and carry the question to the final check.
+- Never block. If they say "later", "not now", or ignore it, keep building and carry the question to the final check.
 - Adapt the frequency. Ask less after correct answers in a row and a bit more when they struggle.
 - A wrong answer gets a short explanation (Tier 2) right away, then work continues. The final check will revisit that concept with a different question.
 
@@ -105,7 +105,7 @@ The JSON:
 
 ## Turning the gate on for a repo
 
-When the user asks to set it up ("enable the ownership gate here", "فعّل بوابة الفهم في المشروع ده"), do it end to end, asking before each step that changes something shared:
+When the user asks to set it up ("enable the ownership gate here", in any language), do it end to end, asking before each step that changes something shared:
 
 1. **Ask one question.** Who should own the gate's own files (a GitHub `@user` or `@org/team`)? That is usually the team lead. If it's a one-person repo, say that code-owner review will be off.
 2. **Install on a branch.** Create `chore/ownership-gate`, then run `node <skill-dir>/scripts/gate.mjs install --repo . --owner <handle>`. It adds:

@@ -57,13 +57,13 @@ Calibrate **per topic**. Keep a mental note like: `React hooks: knows well · Do
 - They use the precise term unprompted ("we need this to be idempotent").
 - Their own code in the repo uses the pattern correctly, especially advanced forms of it.
 - They ask about trade-offs, edge cases, or performance rather than "what is".
-- They say "I know", "skip", "عارف", "كمّل", or skim past explanations without questions.
+- They say "I know", "skip", "go on", or skim past explanations without questions.
 - They correct you on a detail.
 
 ### Evidence they're learning a topic → go deeper
-- They ask "what is X" / "يعني إيه X".
+- They ask "what is X" / "what does X mean".
 - They describe a concept slightly wrong, or misuse a term.
-- They say "not sure", "lost", "مش فاهم", or ask for an example.
+- They say "not sure", "lost", "I don't get it", or ask for an example.
 - They copy a pattern without adapting it where it needed adapting.
 
 ### Evidence about the person overall (weak — don't overfit)

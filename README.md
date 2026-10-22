@@ -10,7 +10,7 @@ Claude explains the code it writes, briefly and only where it matters.<br>
 For teams, an optional <b>ownership gate</b> makes sure the developer who ships a change actually understands it.
 </p>
 
-<p align="center"><a href="README.ar.md">العربية</a></p>
+<p align="center"><a href="README.ar.md">Arabic</a></p>
 
 ## Quick start
 
@@ -63,10 +63,10 @@ Just build things. Claude decides what deserves an explanation. You can steer it
 
 | Say | What happens |
 |---|---|
-| "explain more", "why?", "اشرح أكتر" | Goes one level deeper on that topic |
-| "I know this", "skip", "عارف" | Explains less, and remembers that for the topic |
-| "just build", "كمّل ساكت" | Stops explaining until you ask again. Risks are still flagged in one line |
-| "check me", "اختبرني" | Runs an ownership check on your current change |
+| "explain more", "why?" | Goes one level deeper on that topic |
+| "I know this", "skip" | Explains less, and remembers that for the topic |
+| "just build" | Stops explaining until you ask again. Risks are still flagged in one line |
+| "check me" | Runs an ownership check on your current change |
 
 Claude remembers what you already know across projects, so it doesn't explain the same thing twice. This memory lives in `~/.comprende/` on your machine and is never committed.
 

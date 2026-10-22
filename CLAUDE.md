@@ -69,13 +69,13 @@ Check that `/mcp` lists `comprende`. If the MCP server doesn't start, check whet
 
 ### 2. Explain-as-you-build
 
-In a scratch project, ask Claude to build something with at least one non-obvious part, for example "add a debounced search box" or "اعمل retry مع exponential backoff". Expected:
+In a scratch project, ask Claude to build something with at least one non-obvious part, for example "add a debounced search box" or "add a retry with exponential backoff". Try it in another language too. Expected:
 
 - Short explanations only on the non-obvious parts. Boilerplate gets none.
 - Replies in your language and dialect.
-- "اشرح أكتر" goes one level deeper on that topic.
-- "عارف" means less explanation on that topic from then on. It's saved in `~/.comprende/profile.json`.
-- "كمّل ساكت" stops explanations, but risks are still flagged in one line.
+- "explain more" goes one level deeper on that topic.
+- "I know this" means less explanation on that topic from then on. It's saved in `~/.comprende/profile.json`.
+- "just build" stops explanations, but risks are still flagged in one line.
 
 ### 3. The ownership gate
 
@@ -99,7 +99,7 @@ Then open Claude in `app/` with the plugin loaded and try these:
 | Start the session | Claude mentions the gate is on for this repo |
 | Ask Claude to add a `sum(xs)` function, commit, and push | Claude refuses to push: no ownership report |
 | `git push` yourself in a terminal | The pre-push hook blocks it |
-| Say "check me" / "اختبرني" | 3 to 6 questions about your change. You write the PR summary yourself |
+| Say "check me" | 3 to 6 questions about your change. You write the PR summary yourself |
 | Answer one wrong on purpose | A short explanation, then a *different* question |
 | After it saves the report, commit and push | The push goes through |
 | Read `.learning/checks/feature%2Fsum.md` | Only the summary and verified concepts. No scores or wrong answers |
