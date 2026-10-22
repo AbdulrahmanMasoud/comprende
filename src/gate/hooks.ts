@@ -68,7 +68,8 @@ export function claudeHook(stdinText: string, fromPlugin = false): number {
 const MIN_NODE = 20;
 
 // hooks/hooks.json carries the same note for a missing or unusable node.
-const NODE_NOTE = "Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.";
+const NODE_NOTE =
+  "Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.";
 
 // Every session, so explanations don't depend on the request sounding like a
 // wish to learn. Fixed text on purpose: nothing read from the repo goes into it.
@@ -80,10 +81,13 @@ export const ALWAYS_ON =
 export function sessionStart(stdinText: string): Record<string, unknown> {
   const lines: string[] = [];
   const node = process.versions.node;
-  if (Number.parseInt(node, 10) < MIN_NODE) lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
+  if (Number.parseInt(node, 10) < MIN_NODE)
+    lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
   lines.push(...gateContext(stdinText));
-  return lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {};
+  return lines.length
+    ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } }
+    : {};
 }
 
 /** In a repo that uses the gate: install the local pre-push hook if this clone
@@ -104,11 +108,15 @@ function gateContext(stdinText: string): string[] {
       // The installed hook runs the repo's gate on every push. Only set that up
       // automatically when it's byte-identical to this (trusted) copy.
       if (!SELF || !readFileSync(repoGate).equals(readFileSync(SELF))) {
-        lines.push(`This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`);
+        lines.push(
+          `This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`,
+        );
       } else {
         const result = installHooks(root, true)[0];
         if (result.startsWith("installed") || result.startsWith("re-pinned")) {
-          lines.push("The local pre-push git hook was just installed in this clone; mention it to the user in one line (set OWNERSHIP_GATE_NO_AUTO_HOOK=1 to opt out).");
+          lines.push(
+            "The local pre-push git hook was just installed in this clone; mention it to the user in one line (set OWNERSHIP_GATE_NO_AUTO_HOOK=1 to opt out).",
+          );
         } else if (result.startsWith("SKIPPED")) lines.push("The gate's pre-push hook wasn't added: " + result);
       }
     }
@@ -189,7 +197,8 @@ await import("data:text/javascript;base64," + code.toString("base64"));
 export function installHooks(repo?: string | null, auto = false): string[] {
   const root = repoRoot(repo);
   const gateFile = join(root, GATE_REL);
-  if (isSymlink(gateFile) || !isFile(gateFile)) return [`SKIPPED pre-push hook: ${GATE_REL} is missing or not a regular file.`];
+  if (isSymlink(gateFile) || !isFile(gateFile))
+    return [`SKIPPED pre-push hook: ${GATE_REL} is missing or not a regular file.`];
   const pin = createHash("sha256").update(readFileSync(gateFile)).digest("hex");
   let hooksDir = git(root, ["rev-parse", "--git-path", "hooks"]).trim();
   if (!isAbsolute(hooksDir)) hooksDir = join(root, hooksDir);
@@ -204,11 +213,15 @@ export function installHooks(repo?: string | null, auto = false): string[] {
       /* doesn't exist yet: it will be created where it says */
     }
     if (auto) {
-      return [`SKIPPED pre-push hook: core.hooksPath is set (${configured}), so it wasn't added automatically. Run \`node ${GATE_REL} install-hooks\` to add it there.`];
+      return [
+        `SKIPPED pre-push hook: core.hooksPath is set (${configured}), so it wasn't added automatically. Run \`node ${GATE_REL} install-hooks\` to add it there.`,
+      ];
     }
     const rel = relative(realpathSync(root), custom);
     if (rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel)) {
-      return [`SKIPPED pre-push hook: core.hooksPath (${configured}) is outside this repo and may be shared by other repos. Add this line to its pre-push hook yourself: ${manualLine}`];
+      return [
+        `SKIPPED pre-push hook: core.hooksPath (${configured}) is outside this repo and may be shared by other repos. Add this line to its pre-push hook yourself: ${manualLine}`,
+      ];
     }
     hooksDir = custom;
   }
@@ -217,7 +230,8 @@ export function installHooks(repo?: string | null, auto = false): string[] {
   let verb = "installed";
   if (exists(hook)) {
     const text = readFileSync(hook, "utf8");
-    if (!text.includes("comprende ownership gate")) return [`SKIPPED pre-push hook: ${hook} already exists. Add this line to it: ${manualLine}`];
+    if (!text.includes("comprende ownership gate"))
+      return [`SKIPPED pre-push hook: ${hook} already exists. Add this line to it: ${manualLine}`];
     if (text.includes(`pinned-sha256: ${pin}`)) return [`pre-push hook already installed (${hook})`];
     verb = "re-pinned";
   }

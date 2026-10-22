@@ -26,7 +26,10 @@ function tapeCommands(tape) {
 
 test("the skill's scripts are exact copies of the built files", () => {
   for (const name of ["gate.mjs", "learning.mjs"]) {
-    assert.ok(read(`dist/${name}`).equals(read(`skills/comprende/scripts/${name}`)), `${name} differs; run npm run build`);
+    assert.ok(
+      read(`dist/${name}`).equals(read(`skills/comprende/scripts/${name}`)),
+      `${name} differs; run npm run build`,
+    );
   }
 });
 
@@ -69,7 +72,10 @@ test("both READMEs open with a Quick start for the three kinds of user", () => {
   for (const who of ["Solo developer", "Team lead", "Team member"]) assert.ok(section.includes(who), who);
   assert.ok(section.includes("Enable the ownership gate in this repo") && section.includes("protect"));
   assert.ok(section.includes("docs/demo.tape"));
-  assert.ok(section.includes("](docs/demo.gif)") && existsSync(join(REPO, "docs/demo.gif")), "the demo GIF is embedded");
+  assert.ok(
+    section.includes("](docs/demo.gif)") && existsSync(join(REPO, "docs/demo.gif")),
+    "the demo GIF is embedded",
+  );
   const ar = read("README.ar.md").toString("utf8");
   const arQuick = ar.indexOf("## البداية السريعة");
   assert.ok(arQuick > 0 && arQuick < ar.indexOf("## التسطيب"), "Arabic Quick start comes before التسطيب");
@@ -86,7 +92,10 @@ test("docs/demo.tape runs: the push is blocked, a report is saved, the push goes
   // output stream as on screen.
   const home = tmp(t);
   const script = ["exec 2>&1", ...commands].join("\n");
-  const r = sh(REPO, "bash", ["--noprofile", "--norc", "-c", script], { check: false, env: { ...ENV, HOME: home, TMPDIR: home } });
+  const r = sh(REPO, "bash", ["--noprofile", "--norc", "-c", script], {
+    check: false,
+    env: { ...ENV, HOME: home, TMPDIR: home },
+  });
   const out = r.stdout;
   assert.equal(r.status, 0, out);
   const blocked = out.indexOf("Ownership gate blocked");

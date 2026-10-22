@@ -139,7 +139,9 @@ async function gateCli(repoRoot: string, args: string[], stdin?: string): Promis
   const text = (b: Buffer) => b.toString("utf8").replace(/\r\n?/g, "\n").trim();
   if (proc.code !== 0) {
     const msg = text(proc.stderr);
-    throw new ToolError((msg.startsWith("ownership gate: ") ? msg.slice("ownership gate: ".length) : msg) || "The gate failed.");
+    throw new ToolError(
+      (msg.startsWith("ownership gate: ") ? msg.slice("ownership gate: ".length) : msg) || "The gate failed.",
+    );
   }
   return text(proc.stdout);
 }
@@ -156,7 +158,11 @@ const title = (name: string) =>
     .split("_")
     .map((w) => w[0]!.toUpperCase() + w.slice(1))
     .join(" ");
-const str = (field: string, description: string) => z.string().describe(description).meta({ title: title(field) });
+const str = (field: string, description: string) =>
+  z
+    .string()
+    .describe(description)
+    .meta({ title: title(field) });
 
 const RepoRoot = str("repo_root", "Absolute path to the project's root folder.");
 const Topic = str("topic", "Short concept name, e.g. 'react hooks', 'sql indexes', 'asyncio cancellation'.");
@@ -168,7 +174,10 @@ const Branch = (field: string) =>
       "local branch (e.g. pushed as another name). Empty = current branch.",
   );
 const Base = (field: string) =>
-  str(field, "Base ref the PR targets, e.g. 'origin/develop' or 'upstream/main' for a fork. Empty = from config / auto-detect.");
+  str(
+    field,
+    "Base ref the PR targets, e.g. 'origin/develop' or 'upstream/main' for a fork. Empty = from config / auto-detect.",
+  );
 
 interface Tool {
   description: string;
@@ -262,10 +271,7 @@ const TOOLS: Record<string, Tool> = {
     annotations: READ_ONLY,
     shape: {
       repo_root: RepoRoot,
-      query: str(
-        "query",
-        "Keywords about the area you're touching, e.g. 'cache redis invalidation'. Empty lists all.",
-      ),
+      query: str("query", "Keywords about the area you're touching, e.g. 'cache redis invalidation'. Empty lists all."),
       limit: z.number().int().min(1).max(10).default(3).meta({ title: "Limit" }),
     },
     run: (a) => call(() => searchDecisions(a.repo_root, a.query, a.limit)),
@@ -287,8 +293,7 @@ const TOOLS: Record<string, Tool> = {
         .meta({ title: "Alternatives" }),
       consequences: str("consequences", "What the team now has to live with."),
     },
-    run: (a) =>
-      call(() => addDecision(a.repo_root, a.title, a.context, a.decision, a.alternatives, a.consequences)),
+    run: (a) => call(() => addDecision(a.repo_root, a.title, a.context, a.decision, a.alternatives, a.consequences)),
   }),
 
   update_map: tool({

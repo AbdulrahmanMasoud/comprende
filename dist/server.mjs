@@ -23677,7 +23677,13 @@ function profilePath() {
 }
 var emptyProfile = () => ({ version: PROFILE_VERSION, preferences: dict(), topics: dict() });
 function freshTopic() {
-  return { level: null, explained_on: null, evidence: [], checkpoints: { right: 0, wrong: 0, streak: 0 }, updated: today() };
+  return {
+    level: null,
+    explained_on: null,
+    evidence: [],
+    checkpoints: { right: 0, wrong: 0, streak: 0 },
+    updated: today()
+  };
 }
 var count = (v) => typeof v === "number" && Number.isFinite(v) ? v : 0;
 function normalizeTopic(raw) {
@@ -23796,7 +23802,8 @@ function setPreference(key, value) {
 function profileSummary(profile) {
   const prefs = Object.entries(profile.preferences);
   const topics = Object.entries(profile.topics);
-  if (!topics.length && !prefs.length) return ["No profile yet. Calibrate from the conversation and record what you learn."];
+  if (!topics.length && !prefs.length)
+    return ["No profile yet. Calibrate from the conversation and record what you learn."];
   const ordered = topics.sort(([, a], [, b]) => a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0);
   const names = (list) => {
     const shown = list.slice(0, MAX_LISTED).map(([k]) => k);
@@ -24103,7 +24110,9 @@ async function gateCli(repoRoot, args, stdin) {
   const text = (b) => b.toString("utf8").replace(/\r\n?/g, "\n").trim();
   if (proc.code !== 0) {
     const msg = text(proc.stderr);
-    throw new ToolError((msg.startsWith("ownership gate: ") ? msg.slice("ownership gate: ".length) : msg) || "The gate failed.");
+    throw new ToolError(
+      (msg.startsWith("ownership gate: ") ? msg.slice("ownership gate: ".length) : msg) || "The gate failed."
+    );
   }
   return text(proc.stdout);
 }
@@ -24119,7 +24128,10 @@ var Branch = (field) => str(
   field,
   "Branch the PR will come from, if it differs from the current local branch (e.g. pushed as another name). Empty = current branch."
 );
-var Base = (field) => str(field, "Base ref the PR targets, e.g. 'origin/develop' or 'upstream/main' for a fork. Empty = from config / auto-detect.");
+var Base = (field) => str(
+  field,
+  "Base ref the PR targets, e.g. 'origin/develop' or 'upstream/main' for a fork. Empty = from config / auto-detect."
+);
 function tool(def) {
   const schema = object2(def.shape);
   return { ...def, run: (args) => def.run(schema.parse(args)) };
@@ -24177,10 +24189,7 @@ var TOOLS = {
     annotations: READ_ONLY,
     shape: {
       repo_root: RepoRoot,
-      query: str(
-        "query",
-        "Keywords about the area you're touching, e.g. 'cache redis invalidation'. Empty lists all."
-      ),
+      query: str("query", "Keywords about the area you're touching, e.g. 'cache redis invalidation'. Empty lists all."),
       limit: number2().int().min(1).max(10).default(3).meta({ title: "Limit" })
     },
     run: (a) => call(() => searchDecisions(a.repo_root, a.query, a.limit))

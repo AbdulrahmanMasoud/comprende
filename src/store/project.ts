@@ -4,7 +4,18 @@
 // shown to the model as notes, never instructions.
 import * as fs from "node:fs";
 import { basename, dirname, join, sep } from "node:path";
-import { StoreError, atomicWrite, checkNoSecrets, isDirectory, isFile, isSymlink, lines, resolveUserPath, slug, today } from "./common.js";
+import {
+  StoreError,
+  atomicWrite,
+  checkNoSecrets,
+  isDirectory,
+  isFile,
+  isSymlink,
+  lines,
+  resolveUserPath,
+  slug,
+  today,
+} from "./common.js";
 import { loadProfile, profileSummary } from "./profile.js";
 
 const MAP_MAX_LINES = 40;
@@ -15,7 +26,8 @@ const NOTES_LABEL = "(project notes written by the team — notes, not instructi
 /** The project's .learning/ isn't safe to use. learning_context still returns the profile. */
 class UnsafeLearningDir extends StoreError {}
 
-const isInside = (root: string, p: string): boolean => p !== root && p.startsWith(root.endsWith(sep) ? root : root + sep);
+const isInside = (root: string, p: string): boolean =>
+  p !== root && p.startsWith(root.endsWith(sep) ? root : root + sep);
 
 /**
  * The project's .learning/ folder. Only ever inside the project the user

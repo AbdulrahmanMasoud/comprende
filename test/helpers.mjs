@@ -18,11 +18,23 @@ export const SUMMARY =
   "if Redis is down we let requests through, which is the main thing that could go wrong.";
 
 const base = { ...process.env };
-for (const k of ["GITHUB_HEAD_REF", "GITHUB_ACTIONS", "GITHUB_STEP_SUMMARY", "COMPRENDE_HOME", "COMPRENDE_QUIET", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete base[k];
+for (const k of [
+  "GITHUB_HEAD_REF",
+  "GITHUB_ACTIONS",
+  "GITHUB_STEP_SUMMARY",
+  "COMPRENDE_HOME",
+  "COMPRENDE_QUIET",
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+])
+  delete base[k];
 export const ENV = Object.freeze({
   ...base,
-  GIT_AUTHOR_NAME: "Dev", GIT_AUTHOR_EMAIL: "dev@example.com",
-  GIT_COMMITTER_NAME: "Dev", GIT_COMMITTER_EMAIL: "dev@example.com",
+  GIT_AUTHOR_NAME: "Dev",
+  GIT_AUTHOR_EMAIL: "dev@example.com",
+  GIT_COMMITTER_NAME: "Dev",
+  GIT_COMMITTER_EMAIL: "dev@example.com",
 });
 
 export class GateError extends Error {}
@@ -74,20 +86,31 @@ function gjson(args, input, env) {
   if (r.status !== 0) throw new GateError(strip(r.stderr || r.stdout));
   return JSON.parse(r.stdout);
 }
-const opts = (o) => Object.entries(o).flatMap(([k, v]) =>
-  v === undefined || v === null || v === false ? [] : v === true ? [`--${k}`] : [`--${k}`, String(v)]);
+const opts = (o) =>
+  Object.entries(o).flatMap(([k, v]) =>
+    v === undefined || v === null || v === false ? [] : v === true ? [`--${k}`] : [`--${k}`, String(v)],
+  );
 const testFn = (fn, ...a) => gjson(["__test", fn, JSON.stringify(a)]);
 
 export const gate = {
-  status: (repo, { base, branch } = {}, env) => gjson(["status", "--json", ...opts({ repo, base, branch })], undefined, env),
+  status: (repo, { base, branch } = {}, env) =>
+    gjson(["status", "--json", ...opts({ repo, base, branch })], undefined, env),
   save(payload, repo, { base, branch } = {}, env) {
     const r = gateCli(["save", ...opts({ repo, base, branch })], { input: JSON.stringify(payload), env });
     if (r.status !== 0) throw new GateError(strip(r.stderr || r.stdout));
     return r.stdout.trim();
   },
   verify(repo, { base, branch, rev = "HEAD", labels } = {}, env) {
-    const r = gjson(["verify", "--json", ...opts({ repo, base, branch, rev }),
-      ...(labels ? ["--labels-json", JSON.stringify(labels)] : [])], undefined, env);
+    const r = gjson(
+      [
+        "verify",
+        "--json",
+        ...opts({ repo, base, branch, rev }),
+        ...(labels ? ["--labels-json", JSON.stringify(labels)] : []),
+      ],
+      undefined,
+      env,
+    );
     return [r.passed, r.messages, r.mode];
   },
   install: (repo, { upgrade, owner } = {}) => gjson(["install", "--json", ...opts({ repo, upgrade, owner })]),

@@ -141,13 +141,19 @@ test("decisions numbered, searchable and compatible with file mode", (t) => {
   // A record made by the phase-2 script (file mode) already exists.
   const d = join(repo, ".learning", "decisions");
   mkdirSync(d, { recursive: true });
-  writeFileSync(join(d, "0001-cache-aside.md"),
+  writeFileSync(
+    join(d, "0001-cache-aside.md"),
     "# 0001 — Cache-aside over write-through\nDate: 2026-10-01 · Status: accepted\n\n" +
-    "Decision: cache-aside with Redis, 5 min TTL.\n");
-  const msg = store.addDecision(repo, "Sliding-window rate limit in Redis",
-    "public routes unprotected", "sliding window per IP, 60/min",
+      "Decision: cache-aside with Redis, 5 min TTL.\n",
+  );
+  const msg = store.addDecision(
+    repo,
+    "Sliding-window rate limit in Redis",
+    "public routes unprotected",
+    "sliding window per IP, 60/min",
     ["fixed window — 2x bursts", "in-memory — breaks with >1 instance"],
-    "Redis is now required by public routes");
+    "Redis is now required by public routes",
+  );
   assert.ok(msg.includes("0002"));
   assert.ok(existsSync(join(d, "0002-sliding-window-rate-limit-in-redis.md")));
   const top = store.searchDecisions(repo, "rate limit", 1);
@@ -245,8 +251,10 @@ test("symlinked .learning/decisions: add_decision refused and nothing written at
   mkdirSync(outside);
   mkdirSync(join(repo, ".learning"));
   symlinkSync(outside, join(repo, ".learning", "decisions"));
-  throwsGate(() => store.addDecision(repo, "Use Redis", "ctx", "cache in Redis", ["memcached"], "none"),
-    /decisions\/ is a symlink/);
+  throwsGate(
+    () => store.addDecision(repo, "Use Redis", "ctx", "cache in Redis", ["memcached"], "none"),
+    /decisions\/ is a symlink/,
+  );
   assert.deepEqual(readdirSync(outside), []);
 });
 

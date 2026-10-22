@@ -1,9 +1,34 @@
 // Turning the gate on: install (and what it writes), and protect (the GitHub ruleset).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { accessSync, chmodSync, constants, existsSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  chmodSync,
+  constants,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { delimiter, join } from "node:path";
-import { commitAll, ENV, gate, git, gitTry, INPUT, out, read, REPO_GATE, setup, sh, throwsGate, tmp, write } from "./helpers.mjs";
+import {
+  commitAll,
+  ENV,
+  gate,
+  git,
+  gitTry,
+  INPUT,
+  out,
+  read,
+  REPO_GATE,
+  setup,
+  sh,
+  throwsGate,
+  tmp,
+  write,
+} from "./helpers.mjs";
 
 const FAKE_GH = `#!${process.execPath}
 const fs = require("fs");
@@ -45,9 +70,13 @@ function fakeGh(dir, mode) {
   const log = join(dir, "gh.log");
   const env = { ...ENV, PATH: `${bindir}${delimiter}${ENV.PATH}`, FAKE_GH_LOG: log };
   if (mode) env.FAKE_GH_MODE = mode;
-  const calls = () => existsSync(log)
-    ? readFileSync(log, "utf8").split("\n").filter((l) => l !== "").map((l) => JSON.parse(l))
-    : [];
+  const calls = () =>
+    existsSync(log)
+      ? readFileSync(log, "utf8")
+          .split("\n")
+          .filter((l) => l !== "")
+          .map((l) => JSON.parse(l))
+      : [];
   return { env, calls };
 }
 
@@ -57,8 +86,13 @@ function which(cmd) {
     if (!d) continue;
     const p = join(d, cmd);
     try {
-      if (statSync(p).isFile()) { accessSync(p, constants.X_OK); return p; }
-    } catch { /* keep looking */ }
+      if (statSync(p).isFile()) {
+        accessSync(p, constants.X_OK);
+        return p;
+      }
+    } catch {
+      /* keep looking */
+    }
   }
   throw new Error(`${cmd} not found on PATH`);
 }
@@ -66,8 +100,12 @@ function which(cmd) {
 test("install writes everything and is idempotent", (t) => {
   const s = setup(t);
   const dev = s.dev;
-  for (const rel of [REPO_GATE, ".learning/config.json", ".github/workflows/ownership-check.yml",
-    ".claude/settings.json"]) {
+  for (const rel of [
+    REPO_GATE,
+    ".learning/config.json",
+    ".github/workflows/ownership-check.yml",
+    ".claude/settings.json",
+  ]) {
     assert.ok(existsSync(join(dev, rel)), rel);
   }
   const hook = join(dev, ".git", "hooks", "pre-push");
@@ -100,7 +138,10 @@ test("install merges into existing Claude settings and keeps a foreign hook", (t
   const out = gate.install(repo);
   const s = JSON.parse(read(repo, ".claude/settings.json"));
   assert.deepEqual(s.permissions, existing.permissions);
-  assert.deepEqual(s.hooks.PreToolUse.map((g) => g.matcher), ["Edit", "Bash"]);
+  assert.deepEqual(
+    s.hooks.PreToolUse.map((g) => g.matcher),
+    ["Edit", "Bash"],
+  );
   assert.ok(out.some((l) => l.startsWith("SKIPPED pre-push")));
   assert.equal(read(repo, ".git/hooks/pre-push"), "#!/bin/sh\necho mine\n");
 });
@@ -127,8 +168,8 @@ test("install leaves a settings.json with hooks of an unexpected shape untouched
 
 test("install adds report.local.json to .gitignore once and keeps its lines", (t) => {
   const { dev } = setup(t);
-  assert.equal(read(dev, ".gitignore"), `${INPUT}\n`);                       // created when missing
-  writeFileSync(join(dev, ".gitignore"), "node_modules/\n*.log");            // no trailing newline
+  assert.equal(read(dev, ".gitignore"), `${INPUT}\n`); // created when missing
+  writeFileSync(join(dev, ".gitignore"), "node_modules/\n*.log"); // no trailing newline
   assert.ok(gate.install(dev).includes(`added ${INPUT} to .gitignore`));
   assert.equal(read(dev, ".gitignore"), `node_modules/\n*.log\n${INPUT}\n`);
   assert.ok(gate.install(dev).includes(`.gitignore already ignores ${INPUT}`));
@@ -174,7 +215,7 @@ test("the install PR with CODEOWNERS needs no report", (t) => {
 });
 
 test("install's one .gitignore line needs no report; any other .gitignore edit does", (t) => {
-  const dir = tmp(t);                                                         // main has no gate yet
+  const dir = tmp(t); // main has no gate yet
   const remote = join(dir, "remote.git");
   git(dir, "init", "-q", "--bare", "-b", "main", remote);
   const dev = join(dir, "dev");
@@ -221,7 +262,11 @@ test("protect apply creates the ruleset", (t) => {
 });
 
 // Parametrized: (mode, match). The helper omits --approvals when unset, so pass 1, the default.
-for (const [mode, match] of [["exists", "already exists"], ["forbidden", "admin"], ["free-private", "free plan"]]) {
+for (const [mode, match] of [
+  ["exists", "already exists"],
+  ["forbidden", "admin"],
+  ["free-private", "free plan"],
+]) {
   test(`protect says why it couldn't create the ruleset [${mode}-${match}]`, (t) => {
     const { dev, tmp } = setup(t);
     const gh = fakeGh(tmp, mode);

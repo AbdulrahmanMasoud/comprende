@@ -62,7 +62,11 @@ function readStdin(): string {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-interface Args { cmd: string; opts: Record<string, string | boolean>; rest: string[] }
+interface Args {
+  cmd: string;
+  opts: Record<string, string | boolean>;
+  rest: string[];
+}
 
 const FLAGS = new Set(["json", "from-plugin", "upgrade", "apply", "no-code-owners", "help"]);
 
@@ -79,7 +83,8 @@ function parseArgs(argv: string[]): Args {
       if (FLAGS.has(k) && v === undefined) opts[k] = true;
       else if (VALUE_OPTS.has(k)) {
         const val = v ?? tail[++i];
-        if (val === undefined || (v === undefined && val.startsWith("--"))) throw new UsageError(`--${k} needs a value`);
+        if (val === undefined || (v === undefined && val.startsWith("--")))
+          throw new UsageError(`--${k} needs a value`);
         opts[k] = val;
       } else if (cmd === "pre-push") rest.push(a);
       else throw new UsageError(`unknown option --${k}`);
@@ -94,7 +99,14 @@ class UsageError extends Error {}
 /** Internal functions, JSON in / JSON out, for the black-box test suite. */
 function testCall(fn: string, a: unknown[]): unknown {
   const s = (i: number) => (a[i] === null || a[i] === undefined ? null : String(a[i]));
-  const consts: Record<string, unknown> = { GATE_VERSION, GATE_FILES, WORKFLOW, CHECK_NAME, REPO_GATE: GATE_REL, ALWAYS_ON };
+  const consts: Record<string, unknown> = {
+    GATE_VERSION,
+    GATE_FILES,
+    WORKFLOW,
+    CHECK_NAME,
+    REPO_GATE: GATE_REL,
+    ALWAYS_ON,
+  };
   if (fn in consts) return consts[fn];
   switch (fn) {
     case "collect_changes": {
@@ -186,7 +198,11 @@ export function main(argv: string[]): number {
         if (summaryPath) {
           try {
             const root = repoRoot(o("repo"));
-            appendFileSync(summaryPath, jobSummary(root, currentBranch(root, o("branch")), rev, o("base"), passed, messages, mode), "utf8");
+            appendFileSync(
+              summaryPath,
+              jobSummary(root, currentBranch(root, o("branch")), rev, o("base"), passed, messages, mode),
+              "utf8",
+            );
           } catch {
             /* a summary is a nicety, never a failure */
           }

@@ -104,15 +104,23 @@ function parseConfig(raw: string, where: string): Config {
   } catch (e) {
     throw new GateError(`${where}: not valid JSON (${(e as Error).message}).`);
   }
-  const section = isObj(data) ? (isObj(data.ownership_check) ? data.ownership_check : "ownership_check" in data ? data.ownership_check : data) : null;
+  const section = isObj(data)
+    ? isObj(data.ownership_check)
+      ? data.ownership_check
+      : "ownership_check" in data
+        ? data.ownership_check
+        : data
+    : null;
   if (!isObj(section)) throw new GateError(`${where}: expected an object like {"ownership_check": {...}}.`);
   const cfg = { ...DEFAULT_CONFIG, ...section } as Record<string, unknown>;
   // Strict types: a string where a list belongs would be read character by
   // character, and "*" alone matches every path — silently disabling the gate.
-  if (!["required", "suggested", "off"].includes(cfg.mode as string)) throw new GateError(`${where}: mode must be required, suggested or off.`);
+  if (!["required", "suggested", "off"].includes(cfg.mode as string))
+    throw new GateError(`${where}: mode must be required, suggested or off.`);
   for (const key of ["sensitive", "ignore"]) {
     const v = cfg[key];
-    if (!Array.isArray(v) || !v.every((x) => typeof x === "string" && x)) throw new GateError(`${where}: "${key}" must be a list of glob strings.`);
+    if (!Array.isArray(v) || !v.every((x) => typeof x === "string" && x))
+      throw new GateError(`${where}: "${key}" must be a list of glob strings.`);
     for (const pat of v as string[]) {
       try {
         globMatch("", pat);
@@ -128,7 +136,8 @@ function parseConfig(raw: string, where: string): Config {
     const m = cfg[key];
     const literal = valueSource(raw, section === data ? [key] : ["ownership_check", key]);
     const floatLiteral = literal !== null && /[.eE]/.test(literal);
-    if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral) throw new GateError(`${where}: "${key}" must be a non-negative integer.`);
+    if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral)
+      throw new GateError(`${where}: "${key}" must be a non-negative integer.`);
   }
   return { ...(cfg as unknown as Config), _configured: true };
 }
@@ -151,7 +160,8 @@ export function loadConfig(root: string, rev?: string | null): Config {
  *  has no config, the strict defaults apply — never the PR's own config,
  *  which the PR could have written to switch itself off. */
 export function rulesForVerify(root: string, baseRef: string): Config {
-  if (hasFile(root, baseRef, CONFIG_PATH)) return parseConfig(showSmall(root, baseRef, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} on ${baseRef}`);
+  if (hasFile(root, baseRef, CONFIG_PATH))
+    return parseConfig(showSmall(root, baseRef, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} on ${baseRef}`);
   return { ...DEFAULT_CONFIG, _configured: false };
 }
 
@@ -172,4 +182,5 @@ export function isSensitive(path: string, mode: string, cfg: Pick<Config, "sensi
 }
 
 /** Ignored files don't need questions — unless they're also sensitive. */
-export const noQuestions = (path: string, mode: string, cfg: Config) => matches(path, cfg.ignore) && !isSensitive(path, mode, cfg);
+export const noQuestions = (path: string, mode: string, cfg: Config) =>
+  matches(path, cfg.ignore) && !isSensitive(path, mode, cfg);

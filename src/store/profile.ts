@@ -3,7 +3,19 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { NOTE_MAX_CHARS, StoreError, atomicWrite, checkNoSecrets, dict, expandHome, isRecord, isoDate, slug, today, truncate } from "./common.js";
+import {
+  NOTE_MAX_CHARS,
+  StoreError,
+  atomicWrite,
+  checkNoSecrets,
+  dict,
+  expandHome,
+  isRecord,
+  isoDate,
+  slug,
+  today,
+  truncate,
+} from "./common.js";
 
 const PROFILE_VERSION = 1;
 const MAX_EVIDENCE = 3; // notes kept per topic: the latest matter most
@@ -36,7 +48,13 @@ function profilePath(): string {
 const emptyProfile = (): Profile => ({ version: PROFILE_VERSION, preferences: dict(), topics: dict() });
 
 function freshTopic(): Topic {
-  return { level: null, explained_on: null, evidence: [], checkpoints: { right: 0, wrong: 0, streak: 0 }, updated: today() };
+  return {
+    level: null,
+    explained_on: null,
+    evidence: [],
+    checkpoints: { right: 0, wrong: 0, streak: 0 },
+    updated: today(),
+  };
 }
 
 const count = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -176,7 +194,8 @@ export function setPreference(key: string, value: string): string {
 export function profileSummary(profile: Profile): string[] {
   const prefs = Object.entries(profile.preferences);
   const topics = Object.entries(profile.topics);
-  if (!topics.length && !prefs.length) return ["No profile yet. Calibrate from the conversation and record what you learn."];
+  if (!topics.length && !prefs.length)
+    return ["No profile yet. Calibrate from the conversation and record what you learn."];
   // Most recently touched first: recent evidence is the most reliable.
   const ordered = topics.sort(([, a], [, b]) => (a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0));
   const names = (list: [string, Topic][]): string => {

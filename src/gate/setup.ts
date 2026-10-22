@@ -84,7 +84,10 @@ function rulesetBody(approvals = 1, codeOwners = true) {
           required_review_thread_resolution: false,
         },
       },
-      { type: "required_status_checks", parameters: { strict_required_status_checks_policy: false, required_status_checks: [{ context: CHECK_NAME }] } },
+      {
+        type: "required_status_checks",
+        parameters: { strict_required_status_checks_policy: false, required_status_checks: [{ context: CHECK_NAME }] },
+      },
     ],
   };
 }
@@ -95,7 +98,9 @@ function gh(root: string, args: string[], input?: string): string {
     r = run("gh", args, { cwd: root, input });
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new GateError("The GitHub CLI (gh) isn't installed. Install it and run `gh auth login`, or set this up by hand: see the README's 'Protect the branch' section.");
+      throw new GateError(
+        "The GitHub CLI (gh) isn't installed. Install it and run `gh auth login`, or set this up by hand: see the README's 'Protect the branch' section.",
+      );
     }
     throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${(e as Error).message}`);
   }
@@ -103,7 +108,9 @@ function gh(root: string, args: string[], input?: string): string {
     const err = (r.stderr.toString("utf8") || r.stdout.toString("utf8")).trim();
     const low = err.toLowerCase();
     if (err.includes("Upgrade to GitHub Pro") || (low.includes("upgrade") && low.includes("plan"))) {
-      throw new GateError("Rulesets aren't available for private repos on GitHub's free plan. Use Settings → Branches → branch protection instead (see README).");
+      throw new GateError(
+        "Rulesets aren't available for private repos on GitHub's free plan. Use Settings → Branches → branch protection instead (see README).",
+      );
     }
     if (err.includes("403") || err.includes("Must have admin rights") || err.includes("Resource not accessible")) {
       throw new GateError("GitHub refused: creating rules needs admin access to this repository.");
@@ -118,9 +125,11 @@ function gh(root: string, args: string[], input?: string): string {
  *  Without apply it only shows what it would do. */
 export function protect(repo?: string | null, apply = false, approvals = 1, codeOwners = true): string[] {
   const root = repoRoot(repo);
-  if (!Number.isInteger(approvals) || approvals < 0 || approvals > 10) throw new GateError("--approvals must be between 0 and 10.");
+  if (!Number.isInteger(approvals) || approvals < 0 || approvals > 10)
+    throw new GateError("--approvals must be between 0 and 10.");
   const nwo = gh(root, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).trim();
-  if (!/^[\w.-]+\/[\w.-]+$/.test(nwo)) throw new GateError(`Couldn't tell which GitHub repo this is (got ${JSON.stringify(nwo)}).`);
+  if (!/^[\w.-]+\/[\w.-]+$/.test(nwo))
+    throw new GateError(`Couldn't tell which GitHub repo this is (got ${JSON.stringify(nwo)}).`);
   let existing: unknown = [];
   try {
     existing = JSON.parse(gh(root, ["api", `repos/${nwo}/rulesets`]) || "[]");
@@ -128,18 +137,29 @@ export function protect(repo?: string | null, apply = false, approvals = 1, code
     if (e instanceof GateError) throw e;
   }
   for (const r of Array.isArray(existing) ? existing : []) {
-    if (isObj(r) && r.name === RULESET_NAME) return [`Ruleset '${RULESET_NAME}' already exists on ${nwo}: https://github.com/${nwo}/rules/${String(r.id)}`];
+    if (isObj(r) && r.name === RULESET_NAME)
+      return [`Ruleset '${RULESET_NAME}' already exists on ${nwo}: https://github.com/${nwo}/rules/${String(r.id)}`];
   }
   const body = rulesetBody(approvals, codeOwners);
   const plan = [
-    `Ruleset for ${nwo} (default branch): require a pull request with ${approvals} approval(s)` + (codeOwners ? " incl. code owners" : "") + `, and the '${CHECK_NAME}' status check.`,
+    `Ruleset for ${nwo} (default branch): require a pull request with ${approvals} approval(s)` +
+      (codeOwners ? " incl. code owners" : "") +
+      `, and the '${CHECK_NAME}' status check.`,
     "It adds to existing branch protection; it doesn't replace it.",
   ];
-  if (codeOwners) plan.push("Note: a code owner can't approve their own PR. On a one-person repo, use --no-code-owners.");
-  if (!apply) return [...plan, "Dry run — nothing changed. Rerun with --apply (needs admin) to create it.", JSON.stringify(body, null, 2)];
+  if (codeOwners)
+    plan.push("Note: a code owner can't approve their own PR. On a one-person repo, use --no-code-owners.");
+  if (!apply)
+    return [
+      ...plan,
+      "Dry run — nothing changed. Rerun with --apply (needs admin) to create it.",
+      JSON.stringify(body, null, 2),
+    ];
   let created: unknown = {};
   try {
-    created = JSON.parse(gh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}");
+    created = JSON.parse(
+      gh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}",
+    );
   } catch (e) {
     if (e instanceof GateError) throw e;
   }
@@ -173,7 +193,8 @@ export function mergeClaudeSettings(path: string): string {
   const groups = (hooks.PreToolUse ??= []) as { hooks?: { command?: string }[] }[];
   for (const g of groups) {
     for (const h of g?.hooks ?? []) {
-      if ((h?.command ?? "").includes("gate.mjs") && (h?.command ?? "").includes("claude-hook")) return `Claude hook already present (${path})`;
+      if ((h?.command ?? "").includes("gate.mjs") && (h?.command ?? "").includes("claude-hook"))
+        return `Claude hook already present (${path})`;
     }
   }
   groups.push({ matcher: "Bash", hooks: [{ type: "command", command: CLAUDE_HOOK_COMMAND, timeout: 60 }] } as never);
@@ -185,7 +206,8 @@ export function mergeClaudeSettings(path: string): string {
 function ignoreReportInput(root: string): string {
   const path = join(root, ".gitignore");
   const st = lstat(path);
-  if (st && (st.isSymbolicLink() || !st.isFile())) return `SKIPPED .gitignore: not a regular file; add ${REPORT_INPUT} to it by hand.`;
+  if (st && (st.isSymbolicLink() || !st.isFile()))
+    return `SKIPPED .gitignore: not a regular file; add ${REPORT_INPUT} to it by hand.`;
   let text = Buffer.alloc(0);
   if (st) {
     try {
@@ -205,16 +227,27 @@ function ignoreReportInput(root: string): string {
 function codeowners(root: string, owner?: string | null): string {
   const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
   if (!owner) {
-    return "MANUAL STEP 2: add to .github/CODEOWNERS (or rerun install with --owner @handle) and turn on 'Require review from Code Owners' — otherwise a PR could edit the workflow to skip the check:\n  " + lines.join("\n  ");
+    return (
+      "MANUAL STEP 2: add to .github/CODEOWNERS (or rerun install with --owner @handle) and turn on 'Require review from Code Owners' — otherwise a PR could edit the workflow to skip the check:\n  " +
+      lines.join("\n  ")
+    );
   }
-  if (!/^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/.test(owner)) throw new GateError(`--owner must be a GitHub @user, @org/team, or an email; got ${JSON.stringify(owner)}.`);
+  if (!/^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/.test(owner))
+    throw new GateError(`--owner must be a GitHub @user, @org/team, or an email; got ${JSON.stringify(owner)}.`);
   const path = join(root, ".github", "CODEOWNERS");
   const existing = exists(path) ? readFileSync(path, "utf8") : "";
-  const have = new Set(splitLines(existing).filter((l) => l.trim() && !l.trimStart().startsWith("#")).map((l) => l.trim().split(/\s+/)[0]));
+  const have = new Set(
+    splitLines(existing)
+      .filter((l) => l.trim() && !l.trimStart().startsWith("#"))
+      .map((l) => l.trim().split(/\s+/)[0]),
+  );
   const fresh = lines.filter((l) => !have.has(l.split(/\s+/)[0]));
   if (fresh.length) {
     const prefix = !existing || existing.endsWith("\n") ? "" : "\n";
-    atomicWrite(path, existing + prefix + "# Ownership gate: changes to the gate need lead review\n" + fresh.join("\n") + "\n");
+    atomicWrite(
+      path,
+      existing + prefix + "# Ownership gate: changes to the gate need lead review\n" + fresh.join("\n") + "\n",
+    );
   }
   return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on 'Require review from Code Owners' in branch protection.`;
 }
@@ -260,7 +293,9 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
   done.push(mergeClaudeSettings(join(root, ".claude", "settings.json")));
   done.push(ignoreReportInput(root));
   done.push(...installHooks(root));
-  done.push(`NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch — without it CI only warns.`);
+  done.push(
+    `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch — without it CI only warns.`,
+  );
   done.push(codeowners(root, owner));
   return done;
 }

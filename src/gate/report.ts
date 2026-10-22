@@ -21,7 +21,11 @@ export interface Report {
 /** JSON with sorted keys, so reports are stable and diff-friendly. */
 function stableJson(value: unknown, indent?: number): string {
   const sortDeep = (v: unknown): unknown =>
-    Array.isArray(v) ? v.map(sortDeep) : isObj(v) ? Object.fromEntries(sorted(Object.keys(v)).map((k) => [k, sortDeep(v[k])])) : v;
+    Array.isArray(v)
+      ? v.map(sortDeep)
+      : isObj(v)
+        ? Object.fromEntries(sorted(Object.keys(v)).map((k) => [k, sortDeep(v[k])]))
+        : v;
   return JSON.stringify(sortDeep(value), null, indent);
 }
 
@@ -43,9 +47,14 @@ export function renderReport(data: Report & { branch: string; date: string; base
     "",
     "## Verified understanding",
   ];
-  for (const path of sorted(Object.keys(data.verified))) lines.push(`- \`${path}\` — ` + (get(data.verified, path) ?? []).join("; "));
+  for (const path of sorted(Object.keys(data.verified)))
+    lines.push(`- \`${path}\` — ` + (get(data.verified, path) ?? []).join("; "));
   const unverified = sorted(Object.keys(data.files).filter((p) => !own(data.verified, p)));
-  if (unverified.length) lines.push("", "Also in this change (reviewed, no specific questions): " + unverified.map((p) => `\`${p}\``).join(", "));
+  if (unverified.length)
+    lines.push(
+      "",
+      "Also in this change (reviewed, no specific questions): " + unverified.map((p) => `\`${p}\``).join(", "),
+    );
   lines.push("", DATA_MARKER, "```json", stableJson(data, 1), "```", "");
   return lines.join("\n");
 }
@@ -57,7 +66,8 @@ function extractData(text: string): string | null {
 }
 
 export function parseReport(text: string): Report {
-  if (!text.includes(DATA_MARKER)) throw new GateError("Report is missing its data block — run the check again to regenerate it.");
+  if (!text.includes(DATA_MARKER))
+    throw new GateError("Report is missing its data block — run the check again to regenerate it.");
   const block = extractData(text);
   if (block === null) throw new GateError("Report data block is malformed — run the check again to regenerate it.");
   let data: unknown;
@@ -70,10 +80,13 @@ export function parseReport(text: string): Report {
     throw new GateError("Report data has the wrong shape — run the check again to regenerate it.");
   }
   for (const v of Object.values(data.verified as Record<string, unknown>)) {
-    if (!Array.isArray(v) || !v.every((x) => typeof x === "string")) throw new GateError("Report data has the wrong shape — run the check again to regenerate it.");
+    if (!Array.isArray(v) || !v.every((x) => typeof x === "string"))
+      throw new GateError("Report data has the wrong shape — run the check again to regenerate it.");
   }
   if (data.version !== GATE_VERSION) {
-    throw new GateError(`Report was made by gate v${String(data.version)}; this gate is v${GATE_VERSION}. If your branch is behind the base, merge it first; then run the check again.`);
+    throw new GateError(
+      `Report was made by gate v${String(data.version)}; this gate is v${GATE_VERSION}. If your branch is behind the base, merge it first; then run the check again.`,
+    );
   }
   return data as unknown as Report;
 }
@@ -110,7 +123,10 @@ function parseLenient(text: string): [Report, string | null] {
       }
     }
     // Old-format entries never match, so every file in it reads as changed.
-    return [{ files, verified: {}, summary: "", _outdated: true }, `Existing report can't be used (${(e as Error).message}); its files need verifying again.`];
+    return [
+      { files, verified: {}, summary: "", _outdated: true },
+      `Existing report can't be used (${(e as Error).message}); its files need verifying again.`,
+    ];
   }
 }
 
@@ -128,7 +144,9 @@ export function previousReport(root: string, branch: string, baseRef: string): [
   }
   const mb = git(root, ["merge-base", baseRef, "HEAD"], { check: false }).trim();
   if (mb) {
-    for (const commit of git(root, ["rev-list", `${mb}..HEAD`, "--", rel], { check: false }).split(/\s+/).filter(Boolean)) {
+    for (const commit of git(root, ["rev-list", `${mb}..HEAD`, "--", rel], { check: false })
+      .split(/\s+/)
+      .filter(Boolean)) {
       for (const rev of [commit, `${commit}^`]) {
         if (hasFile(root, rev, rel)) {
           const [report, note] = parseLenient(showSmall(root, rev, rel, MAX_REPORT_BYTES));

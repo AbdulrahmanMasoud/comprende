@@ -22,11 +22,24 @@ export function gitEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
   return { ...env, ...(extra ?? {}) };
 }
 
-export interface RunResult { status: number; stdout: Buffer; stderr: Buffer }
+export interface RunResult {
+  status: number;
+  stdout: Buffer;
+  stderr: Buffer;
+}
 
-export function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv; input?: string | Buffer; timeout?: number } = {}): RunResult {
+export function run(
+  cmd: string,
+  args: string[],
+  opts: { cwd?: string; env?: NodeJS.ProcessEnv; input?: string | Buffer; timeout?: number } = {},
+): RunResult {
   const r = spawnSync(cmd, args, {
-    cwd: opts.cwd, env: opts.env, input: opts.input, maxBuffer: 1 << 30, timeout: opts.timeout, windowsHide: true,
+    cwd: opts.cwd,
+    env: opts.env,
+    input: opts.input,
+    maxBuffer: 1 << 30,
+    timeout: opts.timeout,
+    windowsHide: true,
   });
   if (r.error) {
     const err = r.error as NodeJS.ErrnoException;
@@ -36,7 +49,11 @@ export function run(cmd: string, args: string[], opts: { cwd?: string; env?: Nod
   return { status: r.status ?? 1, stdout: r.stdout ?? Buffer.alloc(0), stderr: r.stderr ?? Buffer.alloc(0) };
 }
 
-export function gitBytes(root: string, args: string[], opts: { env?: Record<string, string>; check?: boolean; input?: Buffer | string } = {}): Buffer {
+export function gitBytes(
+  root: string,
+  args: string[],
+  opts: { env?: Record<string, string>; check?: boolean; input?: Buffer | string } = {},
+): Buffer {
   let r: RunResult;
   try {
     r = run("git", args, { cwd: root, env: gitEnv(opts.env), input: opts.input });
@@ -75,7 +92,8 @@ export function repoRoot(path?: string | null): string {
   return resolve(top);
 }
 
-export const refExists = (root: string, ref: string) => gitOk(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
+export const refExists = (root: string, ref: string) =>
+  gitOk(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
 
 export const hasFile = (root: string, rev: string, rel: string) => gitOk(root, ["cat-file", "-e", `${rev}:${rel}`]);
 
@@ -92,13 +110,15 @@ export function readBlob(root: string, sha: string): Buffer | null {
 export function showSmall(root: string, rev: string, rel: string, limit: number): string {
   const size = git(root, ["cat-file", "-s", `${rev}:${rel}`], { check: false }).trim();
   if (!/^\d+$/.test(size)) throw new GateError(`${rel} at ${rev} isn't readable.`);
-  if (Number(size) > limit) throw new GateError(`${rel} at ${rev} is larger than ${Math.floor(limit / 1024)} KB — refusing to read it.`);
+  if (Number(size) > limit)
+    throw new GateError(`${rel} at ${rev} is larger than ${Math.floor(limit / 1024)} KB — refusing to read it.`);
   return git(root, ["show", `${rev}:${rel}`]);
 }
 
 export function resolveBase(root: string, cfg: Pick<Config, "base">, base?: string | null): string {
   if (base) {
-    if (!refExists(root, base)) throw new GateError(`Base ref '${base}' not found. In CI, check out with fetch-depth: 0.`);
+    if (!refExists(root, base))
+      throw new GateError(`Base ref '${base}' not found. In CI, check out with fetch-depth: 0.`);
     return base;
   }
   const names = cfg.base ? [cfg.base] : [];
@@ -133,7 +153,9 @@ export const WORKTREE_SAFE = ["-c", "core.fsmonitor=false", "-c", `core.hooksPat
  *  Refuse those unless the user says they trust them. */
 function ensureRepoConfigIsInert(root: string): void {
   if (process.env.OWNERSHIP_GATE_TRUST_REPO_CONFIG === "1") return;
-  const out = git(root, ["config", "--show-scope", "--get-regexp", "^filter\\..*\\.(clean|smudge|process)$"], { check: false });
+  const out = git(root, ["config", "--show-scope", "--get-regexp", "^filter\\..*\\.(clean|smudge|process)$"], {
+    check: false,
+  });
   const local = new Set<string>();
   for (const line of splitLines(out)) {
     const parts = line.trim().split(/\s+/);
@@ -182,7 +204,9 @@ export function decodePath(raw: Buffer): string {
   try {
     return UTF8.decode(raw);
   } catch {
-    throw new GateError(`File name ${JSON.stringify(raw.toString("latin1"))} is not valid UTF-8; the gate can't track it reliably. Rename it.`);
+    throw new GateError(
+      `File name ${JSON.stringify(raw.toString("latin1"))} is not valid UTF-8; the gate can't track it reliably. Rename it.`,
+    );
   }
 }
 

@@ -2,13 +2,46 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { accessSync, chmodSync, constants, existsSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  chmodSync,
+  constants,
+  existsSync,
+  readFileSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { commitAll, ENV, gate, git, gitTry, out, payload, plugin, pushEvent, REPO, REPO_GATE, runGate, saveAndCommit, setup, sh, tmp, tmp as tmpDir, write } from "./helpers.mjs";
+import {
+  commitAll,
+  ENV,
+  gate,
+  git,
+  gitTry,
+  out,
+  payload,
+  plugin,
+  pushEvent,
+  REPO,
+  REPO_GATE,
+  runGate,
+  saveAndCommit,
+  setup,
+  sh,
+  tmp,
+  tmp as tmpDir,
+  write,
+} from "./helpers.mjs";
 
 const isExecutable = (p) => {
-  try { accessSync(p, constants.X_OK); return true; } catch { return false; }
+  try {
+    accessSync(p, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 const ALWAYS_ON = gate.const("ALWAYS_ON");
@@ -45,7 +78,9 @@ function fakeBin(t, node) {
 /** Run a hooks.json command the way Claude Code does on macOS and Linux. */
 const runHook = (command, bin, input = "", shell = "/bin/sh") =>
   spawnSync(shell, ["-c", command], {
-    input, encoding: "utf8", env: { HOME: bin, PATH: bin, CLAUDE_PLUGIN_ROOT: REPO, GIT_CONFIG_NOSYSTEM: "1" },
+    input,
+    encoding: "utf8",
+    env: { HOME: bin, PATH: bin, CLAUDE_PLUGIN_ROOT: REPO, GIT_CONFIG_NOSYSTEM: "1" },
   });
 
 const contextOf = (r) => JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
@@ -108,9 +143,10 @@ test("the Claude hook blocks only a push without a report", (t) => {
   write(dev, "src/app.js", "export const app = 2;\n");
   git(dev, "commit", "-qam", "unchecked");
 
-  const hook = (command, cwd = dev) => runGate(dev, ["claude-hook"], {
-    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: String(cwd) }),
-  });
+  const hook = (command, cwd = dev) =>
+    runGate(dev, ["claude-hook"], {
+      input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: String(cwd) }),
+    });
 
   assert.equal(hook("npm test").status, 0);
   const r = hook("git push");
@@ -128,17 +164,19 @@ test("the Claude hook says when the report is saved but not committed", (t) => {
   const { dev } = setup(t);
   write(dev, "src/app.js", "export const app = 2;\n");
   git(dev, "commit", "-qam", "unchecked");
-  const hook = (command) => runGate(dev, ["claude-hook"], {
-    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: dev }),
-  });
-  const PENDING = /report \.learning\/checks\/feature%2Frate-limit\.md is saved but not committed\. Commit it first, then push as a separate command/;
+  const hook = (command) =>
+    runGate(dev, ["claude-hook"], {
+      input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: dev }),
+    });
+  const PENDING =
+    /report \.learning\/checks\/feature%2Frate-limit\.md is saved but not committed\. Commit it first, then push as a separate command/;
 
-  let r = hook("git push");                                    // no report at all
+  let r = hook("git push"); // no report at all
   assert.equal(r.status, 2);
   assert.match(r.stderr, /No ownership report for branch 'feature\/rate-limit'/);
   assert.doesNotMatch(r.stderr, /not committed/);
 
-  gate.save(payload(), dev);                                   // saved, not committed:
+  gate.save(payload(), dev); // saved, not committed:
   r = hook("git add -A && git commit -qm report && git push"); // the hook runs before the commit
   assert.equal(r.status, 2);
   assert.match(r.stderr, PENDING);
@@ -148,11 +186,11 @@ test("the Claude hook says when the report is saved but not committed", (t) => {
   git(dev, "commit", "-qm", "report");
   assert.equal(hook("git push").status, 0);
 
-  write(dev, "src/app.js", "export const app = 3;\n");        // stale, and HEAD's report is the old one
+  write(dev, "src/app.js", "export const app = 3;\n"); // stale, and HEAD's report is the old one
   git(dev, "commit", "-qam", "more");
   r = hook("git push");
   assert.ok(r.status === 2 && /Changed after the check/.test(r.stderr) && !PENDING.test(r.stderr), r.stderr);
-  gate.save(payload(), dev);                                   // a newer report, not committed yet
+  gate.save(payload(), dev); // a newer report, not committed yet
   assert.match(hook("git push").stderr, PENDING);
 });
 
@@ -239,7 +277,7 @@ test("session start: gate off leaves only the always-on line", (t) => {
 });
 
 test("session start: the always-on line in every session, short", (t) => {
-  const dir = tmpDir(t);                                          // not a git repo at all
+  const dir = tmpDir(t); // not a git repo at all
   const out = JSON.parse(plugin(dir, ["session-start"], { input: JSON.stringify({ cwd: dir }) }).stdout);
   assert.equal(out.hookSpecificOutput.hookEventName, "SessionStart");
   assert.equal(out.hookSpecificOutput.additionalContext, ALWAYS_ON);
@@ -250,7 +288,10 @@ test("session start: the always-on line in every session, short", (t) => {
 test("session start: COMPRENDE_QUIET=1 drops the always-on line, not the gate", (t) => {
   const { dev, tmp } = setup(t);
   const dir = tmpDir(t);
-  assert.deepEqual(JSON.parse(plugin(dir, ["session-start"], { input: JSON.stringify({ cwd: dir }), env: QUIET }).stdout), {});
+  assert.deepEqual(
+    JSON.parse(plugin(dir, ["session-start"], { input: JSON.stringify({ cwd: dir }), env: QUIET }).stdout),
+    {},
+  );
   const ctx = JSON.parse(plugin(tmp, ["session-start"], { input: JSON.stringify({ cwd: dev }), env: QUIET }).stdout)
     .hookSpecificOutput.additionalContext;
   assert.ok(ctx.includes("ownership gate (mode: required)"), ctx);
@@ -282,7 +323,9 @@ test("hooks without node: SessionStart tells Claude, PreToolUse allows", (t) => 
   // The project-level hook that install writes for teammates without the plugin.
   const settings = JSON.parse(readFileSync(join(dev, ".claude/settings.json"), "utf8"));
   const project = spawnSync("/bin/sh", ["-c", settings.hooks.PreToolUse[0].hooks[0].command], {
-    input: pushEvent(dev), encoding: "utf8", env: { PATH: bin, CLAUDE_PROJECT_DIR: dev },
+    input: pushEvent(dev),
+    encoding: "utf8",
+    env: { PATH: bin, CLAUDE_PROJECT_DIR: dev },
   });
   assert.deepEqual([project.status, project.stdout, project.stderr], [0, "", ""]);
 });
@@ -302,7 +345,7 @@ test("session start on Node older than 20 adds the note; 20+ doesn't", (t) => {
   assert.equal(old.status, 0, old.stderr);
   assert.match(contextOf(old), NODE_NOTE);
   assert.match(contextOf(old), /18\.20\.4/);
-  assert.match(contextOf(old), /ownership gate/);                  // the rest still works
+  assert.match(contextOf(old), /ownership gate/); // the rest still works
   const current = runHook(SESSION_START, fakeBin(t, "20.0.0"), JSON.stringify({ cwd: dev }));
   assert.doesNotMatch(contextOf(current), NODE_NOTE);
 });

@@ -10,5 +10,15 @@
   "homepage": "https://github.com/AbdulrahmanMasoud/comprende",
   "repository": "https://github.com/AbdulrahmanMasoud/comprende",
   "license": "MIT",
-  "keywords": ["proof-of-understanding", "ai-code", "vibe-coding", "learning", "code-explanation", "onboarding", "code-review", "ownership", "teams"]
+  "keywords": [
+    "proof-of-understanding",
+    "ai-code",
+    "vibe-coding",
+    "learning",
+    "code-explanation",
+    "onboarding",
+    "code-review",
+    "ownership",
+    "teams"
+  ]
 }

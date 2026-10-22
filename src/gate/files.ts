@@ -1,6 +1,18 @@
 // Reading and writing files a repo controls: never through a symlink, never a FIFO,
 // never more than a size limit, and atomically when writing.
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { GateError } from "./shared.js";
 
@@ -40,7 +52,8 @@ export const MAX_REPORT_BYTES = 4 * 1024 * 1024;
  *  at /dev/zero or a secret), never a FIFO, never more than `limit` bytes. */
 export function readSmall(path: string, limit: number): string {
   const st = lstat(path);
-  if (!st || st.isSymbolicLink() || !st.isFile()) throw new GateError(`${basename(path)} must be a regular file, not a symlink or special file.`);
+  if (!st || st.isSymbolicLink() || !st.isFile())
+    throw new GateError(`${basename(path)} must be a regular file, not a symlink or special file.`);
   const fd = openSync(path, "r");
   try {
     const buf = Buffer.alloc(limit + 1);
@@ -49,7 +62,8 @@ export function readSmall(path: string, limit: number): string {
       const got = readSync(fd, buf, n, buf.length - n, null);
       if (got === 0) break;
       n += got;
-      if (n > limit) throw new GateError(`${basename(path)} is larger than ${Math.floor(limit / 1024)} KB — refusing to read it.`);
+      if (n > limit)
+        throw new GateError(`${basename(path)} is larger than ${Math.floor(limit / 1024)} KB — refusing to read it.`);
     }
     return buf.subarray(0, n).toString("utf8");
   } finally {

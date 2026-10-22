@@ -4,7 +4,24 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { callTool, commitAll, ENV, gate, gateCli, git, out, plugin, pushEvent, REPO_GATE, runGate, setup, sh, throwsGate, tmp, write } from "./helpers.mjs";
+import {
+  callTool,
+  commitAll,
+  ENV,
+  gate,
+  gateCli,
+  git,
+  out,
+  plugin,
+  pushEvent,
+  REPO_GATE,
+  runGate,
+  setup,
+  sh,
+  throwsGate,
+  tmp,
+  write,
+} from "./helpers.mjs";
 
 // Gate code that would leave a marker file if it ever ran.
 const codeWriteMarker = (marker) => `import fs from 'node:fs';\nfs.writeFileSync(${JSON.stringify(marker)}, 'x');\n`;
@@ -30,14 +47,14 @@ function plantShadowModules(root, marker) {
 
 test("the plugin's hook never runs the repo's own gate code", (t) => {
   const { dev, tmp } = setup(t);
-  unlinkSync(join(dev, ".claude/settings.json"));            // repo without the project-level hook
+  unlinkSync(join(dev, ".claude/settings.json")); // repo without the project-level hook
   const marker = join(tmp, "PWNED");
   writeFileSync(join(dev, REPO_GATE), codeWriteMarker(marker));
   write(dev, "src/app.js", "export const app = 2;\n");
   commitAll(dev, "unchecked + a malicious gate.mjs");
   const r = plugin(tmp, ["claude-hook", "--from-plugin"], { input: pushEvent(dev) });
-  assert.ok(!existsSync(marker));                            // the repo's code never ran
-  assert.ok(r.status === 2 && r.stderr.includes("No ownership report"));   // the plugin's own logic still blocks
+  assert.ok(!existsSync(marker)); // the repo's code never ran
+  assert.ok(r.status === 2 && r.stderr.includes("No ownership report")); // the plugin's own logic still blocks
   const npm = JSON.stringify({ tool_name: "Bash", tool_input: { command: "npm test" }, cwd: dev });
   assert.equal(plugin(tmp, ["claude-hook", "--from-plugin"], { input: npm }).status, 0);
 });
@@ -57,7 +74,7 @@ test("session start repins only for trusted code", (t) => {
   const before = readFileSync(hook, "utf8");
   writeFileSync(join(dev, REPO_GATE), "something different\n");
   assert.ok(sessionStart(dev, tmp).includes("NOT installed automatically"));
-  assert.equal(readFileSync(hook, "utf8"), before);               // still pinned to the trusted copy
+  assert.equal(readFileSync(hook, "utf8"), before); // still pinned to the trusted copy
 });
 
 // a module planted next to gate.mjs must never be imported by the hook.
@@ -68,10 +85,10 @@ test("a module planted next to gate.mjs never runs on push", (t) => {
   write(dev, "src/app.js", "export const app = 2;\n");
   commitAll(dev, "plant modules");
   unlinkSync(join(dev, ".git/hooks/pre-push"));
-  sessionStart(dev, tmp);                                         // auto-installs the pinned hook
+  sessionStart(dev, tmp); // auto-installs the pinned hook
   const r = push(dev);
   assert.ok(!existsSync(marker));
-  assert.ok(r.status !== 0 && r.stderr.includes("No ownership report"));   // the gate itself still worked
+  assert.ok(r.status !== 0 && r.stderr.includes("No ownership report")); // the gate itself still worked
 });
 
 // gate.mjs swapped after the hook was installed is not executed.
@@ -112,9 +129,9 @@ test("a shared core.hooksPath is never touched", (t) => {
   git(dev, "config", "core.hooksPath", shared);
   const ctx = sessionStart(dev, tmp);
   assert.ok(!existsSync(join(shared, "pre-push")) && ctx.includes("core.hooksPath is set"));
-  const out = gate.installHooks(dev)[0];                          // explicit, but shared dir: refuse
+  const out = gate.installHooks(dev)[0]; // explicit, but shared dir: refuse
   assert.ok(out.startsWith("SKIPPED") && out.includes("outside this repo") && !existsSync(join(shared, "pre-push")));
-  git(dev, "config", "core.hooksPath", ".husky");                 // repo-local custom dir: allowed explicitly
+  git(dev, "config", "core.hooksPath", ".husky"); // repo-local custom dir: allowed explicitly
   assert.ok(gate.installHooks(dev)[0].startsWith("installed") && existsSync(join(dev, ".husky/pre-push")));
 });
 
@@ -163,7 +180,7 @@ test("a symlinked report or settings file is not followed", (t) => {
   mkdirSync(dirname(rel), { recursive: true });
   symlinkSync("/dev/zero", rel);
   write(dev, "src/app.js", "export const app = 2;\n");
-  const st = gate.status(dev);                                    // lenient: notes it, doesn't read it
+  const st = gate.status(dev); // lenient: notes it, doesn't read it
   assert.ok(st.notes.some((n) => n.includes("symlink")));
   unlinkSync(join(dev, ".claude/settings.json"));
   symlinkSync("/dev/zero", join(dev, ".claude/settings.json"));
@@ -181,7 +198,7 @@ test("filter commands from the repo's own git config are refused", (t) => {
   assert.throws(() => callTool("gate_status", { repo_root: dev, base: "", branch: "" }), /filter commands/);
   assert.ok(!existsSync(marker));
   const trusted = { ...ENV, OWNERSHIP_GATE_TRUST_REPO_CONFIG: "1" };
-  assert.equal(runGate(dev, ["status"], { env: trusted }).status, 0);   // explicit trust: the user's own setup
+  assert.equal(runGate(dev, ["status"], { env: trusted }).status, 0); // explicit trust: the user's own setup
 });
 
 test("an fsmonitor command from the repo's own git config never runs", (t) => {

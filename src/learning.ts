@@ -98,7 +98,8 @@ const NUMBERED = /^([0-9]{4})-/;
 
 function decision(root: string, title: string): void {
   const folder = join(root, ".learning", "decisions");
-  if (!fs.statSync(folder, { throwIfNoEntry: false })?.isDirectory()) exit("No .learning/decisions/ here. Run `learning.mjs init` first.");
+  if (!fs.statSync(folder, { throwIfNoEntry: false })?.isDirectory())
+    exit("No .learning/decisions/ here. Run `learning.mjs init` first.");
   // Next number = highest existing + 1, so deleted records never cause reuse.
   const numbers = fs
     .readdirSync(folder)

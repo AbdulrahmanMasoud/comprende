@@ -3,7 +3,19 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { commitAll, gate, git, payload, read, saveAndCommit, setup, SUMMARY, throwsGate, tmp, write } from "./helpers.mjs";
+import {
+  commitAll,
+  gate,
+  git,
+  payload,
+  read,
+  saveAndCommit,
+  setup,
+  SUMMARY,
+  throwsGate,
+  tmp,
+  write,
+} from "./helpers.mjs";
 
 test("full flow: save, commit, verify, then stale, then recheck", (t) => {
   const { dev } = setup(t);
@@ -13,10 +25,18 @@ test("full flow: save, commit, verify, then stale, then recheck", (t) => {
 
   let st = gate.status(dev);
   assert.deepEqual(Object.fromEntries(st.files.map((f) => [f.path, f.state])), {
-    "package-lock.json": "new", "src/app.js": "new", "src/util.js": "new",
+    "package-lock.json": "new",
+    "src/app.js": "new",
+    "src/util.js": "new",
   });
-  assert.deepEqual(st.files.filter((f) => f.ignored).map((f) => f.path), ["package-lock.json"]);
-  assert.deepEqual(st.files.filter((f) => f.untracked).map((f) => f.path), ["src/util.js"]);
+  assert.deepEqual(
+    st.files.filter((f) => f.ignored).map((f) => f.path),
+    ["package-lock.json"],
+  );
+  assert.deepEqual(
+    st.files.filter((f) => f.untracked).map((f) => f.path),
+    ["src/util.js"],
+  );
 
   throwsGate(() => gate.save({ summary: "did stuff", verified: { "src/app.js": ["x"] } }, dev), /summary/);
   throwsGate(() => gate.save({ summary: SUMMARY, verified: { "src/nope.js": ["x"] } }, dev), /Not part of this change/);
@@ -71,7 +91,10 @@ test("a change of only ignored files needs no report, and a deleted file is fing
   const { dev } = setup(t);
   write(dev, "package-lock.json", '{"only": "lock"}\n');
   const st = gate.status(dev);
-  assert.deepEqual(st.files.map((f) => f.ignored), [true]);
+  assert.deepEqual(
+    st.files.map((f) => f.ignored),
+    [true],
+  );
   assert.deepEqual(st.must_verify, []);
   git(dev, "commit", "-qam", "lockfile only");
   assert.ok(gate.verify(dev)[0]); // ignored-only change: no report needed (e.g. dependency bots)
@@ -101,8 +124,14 @@ test("summary length counts characters, not UTF-16 units or exotic whitespace", 
   const { dev } = setup(t);
   // More than small_change_lines, so the full min_summary_chars (80) applies.
   write(dev, "src/app.js", Array.from({ length: 12 }, (_, i) => `export const app${i} = ${i};\n`).join(""));
-  throwsGate(() => gate.save({ summary: "😀".repeat(40), verified: { "src/app.js": ["x"] } }, dev), /at least 80 characters/);
-  throwsGate(() => gate.save({ summary: "ok" + "\x1c".repeat(80), verified: { "src/app.js": ["x"] } }, dev), /at least 80 characters/);
+  throwsGate(
+    () => gate.save({ summary: "😀".repeat(40), verified: { "src/app.js": ["x"] } }, dev),
+    /at least 80 characters/,
+  );
+  throwsGate(
+    () => gate.save({ summary: "ok" + "\x1c".repeat(80), verified: { "src/app.js": ["x"] } }, dev),
+    /at least 80 characters/,
+  );
   gate.save({ summary: "😀".repeat(80), verified: { "src/app.js": ["x"] } }, dev);
 });
 

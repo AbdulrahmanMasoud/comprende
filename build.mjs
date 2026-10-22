@@ -27,7 +27,11 @@ const entries = [
   // never shadow a module it loads.
   // The version and features lines are read by other gates (status notes, and
   // whether the base branch's copy supports a feature such as the fast path).
-  { name: "gate", src: "src/gate/cli.ts", banner: `${header("src/gate/")}// ownership-gate-version: ${version}\n// ownership-gate-features: ${features}` },
+  {
+    name: "gate",
+    src: "src/gate/cli.ts",
+    banner: `${header("src/gate/")}// ownership-gate-version: ${version}\n// ownership-gate-features: ${features}`,
+  },
   { name: "learning", src: "src/learning.ts", banner: header("src/learning.ts") },
   // The MCP server bundles its SDK; esbuild needs a `require` shim for the
   // CommonJS bits of its dependencies.

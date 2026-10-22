@@ -3,7 +3,22 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { commitAll, ENV, gate, git, gitTry, out, payload, read, runGate, setBaseConfig, setup, throwsGate, tmp, write } from "./helpers.mjs";
+import {
+  commitAll,
+  ENV,
+  gate,
+  git,
+  gitTry,
+  out,
+  payload,
+  read,
+  runGate,
+  setBaseConfig,
+  setup,
+  throwsGate,
+  tmp,
+  write,
+} from "./helpers.mjs";
 
 function setMode(root, mode) {
   const cfgPath = join(root, ".learning/config.json");
@@ -57,8 +72,10 @@ test("base without config uses strict defaults, not the PR's config", (t) => {
   writeFileSync(join(dev, ".learning/config.json"), JSON.stringify(cfg));
   commitAll(dev, "change + turn gate off");
   const [passed, problems, mode] = gate.verify(dev, { base: "origin/scratch" });
-  assert.ok(!passed && mode === "required" && problems[0].includes("No ownership report"),
-    JSON.stringify({ passed, problems, mode }));
+  assert.ok(
+    !passed && mode === "required" && problems[0].includes("No ownership report"),
+    JSON.stringify({ passed, problems, mode }),
+  );
   const wf = read(dev, ".github/workflows/ownership-check.yml");
   assert.ok(wf.includes("edited"));
 });
@@ -69,8 +86,9 @@ test("the skip label comes from the base branch's config", (t) => {
   commitAll(dev, "unchecked");
   assert.equal(gate.verify(dev, { labels: ["skip-ownership-check"] })[2], "skipped");
   assert.ok(!gate.verify(dev, { labels: ["some-other-label"] })[0]);
-  const r = runGate(dev, ["verify", "--labels-json", '["skip-ownership-check"]'],
-    { env: { ...ENV, GITHUB_ACTIONS: "true" } });
+  const r = runGate(dev, ["verify", "--labels-json", '["skip-ownership-check"]'], {
+    env: { ...ENV, GITHUB_ACTIONS: "true" },
+  });
   assert.ok(r.status === 0 && r.stdout.includes("::warning"), r.stdout + r.stderr);
 });
 
@@ -116,8 +134,12 @@ test("in a fork, upstream/<branch> is preferred as the base", (t) => {
 
 // Config types are validated; a string list must not disable the gate.
 for (const bad of [
-  { ignore: "**/*.lock" }, { sensitive: "src/auth/**" }, { min_summary_chars: "80" },
-  { min_summary_chars: true }, { mode: "strict" }, { base: 5 },
+  { ignore: "**/*.lock" },
+  { sensitive: "src/auth/**" },
+  { min_summary_chars: "80" },
+  { min_summary_chars: true },
+  { mode: "strict" },
+  { base: 5 },
 ]) {
   test(`bad config types are rejected [${JSON.stringify(bad)}]`, (t) => {
     const { dev } = setup(t);
@@ -151,7 +173,10 @@ test("only the gate's own min_summary_chars is checked for a float literal", (t)
   writeFileSync(p, JSON.stringify({ ...cfg, notes: { min_summary_chars: 1.5 } }, null, 2));
   gate.status(dev);
   // A duplicate key: the last one wins, as JSON.parse reads it.
-  writeFileSync(p, readFileSync(p, "utf8").replace('"min_summary_chars": 80', '"min_summary_chars": 1.5, "min_summary_chars": 80'));
+  writeFileSync(
+    p,
+    readFileSync(p, "utf8").replace('"min_summary_chars": 80', '"min_summary_chars": 1.5, "min_summary_chars": 80'),
+  );
   gate.status(dev);
 });
 
@@ -180,13 +205,22 @@ test("a reversed range in a config glob doesn't crash, and doesn't open the gate
 
 test("glob edge cases follow Comprende's glob rules", () => {
   const cases = [
-    ["a", "[]a]", true], ["]", "[]a]", true], ["b", "[]a]", false],
-    ["b", "[!]]", true], ["]", "[!]]", false],
-    ["a😀b", "a?b", true], ["a😀😀b", "a?b", false],
-    ["x-y", "x[-]y", true], ["d", "[a-c-e]", false], ["e", "[a-c-e]", true],
-    ["web/package-lock.json", "**/package-lock.json", true], ["package-lock.json", "**/package-lock.json", true],
-    ["a.b+c(d)", "a.b+c(d)", true], ["axb+c(d)", "a.b+c(d)", false],
-    ["anything", "[z-a]*", false], ["q", "[!z-a]", true],
+    ["a", "[]a]", true],
+    ["]", "[]a]", true],
+    ["b", "[]a]", false],
+    ["b", "[!]]", true],
+    ["]", "[!]]", false],
+    ["a😀b", "a?b", true],
+    ["a😀😀b", "a?b", false],
+    ["x-y", "x[-]y", true],
+    ["d", "[a-c-e]", false],
+    ["e", "[a-c-e]", true],
+    ["web/package-lock.json", "**/package-lock.json", true],
+    ["package-lock.json", "**/package-lock.json", true],
+    ["a.b+c(d)", "a.b+c(d)", true],
+    ["axb+c(d)", "a.b+c(d)", false],
+    ["anything", "[z-a]*", false],
+    ["q", "[!z-a]", true],
   ];
   for (const [path, pat, want] of cases) {
     // None of these patterns can match path + "/_", which is_sensitive also tries.

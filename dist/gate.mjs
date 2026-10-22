@@ -15,7 +15,19 @@ import { join as join4 } from "node:path";
 import { join as join3 } from "node:path";
 
 // src/gate/files.ts
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 // src/gate/shared.ts
@@ -28,7 +40,13 @@ var GATE_REL = `${LEARNING}/gate.mjs`;
 var REPORT_INPUT = `${LEARNING}/report.local.json`;
 var ZERO_SHA = "0".repeat(40);
 var REGULAR_MODES = ["100644", "100755"];
-var GATE_FILES = [CONFIG_PATH, GATE_REL, ".github/workflows/ownership-check.yml", ".claude/settings.json", ".github/CODEOWNERS"];
+var GATE_FILES = [
+  CONFIG_PATH,
+  GATE_REL,
+  ".github/workflows/ownership-check.yml",
+  ".claude/settings.json",
+  ".github/CODEOWNERS"
+];
 var GateError = class extends Error {
 };
 var SELF = (() => {
@@ -77,7 +95,8 @@ var MAX_CONFIG_BYTES = 256 * 1024;
 var MAX_REPORT_BYTES = 4 * 1024 * 1024;
 function readSmall(path, limit) {
   const st = lstat(path);
-  if (!st || st.isSymbolicLink() || !st.isFile()) throw new GateError(`${basename(path)} must be a regular file, not a symlink or special file.`);
+  if (!st || st.isSymbolicLink() || !st.isFile())
+    throw new GateError(`${basename(path)} must be a regular file, not a symlink or special file.`);
   const fd = openSync(path, "r");
   try {
     const buf = Buffer.alloc(limit + 1);
@@ -86,7 +105,8 @@ function readSmall(path, limit) {
       const got = readSync(fd, buf, n, buf.length - n, null);
       if (got === 0) break;
       n += got;
-      if (n > limit) throw new GateError(`${basename(path)} is larger than ${Math.floor(limit / 1024)} KB \u2014 refusing to read it.`);
+      if (n > limit)
+        throw new GateError(`${basename(path)} is larger than ${Math.floor(limit / 1024)} KB \u2014 refusing to read it.`);
     }
     return buf.subarray(0, n).toString("utf8");
   } finally {
@@ -194,12 +214,14 @@ function readBlob(root, sha) {
 function showSmall(root, rev, rel, limit) {
   const size = git(root, ["cat-file", "-s", `${rev}:${rel}`], { check: false }).trim();
   if (!/^\d+$/.test(size)) throw new GateError(`${rel} at ${rev} isn't readable.`);
-  if (Number(size) > limit) throw new GateError(`${rel} at ${rev} is larger than ${Math.floor(limit / 1024)} KB \u2014 refusing to read it.`);
+  if (Number(size) > limit)
+    throw new GateError(`${rel} at ${rev} is larger than ${Math.floor(limit / 1024)} KB \u2014 refusing to read it.`);
   return git(root, ["show", `${rev}:${rel}`]);
 }
 function resolveBase(root, cfg, base) {
   if (base) {
-    if (!refExists(root, base)) throw new GateError(`Base ref '${base}' not found. In CI, check out with fetch-depth: 0.`);
+    if (!refExists(root, base))
+      throw new GateError(`Base ref '${base}' not found. In CI, check out with fetch-depth: 0.`);
     return base;
   }
   const names = cfg.base ? [cfg.base] : [];
@@ -224,7 +246,9 @@ function currentBranch(root, branch) {
 var WORKTREE_SAFE = ["-c", "core.fsmonitor=false", "-c", `core.hooksPath=${devNull}`];
 function ensureRepoConfigIsInert(root) {
   if (process.env.OWNERSHIP_GATE_TRUST_REPO_CONFIG === "1") return;
-  const out = git(root, ["config", "--show-scope", "--get-regexp", "^filter\\..*\\.(clean|smudge|process)$"], { check: false });
+  const out = git(root, ["config", "--show-scope", "--get-regexp", "^filter\\..*\\.(clean|smudge|process)$"], {
+    check: false
+  });
   const local = /* @__PURE__ */ new Set();
   for (const line of splitLines(out)) {
     const parts = line.trim().split(/\s+/);
@@ -261,7 +285,9 @@ function decodePath(raw) {
   try {
     return UTF8.decode(raw);
   } catch {
-    throw new GateError(`File name ${JSON.stringify(raw.toString("latin1"))} is not valid UTF-8; the gate can't track it reliably. Rename it.`);
+    throw new GateError(
+      `File name ${JSON.stringify(raw.toString("latin1"))} is not valid UTF-8; the gate can't track it reliably. Rename it.`
+    );
   }
 }
 function splitNul(buf) {
@@ -418,10 +444,12 @@ function parseConfig(raw, where) {
   const section = isObj(data) ? isObj(data.ownership_check) ? data.ownership_check : "ownership_check" in data ? data.ownership_check : data : null;
   if (!isObj(section)) throw new GateError(`${where}: expected an object like {"ownership_check": {...}}.`);
   const cfg = { ...DEFAULT_CONFIG, ...section };
-  if (!["required", "suggested", "off"].includes(cfg.mode)) throw new GateError(`${where}: mode must be required, suggested or off.`);
+  if (!["required", "suggested", "off"].includes(cfg.mode))
+    throw new GateError(`${where}: mode must be required, suggested or off.`);
   for (const key of ["sensitive", "ignore"]) {
     const v = cfg[key];
-    if (!Array.isArray(v) || !v.every((x) => typeof x === "string" && x)) throw new GateError(`${where}: "${key}" must be a list of glob strings.`);
+    if (!Array.isArray(v) || !v.every((x) => typeof x === "string" && x))
+      throw new GateError(`${where}: "${key}" must be a list of glob strings.`);
     for (const pat of v) {
       try {
         globMatch("", pat);
@@ -437,7 +465,8 @@ function parseConfig(raw, where) {
     const m = cfg[key];
     const literal = valueSource(raw, section === data ? [key] : ["ownership_check", key]);
     const floatLiteral = literal !== null && /[.eE]/.test(literal);
-    if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral) throw new GateError(`${where}: "${key}" must be a non-negative integer.`);
+    if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral)
+      throw new GateError(`${where}: "${key}" must be a non-negative integer.`);
   }
   return { ...cfg, _configured: true };
 }
@@ -452,7 +481,8 @@ function loadConfig(root, rev) {
   return parseConfig(readSmall(path, MAX_CONFIG_BYTES), CONFIG_PATH);
 }
 function rulesForVerify(root, baseRef) {
-  if (hasFile(root, baseRef, CONFIG_PATH)) return parseConfig(showSmall(root, baseRef, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} on ${baseRef}`);
+  if (hasFile(root, baseRef, CONFIG_PATH))
+    return parseConfig(showSmall(root, baseRef, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} on ${baseRef}`);
   return { ...DEFAULT_CONFIG, _configured: false };
 }
 function rulesForLocal(root, baseRef) {
@@ -488,7 +518,8 @@ function collectChanges(root, base, rev) {
   const target = rev || "HEAD";
   if (!refExists(root, target)) throw new GateError("This branch has no commits yet \u2014 commit something first.");
   const mb = git(root, ["merge-base", base, target], { check: false }).trim();
-  if (!mb) throw new GateError(`No common history between ${base} and ${target}. In CI, check out with fetch-depth: 0.`);
+  if (!mb)
+    throw new GateError(`No common history between ${base} and ${target}. In CI, check out with fetch-depth: 0.`);
   const rawArgs = ["diff", "--raw", "-z", "--no-abbrev", "--no-renames", "--ignore-submodules=none"];
   let raw;
   let untracked = /* @__PURE__ */ new Set();
@@ -496,7 +527,9 @@ function collectChanges(root, base, rev) {
   else {
     raw = withWorktreeIndex(root, (env) => gitBytes(root, [...rawArgs, "--cached", mb], { env }));
     const out = gitBytes(root, [...WORKTREE_SAFE, "ls-files", "--others", "--exclude-standard", "-z"]);
-    untracked = new Set(splitNul(out).filter((p) => p.length).map(decodePath));
+    untracked = new Set(
+      splitNul(out).filter((p) => p.length).map(decodePath)
+    );
   }
   const fields = splitNul(raw);
   const changes = dict();
@@ -518,7 +551,11 @@ function collectChanges(root, base, rev) {
 function merge3(ours, base, theirs) {
   const dir = mkdtempSync2(join4(tmpdir2(), "ownership-gate-merge-"));
   try {
-    const paths = [["ours", ours], ["base", base], ["theirs", theirs]].map(([name, data]) => {
+    const paths = [
+      ["ours", ours],
+      ["base", base],
+      ["theirs", theirs]
+    ].map(([name, data]) => {
       const p = join4(dir, name);
       writeFileSync2(p, data);
       return p;
@@ -534,7 +571,8 @@ function merge3(ours, base, theirs) {
 var isChange = (v) => isObj(v) && ["mode", "blob", "base", "base_mode"].every((k) => typeof v[k] === "string");
 function matchKind(root, verified, current) {
   if (!isChange(verified)) return null;
-  if (verified.mode === current.mode && verified.blob === current.blob && verified.base === current.base && verified.base_mode === current.base_mode) return "exact";
+  if (verified.mode === current.mode && verified.blob === current.blob && verified.base === current.base && verified.base_mode === current.base_mode)
+    return "exact";
   const expectedMode = verified.mode === verified.base_mode ? current.base_mode : verified.mode;
   if (current.mode !== expectedMode) return null;
   if (verified.base === current.base) return current.blob === verified.blob ? "merged" : null;
@@ -549,7 +587,9 @@ function matchKind(root, verified, current) {
 }
 function branchBlobs(root, target, mb) {
   const out = git(root, ["rev-list", "--objects", target, "--not", mb], { check: false });
-  return new Set(splitLines(out).filter(Boolean).map((l) => l.split(" ", 1)[0]));
+  return new Set(
+    splitLines(out).filter(Boolean).map((l) => l.split(" ", 1)[0])
+  );
 }
 var SAME = ["ok", "rebased"];
 function states(root, changes, old, target, mb) {
@@ -590,7 +630,16 @@ function baseGateHas(root, baseRef, feature) {
   }
 }
 function changedLines(root, mb, rev, paths) {
-  const args = ["diff", "--numstat", "-z", "--no-renames", "--no-ext-diff", "--no-textconv", "--diff-algorithm=myers", "--ignore-submodules=none"];
+  const args = [
+    "diff",
+    "--numstat",
+    "-z",
+    "--no-renames",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--diff-algorithm=myers",
+    "--ignore-submodules=none"
+  ];
   const raw = rev ? gitBytes(root, [...args, mb, rev]) : withWorktreeIndex(root, (env) => gitBytes(root, [...args, "--cached", mb], { env }));
   let total = 0;
   for (const rec of splitNul(raw)) {
@@ -614,7 +663,10 @@ function smallChange(root, baseRef, mb, rev, changes, cfg) {
   const lines = changedLines(root, mb, rev, counted);
   if (lines === null || lines > cfg.small_change_lines) return no(lines);
   if (!baseGateHas(root, baseRef, "small-change")) {
-    return no(lines, `This would count as a small change (${changedLinesText(lines)}), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`);
+    return no(
+      lines,
+      `This would count as a small change (${changedLinesText(lines)}), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`
+    );
   }
   return { small: true, lines, note: null };
 }
@@ -640,9 +692,14 @@ function renderReport(data) {
     "",
     "## Verified understanding"
   ];
-  for (const path of sorted(Object.keys(data.verified))) lines.push(`- \`${path}\` \u2014 ` + (get(data.verified, path) ?? []).join("; "));
+  for (const path of sorted(Object.keys(data.verified)))
+    lines.push(`- \`${path}\` \u2014 ` + (get(data.verified, path) ?? []).join("; "));
   const unverified = sorted(Object.keys(data.files).filter((p) => !own(data.verified, p)));
-  if (unverified.length) lines.push("", "Also in this change (reviewed, no specific questions): " + unverified.map((p) => `\`${p}\``).join(", "));
+  if (unverified.length)
+    lines.push(
+      "",
+      "Also in this change (reviewed, no specific questions): " + unverified.map((p) => `\`${p}\``).join(", ")
+    );
   lines.push("", DATA_MARKER, "```json", stableJson(data, 1), "```", "");
   return lines.join("\n");
 }
@@ -652,7 +709,8 @@ function extractData(text) {
   return m ? m[1] : null;
 }
 function parseReport(text) {
-  if (!text.includes(DATA_MARKER)) throw new GateError("Report is missing its data block \u2014 run the check again to regenerate it.");
+  if (!text.includes(DATA_MARKER))
+    throw new GateError("Report is missing its data block \u2014 run the check again to regenerate it.");
   const block = extractData(text);
   if (block === null) throw new GateError("Report data block is malformed \u2014 run the check again to regenerate it.");
   let data;
@@ -665,10 +723,13 @@ function parseReport(text) {
     throw new GateError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
   }
   for (const v of Object.values(data.verified)) {
-    if (!Array.isArray(v) || !v.every((x) => typeof x === "string")) throw new GateError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
+    if (!Array.isArray(v) || !v.every((x) => typeof x === "string"))
+      throw new GateError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
   }
   if (data.version !== GATE_VERSION) {
-    throw new GateError(`Report was made by gate v${String(data.version)}; this gate is v${GATE_VERSION}. If your branch is behind the base, merge it first; then run the check again.`);
+    throw new GateError(
+      `Report was made by gate v${String(data.version)}; this gate is v${GATE_VERSION}. If your branch is behind the base, merge it first; then run the check again.`
+    );
   }
   return data;
 }
@@ -697,7 +758,10 @@ function parseLenient(text) {
       } catch {
       }
     }
-    return [{ files, verified: {}, summary: "", _outdated: true }, `Existing report can't be used (${e.message}); its files need verifying again.`];
+    return [
+      { files, verified: {}, summary: "", _outdated: true },
+      `Existing report can't be used (${e.message}); its files need verifying again.`
+    ];
   }
 }
 function previousReport(root, branch, baseRef) {
@@ -762,7 +826,16 @@ function jobSummary(root, branch, rev, base, passed, messages, mode) {
       cfg = rulesForVerify(root, resolveBase(root, loadConfig(root, rev), base));
     } catch {
     }
-    out.push("### The developer's summary", "", ...splitLines(report.summary.trim()).map((l) => `> ${mdSafe(l)}`), "", "### Verified understanding", "", "| File | Concepts the developer explained |", "|---|---|");
+    out.push(
+      "### The developer's summary",
+      "",
+      ...splitLines(report.summary.trim()).map((l) => `> ${mdSafe(l)}`),
+      "",
+      "### Verified understanding",
+      "",
+      "| File | Concepts the developer explained |",
+      "|---|---|"
+    );
     for (const path of sorted(Object.keys(report.verified))) {
       const entry = get(report.files, path);
       const mode2 = isObj(entry) && typeof entry.mode === "string" ? entry.mode : "100644";
@@ -770,13 +843,25 @@ function jobSummary(root, branch, rev, base, passed, messages, mode) {
       out.push(`| ${mdSafe(path)}${tag} | ${(get(report.verified, path) ?? []).map(mdSafe).join("; ")} |`);
     }
     const rest = sorted(Object.keys(report.files).filter((p) => !own(report.verified, p)));
-    if (rest.length) out.push("", `<details><summary>Also in this change, no specific questions (${rest.length})</summary>`, "", ...rest.map((p) => `- ${mdSafe(p)}`), "", "</details>");
-    out.push("", `<sub>\u{1F512} sensitive \xB7 report: \`${reportRelpath(branch)}\` \xB7 gate v${GATE_VERSION}. The report shows what was verified, never scores or mistakes.</sub>`);
+    if (rest.length)
+      out.push(
+        "",
+        `<details><summary>Also in this change, no specific questions (${rest.length})</summary>`,
+        "",
+        ...rest.map((p) => `- ${mdSafe(p)}`),
+        "",
+        "</details>"
+      );
+    out.push(
+      "",
+      `<sub>\u{1F512} sensitive \xB7 report: \`${reportRelpath(branch)}\` \xB7 gate v${GATE_VERSION}. The report shows what was verified, never scores or mistakes.</sub>`
+    );
   }
   return (out.join("\n") + "\n").slice(0, 6e4);
 }
 function ci(kind, messages) {
-  if (process.env.GITHUB_ACTIONS === "true") for (const m of messages) process.stdout.write(`::${kind} title=Ownership check::${m}
+  if (process.env.GITHUB_ACTIONS === "true")
+    for (const m of messages) process.stdout.write(`::${kind} title=Ownership check::${m}
 `);
 }
 
@@ -807,7 +892,9 @@ function status(repo, base, branch) {
   }));
   const notes = note ? [note] : [];
   if (Object.values(st).includes("rebased")) {
-    notes.push("Some verified files were rebased: save the report again (no new questions needed), or CI won't be able to match them.");
+    notes.push(
+      "Some verified files were rebased: save the report again (no new questions needed), or CI won't be able to match them."
+    );
   }
   const localGate = join6(root, GATE_REL);
   if (isFile(localGate) && !isSymlink(localGate)) {
@@ -818,7 +905,9 @@ function status(repo, base, branch) {
     }
     const v = VERSION_RE.exec(head);
     if (v && Number(v[1]) !== GATE_VERSION) {
-      notes.push(`This repo's ${GATE_REL} is v${v[1]} but the running gate is v${GATE_VERSION}. CI runs the base branch's copy, so update whichever is older (the plugin, or \`gate.mjs install --upgrade\` in a PR).`);
+      notes.push(
+        `This repo's ${GATE_REL} is v${v[1]} but the running gate is v${GATE_VERSION}. CI runs the base branch's copy, so update whichever is older (the plugin, or \`gate.mjs install --upgrade\` in a PR).`
+      );
     }
   }
   if (exists(localGate) && hasFile(root, baseRef, GATE_REL)) {
@@ -829,7 +918,9 @@ function status(repo, base, branch) {
     }
     const v = VERSION_RE.exec(head);
     if (v && Number(v[1]) !== GATE_VERSION) {
-      notes.push(`The base branch runs gate v${v[1]} but this one is v${GATE_VERSION}: merge the base branch first, or CI will reject the report.`);
+      notes.push(
+        `The base branch runs gate v${v[1]} but this one is v${GATE_VERSION}: merge the base branch first, or CI will reject the report.`
+      );
     }
   }
   const small = smallChange(root, baseRef, mb, null, changes, cfg);
@@ -855,12 +946,17 @@ function formatStatus(s) {
   if (!s.files.length) return [lines[0], "No changes \u2014 nothing to check.", ...s.notes].join("\n");
   lines.push(`Report: ${s.report} (${s.report_exists ? "exists" : "not yet saved"})`);
   for (const f of s.files) {
-    const tags = [f.state, ...["sensitive", "ignored", "untracked", "verified"].filter((t) => f[t]).map((t) => t === "sensitive" ? "SENSITIVE" : t)];
+    const tags = [
+      f.state,
+      ...["sensitive", "ignored", "untracked", "verified"].filter((t) => f[t]).map((t) => t === "sensitive" ? "SENSITIVE" : t)
+    ];
     lines.push(`- ${f.path} [${tags.join(", ")}]`);
   }
   if (s.must_verify.length) lines.push("Must be verified before saving: " + s.must_verify.join(", "));
   if (s.small_change) {
-    lines.push(`Small change (${changedLinesText(s.changed_lines ?? 0)}): one question is enough, and the summary needs at least ${s.min_summary_chars} characters.`);
+    lines.push(
+      `Small change (${changedLinesText(s.changed_lines ?? 0)}): one question is enough, and the summary needs at least ${s.min_summary_chars} characters.`
+    );
   }
   lines.push(...s.notes);
   return lines.join("\n");
@@ -876,7 +972,9 @@ function save(payload, repo, base, branch) {
   const len = charCount(summary);
   const minChars = len < cfg.min_summary_chars && smallChange(root, baseRef, mb, null, changes, cfg).small ? cfg.small_summary_chars : cfg.min_summary_chars;
   if (len < minChars) {
-    throw new GateError(`The summary must be the developer's own description of what changed, why, and what could break \u2014 at least ${minChars} characters.`);
+    throw new GateError(
+      `The summary must be the developer's own description of what changed, why, and what could break \u2014 at least ${minChars} characters.`
+    );
   }
   const rawVerified = payload.verified ?? {};
   if (!isObj(rawVerified)) throw new GateError('"verified" must map file paths to lists of concepts.');
@@ -887,18 +985,25 @@ function save(payload, repo, base, branch) {
     if (items.length) verified[String(path).trim().replace(/^\.\//, "")] = items;
   }
   const unknown = sorted(Object.keys(verified).filter((p) => !own(changes, p)));
-  if (unknown.length) throw new GateError(`Not part of this change: ${unknown.join(", ")}. Changed files: ${Object.keys(changes).join(", ")}`);
+  if (unknown.length)
+    throw new GateError(
+      `Not part of this change: ${unknown.join(", ")}. Changed files: ${Object.keys(changes).join(", ")}`
+    );
   const [old] = previousReport(root, br, baseRef);
   const st = states(root, changes, old, "HEAD", mb);
   const missing = needsVerification(changes, st, old, cfg).filter((p) => !own(verified, p));
-  if (missing.length) throw new GateError("Still needs verification (sensitive, or new/changed since the last report): " + missing.join(", "));
+  if (missing.length)
+    throw new GateError(
+      "Still needs verification (sensitive, or new/changed since the last report): " + missing.join(", ")
+    );
   if (old) {
     for (const [p, concepts] of Object.entries(old.verified)) {
       if (own(changes, p) && SAME.includes(st[p]) && !own(verified, p)) verified[p] = concepts;
     }
   }
   const askable = Object.entries(changes).filter(([p, c]) => !noQuestions(p, c.mode, cfg));
-  if (askable.length && !Object.keys(verified).length) throw new GateError("No verified files \u2014 the check needs at least one area the developer explained.");
+  if (askable.length && !Object.keys(verified).length)
+    throw new GateError("No verified files \u2014 the check needs at least one area the developer explained.");
   const data = { version: GATE_VERSION, branch: br, base: baseRef, date: today(), summary, verified, files: changes };
   const rel = reportRelpath(br);
   atomicWrite(join6(root, rel), renderReport(data));
@@ -918,7 +1023,8 @@ function verify(repo, base, branch, rev = "HEAD", labels = []) {
   if (!Object.keys(changes).length) return [true, [], cfg.mode];
   const report = readReport(root, br, rev);
   if (report === null) {
-    if (Object.entries(changes).every(([p, c]) => noQuestions(p, c.mode, cfg))) return [true, ["Only ignored files changed (e.g. lockfiles) \u2014 no report needed."], cfg.mode];
+    if (Object.entries(changes).every(([p, c]) => noQuestions(p, c.mode, cfg)))
+      return [true, ["Only ignored files changed (e.g. lockfiles) \u2014 no report needed."], cfg.mode];
     return [false, [`No ownership report for branch '${br}' (${reportRelpath(br)}). ${CHECK_ME_HINT}`], cfg.mode];
   }
   const st = states(root, changes, report, rev, mb);
@@ -926,9 +1032,14 @@ function verify(repo, base, branch, rev = "HEAD", labels = []) {
   const problems = [];
   const unverifiedSensitive = Object.entries(changes).filter(([p, c]) => isSensitive(p, c.mode, cfg) && !get(report.verified, p)?.length).map(([p]) => p);
   if (by("new").length) problems.push("Changed after the check (not in the report): " + by("new").join(", "));
-  if (by("stale").length) problems.push("Changed after the check (differs from what was verified): " + by("stale").join(", "));
-  if (by("rebased").length) problems.push("Verified before a rebase \u2014 save the report again, no new questions needed: " + by("rebased").join(", "));
-  if (unverifiedSensitive.length) problems.push("Sensitive files not explicitly verified: " + unverifiedSensitive.join(", "));
+  if (by("stale").length)
+    problems.push("Changed after the check (differs from what was verified): " + by("stale").join(", "));
+  if (by("rebased").length)
+    problems.push(
+      "Verified before a rebase \u2014 save the report again, no new questions needed: " + by("rebased").join(", ")
+    );
+  if (unverifiedSensitive.length)
+    problems.push("Sensitive files not explicitly verified: " + unverifiedSensitive.join(", "));
   const len = charCount(trimSummary(report.summary));
   const shortOk = () => len >= cfg.small_summary_chars && smallChange(root, baseRef, mb, rev, changes, cfg).small;
   if (len < cfg.min_summary_chars && !shortOk()) problems.push("The developer's summary is missing or too short.");
@@ -1120,7 +1231,8 @@ var ALWAYS_ON = "Comprende is installed. Whenever you write or change code in th
 function sessionStart(stdinText) {
   const lines = [];
   const node = process.versions.node;
-  if (Number.parseInt(node, 10) < MIN_NODE) lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
+  if (Number.parseInt(node, 10) < MIN_NODE)
+    lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
   lines.push(...gateContext(stdinText));
   return lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {};
@@ -1138,11 +1250,15 @@ function gateContext(stdinText) {
     const repoGate = join7(root, GATE_REL);
     if (process.env.OWNERSHIP_GATE_NO_AUTO_HOOK !== "1" && isFile(repoGate) && !isSymlink(repoGate)) {
       if (!SELF || !readFileSync(repoGate).equals(readFileSync(SELF))) {
-        lines.push(`This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`);
+        lines.push(
+          `This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`
+        );
       } else {
         const result = installHooks(root, true)[0];
         if (result.startsWith("installed") || result.startsWith("re-pinned")) {
-          lines.push("The local pre-push git hook was just installed in this clone; mention it to the user in one line (set OWNERSHIP_GATE_NO_AUTO_HOOK=1 to opt out).");
+          lines.push(
+            "The local pre-push git hook was just installed in this clone; mention it to the user in one line (set OWNERSHIP_GATE_NO_AUTO_HOOK=1 to opt out)."
+          );
         } else if (result.startsWith("SKIPPED")) lines.push("The gate's pre-push hook wasn't added: " + result);
       }
     }
@@ -1212,7 +1328,8 @@ await import("data:text/javascript;base64," + code.toString("base64"));
 function installHooks(repo, auto = false) {
   const root = repoRoot(repo);
   const gateFile = join7(root, GATE_REL);
-  if (isSymlink(gateFile) || !isFile(gateFile)) return [`SKIPPED pre-push hook: ${GATE_REL} is missing or not a regular file.`];
+  if (isSymlink(gateFile) || !isFile(gateFile))
+    return [`SKIPPED pre-push hook: ${GATE_REL} is missing or not a regular file.`];
   const pin = createHash("sha256").update(readFileSync(gateFile)).digest("hex");
   let hooksDir = git(root, ["rev-parse", "--git-path", "hooks"]).trim();
   if (!isAbsolute2(hooksDir)) hooksDir = join7(root, hooksDir);
@@ -1226,11 +1343,15 @@ function installHooks(repo, auto = false) {
     } catch {
     }
     if (auto) {
-      return [`SKIPPED pre-push hook: core.hooksPath is set (${configured}), so it wasn't added automatically. Run \`node ${GATE_REL} install-hooks\` to add it there.`];
+      return [
+        `SKIPPED pre-push hook: core.hooksPath is set (${configured}), so it wasn't added automatically. Run \`node ${GATE_REL} install-hooks\` to add it there.`
+      ];
     }
     const rel = relative(realpathSync2(root), custom);
     if (rel === ".." || rel.startsWith(".." + sep) || isAbsolute2(rel)) {
-      return [`SKIPPED pre-push hook: core.hooksPath (${configured}) is outside this repo and may be shared by other repos. Add this line to its pre-push hook yourself: ${manualLine}`];
+      return [
+        `SKIPPED pre-push hook: core.hooksPath (${configured}) is outside this repo and may be shared by other repos. Add this line to its pre-push hook yourself: ${manualLine}`
+      ];
     }
     hooksDir = custom;
   }
@@ -1239,7 +1360,8 @@ function installHooks(repo, auto = false) {
   let verb = "installed";
   if (exists(hook)) {
     const text = readFileSync(hook, "utf8");
-    if (!text.includes("comprende ownership gate")) return [`SKIPPED pre-push hook: ${hook} already exists. Add this line to it: ${manualLine}`];
+    if (!text.includes("comprende ownership gate"))
+      return [`SKIPPED pre-push hook: ${hook} already exists. Add this line to it: ${manualLine}`];
     if (text.includes(`pinned-sha256: ${pin}`)) return [`pre-push hook already installed (${hook})`];
     verb = "re-pinned";
   }
@@ -1317,7 +1439,10 @@ function rulesetBody(approvals = 1, codeOwners = true) {
           required_review_thread_resolution: false
         }
       },
-      { type: "required_status_checks", parameters: { strict_required_status_checks_policy: false, required_status_checks: [{ context: CHECK_NAME }] } }
+      {
+        type: "required_status_checks",
+        parameters: { strict_required_status_checks_policy: false, required_status_checks: [{ context: CHECK_NAME }] }
+      }
     ]
   };
 }
@@ -1327,7 +1452,9 @@ function gh(root, args, input) {
     r = run("gh", args, { cwd: root, input });
   } catch (e) {
     if (e.code === "ENOENT") {
-      throw new GateError("The GitHub CLI (gh) isn't installed. Install it and run `gh auth login`, or set this up by hand: see the README's 'Protect the branch' section.");
+      throw new GateError(
+        "The GitHub CLI (gh) isn't installed. Install it and run `gh auth login`, or set this up by hand: see the README's 'Protect the branch' section."
+      );
     }
     throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${e.message}`);
   }
@@ -1335,7 +1462,9 @@ function gh(root, args, input) {
     const err = (r.stderr.toString("utf8") || r.stdout.toString("utf8")).trim();
     const low = err.toLowerCase();
     if (err.includes("Upgrade to GitHub Pro") || low.includes("upgrade") && low.includes("plan")) {
-      throw new GateError("Rulesets aren't available for private repos on GitHub's free plan. Use Settings \u2192 Branches \u2192 branch protection instead (see README).");
+      throw new GateError(
+        "Rulesets aren't available for private repos on GitHub's free plan. Use Settings \u2192 Branches \u2192 branch protection instead (see README)."
+      );
     }
     if (err.includes("403") || err.includes("Must have admin rights") || err.includes("Resource not accessible")) {
       throw new GateError("GitHub refused: creating rules needs admin access to this repository.");
@@ -1346,9 +1475,11 @@ function gh(root, args, input) {
 }
 function protect(repo, apply = false, approvals = 1, codeOwners = true) {
   const root = repoRoot(repo);
-  if (!Number.isInteger(approvals) || approvals < 0 || approvals > 10) throw new GateError("--approvals must be between 0 and 10.");
+  if (!Number.isInteger(approvals) || approvals < 0 || approvals > 10)
+    throw new GateError("--approvals must be between 0 and 10.");
   const nwo = gh(root, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).trim();
-  if (!/^[\w.-]+\/[\w.-]+$/.test(nwo)) throw new GateError(`Couldn't tell which GitHub repo this is (got ${JSON.stringify(nwo)}).`);
+  if (!/^[\w.-]+\/[\w.-]+$/.test(nwo))
+    throw new GateError(`Couldn't tell which GitHub repo this is (got ${JSON.stringify(nwo)}).`);
   let existing = [];
   try {
     existing = JSON.parse(gh(root, ["api", `repos/${nwo}/rulesets`]) || "[]");
@@ -1356,18 +1487,27 @@ function protect(repo, apply = false, approvals = 1, codeOwners = true) {
     if (e instanceof GateError) throw e;
   }
   for (const r of Array.isArray(existing) ? existing : []) {
-    if (isObj(r) && r.name === RULESET_NAME) return [`Ruleset '${RULESET_NAME}' already exists on ${nwo}: https://github.com/${nwo}/rules/${String(r.id)}`];
+    if (isObj(r) && r.name === RULESET_NAME)
+      return [`Ruleset '${RULESET_NAME}' already exists on ${nwo}: https://github.com/${nwo}/rules/${String(r.id)}`];
   }
   const body = rulesetBody(approvals, codeOwners);
   const plan = [
     `Ruleset for ${nwo} (default branch): require a pull request with ${approvals} approval(s)` + (codeOwners ? " incl. code owners" : "") + `, and the '${CHECK_NAME}' status check.`,
     "It adds to existing branch protection; it doesn't replace it."
   ];
-  if (codeOwners) plan.push("Note: a code owner can't approve their own PR. On a one-person repo, use --no-code-owners.");
-  if (!apply) return [...plan, "Dry run \u2014 nothing changed. Rerun with --apply (needs admin) to create it.", JSON.stringify(body, null, 2)];
+  if (codeOwners)
+    plan.push("Note: a code owner can't approve their own PR. On a one-person repo, use --no-code-owners.");
+  if (!apply)
+    return [
+      ...plan,
+      "Dry run \u2014 nothing changed. Rerun with --apply (needs admin) to create it.",
+      JSON.stringify(body, null, 2)
+    ];
   let created = {};
   try {
-    created = JSON.parse(gh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}");
+    created = JSON.parse(
+      gh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}"
+    );
   } catch (e) {
     if (e instanceof GateError) throw e;
   }
@@ -1399,7 +1539,8 @@ function mergeClaudeSettings(path) {
   const groups = hooks.PreToolUse ??= [];
   for (const g of groups) {
     for (const h of g?.hooks ?? []) {
-      if ((h?.command ?? "").includes("gate.mjs") && (h?.command ?? "").includes("claude-hook")) return `Claude hook already present (${path})`;
+      if ((h?.command ?? "").includes("gate.mjs") && (h?.command ?? "").includes("claude-hook"))
+        return `Claude hook already present (${path})`;
     }
   }
   groups.push({ matcher: "Bash", hooks: [{ type: "command", command: CLAUDE_HOOK_COMMAND, timeout: 60 }] });
@@ -1409,7 +1550,8 @@ function mergeClaudeSettings(path) {
 function ignoreReportInput(root) {
   const path = join8(root, ".gitignore");
   const st = lstat(path);
-  if (st && (st.isSymbolicLink() || !st.isFile())) return `SKIPPED .gitignore: not a regular file; add ${REPORT_INPUT} to it by hand.`;
+  if (st && (st.isSymbolicLink() || !st.isFile()))
+    return `SKIPPED .gitignore: not a regular file; add ${REPORT_INPUT} to it by hand.`;
   let text = Buffer.alloc(0);
   if (st) {
     try {
@@ -1430,14 +1572,20 @@ function codeowners(root, owner) {
   if (!owner) {
     return "MANUAL STEP 2: add to .github/CODEOWNERS (or rerun install with --owner @handle) and turn on 'Require review from Code Owners' \u2014 otherwise a PR could edit the workflow to skip the check:\n  " + lines.join("\n  ");
   }
-  if (!/^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/.test(owner)) throw new GateError(`--owner must be a GitHub @user, @org/team, or an email; got ${JSON.stringify(owner)}.`);
+  if (!/^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/.test(owner))
+    throw new GateError(`--owner must be a GitHub @user, @org/team, or an email; got ${JSON.stringify(owner)}.`);
   const path = join8(root, ".github", "CODEOWNERS");
   const existing = exists(path) ? readFileSync2(path, "utf8") : "";
-  const have = new Set(splitLines(existing).filter((l) => l.trim() && !l.trimStart().startsWith("#")).map((l) => l.trim().split(/\s+/)[0]));
+  const have = new Set(
+    splitLines(existing).filter((l) => l.trim() && !l.trimStart().startsWith("#")).map((l) => l.trim().split(/\s+/)[0])
+  );
   const fresh = lines.filter((l) => !have.has(l.split(/\s+/)[0]));
   if (fresh.length) {
     const prefix = !existing || existing.endsWith("\n") ? "" : "\n";
-    atomicWrite(path, existing + prefix + "# Ownership gate: changes to the gate need lead review\n" + fresh.join("\n") + "\n");
+    atomicWrite(
+      path,
+      existing + prefix + "# Ownership gate: changes to the gate need lead review\n" + fresh.join("\n") + "\n"
+    );
   }
   return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on 'Require review from Code Owners' in branch protection.`;
 }
@@ -1479,7 +1627,9 @@ function install(repo, upgrade = false, owner) {
   done.push(mergeClaudeSettings(join8(root, ".claude", "settings.json")));
   done.push(ignoreReportInput(root));
   done.push(...installHooks(root));
-  done.push(`NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch \u2014 without it CI only warns.`);
+  done.push(
+    `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch \u2014 without it CI only warns.`
+  );
   done.push(codeowners(root, owner));
   return done;
 }
@@ -1536,7 +1686,8 @@ function parseArgs(argv) {
       if (FLAGS.has(k) && v === void 0) opts[k] = true;
       else if (VALUE_OPTS.has(k)) {
         const val = v ?? tail[++i];
-        if (val === void 0 || v === void 0 && val.startsWith("--")) throw new UsageError(`--${k} needs a value`);
+        if (val === void 0 || v === void 0 && val.startsWith("--"))
+          throw new UsageError(`--${k} needs a value`);
         opts[k] = val;
       } else if (cmd === "pre-push") rest.push(a);
       else throw new UsageError(`unknown option --${k}`);
@@ -1549,7 +1700,14 @@ var UsageError = class extends Error {
 };
 function testCall(fn, a) {
   const s = (i) => a[i] === null || a[i] === void 0 ? null : String(a[i]);
-  const consts = { GATE_VERSION, GATE_FILES, WORKFLOW, CHECK_NAME, REPO_GATE: GATE_REL, ALWAYS_ON };
+  const consts = {
+    GATE_VERSION,
+    GATE_FILES,
+    WORKFLOW,
+    CHECK_NAME,
+    REPO_GATE: GATE_REL,
+    ALWAYS_ON
+  };
   if (fn in consts) return consts[fn];
   switch (fn) {
     case "collect_changes": {
@@ -1642,7 +1800,11 @@ ${HELP}`);
         if (summaryPath) {
           try {
             const root = repoRoot(o("repo"));
-            appendFileSync(summaryPath, jobSummary(root, currentBranch(root, o("branch")), rev, o("base"), passed, messages, mode), "utf8");
+            appendFileSync(
+              summaryPath,
+              jobSummary(root, currentBranch(root, o("branch")), rev, o("base"), passed, messages, mode),
+              "utf8"
+            );
           } catch {
           }
         }

@@ -53,7 +53,9 @@ function globToRegExp(pat: string): RegExp {
         res.push(negate ? "[\\s\\S]" : "(?!)");
         continue;
       }
-      const cls = valid.map(([lo, hi]) => (lo === hi ? escapeInSet(lo) : `${escapeInSet(lo)}-${escapeInSet(hi)}`)).join("");
+      const cls = valid
+        .map(([lo, hi]) => (lo === hi ? escapeInSet(lo) : `${escapeInSet(lo)}-${escapeInSet(hi)}`))
+        .join("");
       res.push(negate ? `[^${cls}]` : `[${cls}]`);
     } else res.push(escapeOutside(c));
   }

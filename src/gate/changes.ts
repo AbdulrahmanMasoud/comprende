@@ -10,15 +10,47 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Config, isSensitive, noQuestions } from "./config.js";
-import { WORKTREE_SAFE, decodePath, git, gitBytes, gitEnv, hasFile, readBlob, refExists, run, showSmall, splitNul, withWorktreeIndex } from "./git.js";
+import {
+  WORKTREE_SAFE,
+  decodePath,
+  git,
+  gitBytes,
+  gitEnv,
+  hasFile,
+  readBlob,
+  refExists,
+  run,
+  showSmall,
+  splitNul,
+  withWorktreeIndex,
+} from "./git.js";
 import { matches } from "./glob.js";
 import { Report } from "./report.js";
-import { FEATURES_RE, GATE_FILES, GATE_REL, GateError, REGULAR_MODES, REPORT_INPUT, ZERO_SHA, dict, get, isObj, own, sorted, splitLines } from "./shared.js";
+import {
+  FEATURES_RE,
+  GATE_FILES,
+  GATE_REL,
+  GateError,
+  REGULAR_MODES,
+  REPORT_INPUT,
+  ZERO_SHA,
+  dict,
+  get,
+  isObj,
+  own,
+  sorted,
+  splitLines,
+} from "./shared.js";
 
 // Exact shapes only (no subfolders, markdown only), so nothing executable can hide here.
 const PLUMBING_RE = /^\.learning\/(checks\/[^/]+\.md|decisions\/[^/]+\.md|map\.md|[^/]+\.local\.md)$/;
 
-interface Change { mode: string; blob: string; base: string; base_mode: string }
+interface Change {
+  mode: string;
+  blob: string;
+  base: string;
+  base_mode: string;
+}
 
 type Changes = Record<string, Change>;
 
@@ -58,7 +90,8 @@ export function collectChanges(root: string, base: string, rev?: string | null):
   const target = rev || "HEAD";
   if (!refExists(root, target)) throw new GateError("This branch has no commits yet — commit something first.");
   const mb = git(root, ["merge-base", base, target], { check: false }).trim();
-  if (!mb) throw new GateError(`No common history between ${base} and ${target}. In CI, check out with fetch-depth: 0.`);
+  if (!mb)
+    throw new GateError(`No common history between ${base} and ${target}. In CI, check out with fetch-depth: 0.`);
   const rawArgs = ["diff", "--raw", "-z", "--no-abbrev", "--no-renames", "--ignore-submodules=none"];
   let raw: Buffer;
   let untracked = new Set<string>();
@@ -66,7 +99,11 @@ export function collectChanges(root: string, base: string, rev?: string | null):
   else {
     raw = withWorktreeIndex(root, (env) => gitBytes(root, [...rawArgs, "--cached", mb], { env }));
     const out = gitBytes(root, [...WORKTREE_SAFE, "ls-files", "--others", "--exclude-standard", "-z"]);
-    untracked = new Set(splitNul(out).filter((p) => p.length).map(decodePath));
+    untracked = new Set(
+      splitNul(out)
+        .filter((p) => p.length)
+        .map(decodePath),
+    );
   }
   const fields = splitNul(raw);
   const changes: Changes = dict();
@@ -89,7 +126,13 @@ export function collectChanges(root: string, base: string, rev?: string | null):
 function merge3(ours: Buffer, base: Buffer, theirs: Buffer): Buffer | null {
   const dir = mkdtempSync(join(tmpdir(), "ownership-gate-merge-"));
   try {
-    const paths = ([["ours", ours], ["base", base], ["theirs", theirs]] as const).map(([name, data]) => {
+    const paths = (
+      [
+        ["ours", ours],
+        ["base", base],
+        ["theirs", theirs],
+      ] as const
+    ).map(([name, data]) => {
       const p = join(dir, name);
       writeFileSync(p, data);
       return p;
@@ -114,7 +157,13 @@ const isChange = (v: unknown): v is Change =>
  *  Anything else (a conflict, a binary file, a missing object) is a change. */
 function matchKind(root: string, verified: unknown, current: Change): "exact" | "merged" | null {
   if (!isChange(verified)) return null;
-  if (verified.mode === current.mode && verified.blob === current.blob && verified.base === current.base && verified.base_mode === current.base_mode) return "exact";
+  if (
+    verified.mode === current.mode &&
+    verified.blob === current.blob &&
+    verified.base === current.base &&
+    verified.base_mode === current.base_mode
+  )
+    return "exact";
   const expectedMode = verified.mode === verified.base_mode ? current.base_mode : verified.mode;
   if (current.mode !== expectedMode) return null;
   // Base content unchanged: only a base mode change can explain a difference.
@@ -134,7 +183,11 @@ function matchKind(root: string, verified: unknown, current: Change): "exact" | 
  *  have it — so such files must be re-saved. */
 function branchBlobs(root: string, target: string, mb: string): Set<string> {
   const out = git(root, ["rev-list", "--objects", target, "--not", mb], { check: false });
-  return new Set(splitLines(out).filter(Boolean).map((l) => l.split(" ", 1)[0]));
+  return new Set(
+    splitLines(out)
+      .filter(Boolean)
+      .map((l) => l.split(" ", 1)[0]),
+  );
 }
 
 export const SAME = ["ok", "rebased"];
@@ -145,7 +198,13 @@ export type State = "new" | "ok" | "stale" | "rebased";
 /** new: not in the report · ok: the verified change · stale: changed since ·
  *  rebased: the verified change on a newer base, but the verified content is
  *  no longer in the branch's history (e.g. after a rebase) — re-save, no questions. */
-export function states(root: string, changes: Changes, old: Report | null, target: string, mb: string): Record<string, State> {
+export function states(
+  root: string,
+  changes: Changes,
+  old: Report | null,
+  target: string,
+  mb: string,
+): Record<string, State> {
   const oldFiles = old ? old.files : dict<unknown>();
   let reachable: Set<string> | null = null;
   const out: Record<string, State> = dict();
@@ -169,7 +228,12 @@ export function states(root: string, changes: Changes, old: Report | null, targe
  *  — unless it was verified before and is unchanged. Ignored files never need
  *  questions unless they're also sensitive. Untracked files count like any
  *  other: exempting them would let new code into a report unverified. */
-export function needsVerification(changes: Changes, st: Record<string, State>, old: Report | null, cfg: Config): string[] {
+export function needsVerification(
+  changes: Changes,
+  st: Record<string, State>,
+  old: Report | null,
+  cfg: Config,
+): string[] {
   const oldVerified = old ? old.verified : dict<string[]>();
   const out: string[] = [];
   for (const [path, c] of Object.entries(changes)) {
@@ -196,8 +260,19 @@ function baseGateHas(root: string, baseRef: string, feature: string): boolean {
  *  one of them is binary. The diff options are fixed, so local diff config
  *  (algorithm, textconv, external tools) can't change the count. */
 function changedLines(root: string, mb: string, rev: string | null, paths: Set<string>): number | null {
-  const args = ["diff", "--numstat", "-z", "--no-renames", "--no-ext-diff", "--no-textconv", "--diff-algorithm=myers", "--ignore-submodules=none"];
-  const raw = rev ? gitBytes(root, [...args, mb, rev]) : withWorktreeIndex(root, (env) => gitBytes(root, [...args, "--cached", mb], { env }));
+  const args = [
+    "diff",
+    "--numstat",
+    "-z",
+    "--no-renames",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--diff-algorithm=myers",
+    "--ignore-submodules=none",
+  ];
+  const raw = rev
+    ? gitBytes(root, [...args, mb, rev])
+    : withWorktreeIndex(root, (env) => gitBytes(root, [...args, "--cached", mb], { env }));
   let total = 0;
   for (const rec of splitNul(raw)) {
     const t1 = rec.indexOf(9);
@@ -224,7 +299,14 @@ interface Small {
  *  submodule or binary. It then needs a summary of small_summary_chars instead
  *  of min_summary_chars; everything else is checked as usual. It only applies
  *  when the base branch's gate knows it, so local and CI always agree. */
-export function smallChange(root: string, baseRef: string, mb: string, rev: string | null, changes: Changes, cfg: Config): Small {
+export function smallChange(
+  root: string,
+  baseRef: string,
+  mb: string,
+  rev: string | null,
+  changes: Changes,
+  cfg: Config,
+): Small {
   const no = (lines: number | null = null, note: string | null = null): Small => ({ small: false, lines, note });
   const entries = Object.entries(changes);
   if (!cfg.small_change_lines || !entries.length) return no();
@@ -233,7 +315,10 @@ export function smallChange(root: string, baseRef: string, mb: string, rev: stri
   const lines = changedLines(root, mb, rev, counted);
   if (lines === null || lines > cfg.small_change_lines) return no(lines);
   if (!baseGateHas(root, baseRef, "small-change")) {
-    return no(lines, `This would count as a small change (${changedLinesText(lines)}), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`);
+    return no(
+      lines,
+      `This would count as a small change (${changedLinesText(lines)}), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`,
+    );
   }
   return { small: true, lines, note: null };
 }

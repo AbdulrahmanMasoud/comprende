@@ -41,14 +41,17 @@ test("a small change needs only a short summary, and status says so", (t) => {
   assert.deepEqual(gate.verify(dev), [true, [], "required"]);
   assert.match(read(dev, gate.reportRelpath("feature/rate-limit")), /"blob": "[0-9a-f]{40}"/); // still fingerprinted
   const push = sh(dev, "git", ["push", "-q", "-u", "origin", "feature/rate-limit"], { check: false });
-  assert.equal(push.status, 0, push.stderr);                       // through the real pre-push hook
+  assert.equal(push.status, 0, push.stderr); // through the real pre-push hook
 });
 
 test("status and save count one line and one file in the singular", (t) => {
   const { dev } = setup(t);
-  write(dev, "src/app.js", "export const app = 1;\nexport const b = 2;\n");   // +1
+  write(dev, "src/app.js", "export const app = 1;\nexport const b = 2;\n"); // +1
   assert.match(runGate(dev, ["status"]).stdout, /Small change \(1 changed line\):/);
-  assert.match(gate.save({ summary: SHORT, verified: { "src/app.js": ["x"] } }, dev), /: 1 file fingerprinted, 1 verified\./);
+  assert.match(
+    gate.save({ summary: SHORT, verified: { "src/app.js": ["x"] } }, dev),
+    /: 1 file fingerprinted, 1 verified\./,
+  );
 });
 
 test("over small_change_lines, the full summary is required", (t) => {
@@ -83,14 +86,27 @@ test("ignored files don't count toward small_change_lines", (t) => {
 
 test("small_change_lines: 0 turns the fast path off; the new keys are strict integers", (t) => {
   const { dev } = setup(t);
-  onMain(dev, () => editConfig(dev, (c) => { c.small_change_lines = 0; }), "fast path off");
+  onMain(
+    dev,
+    () =>
+      editConfig(dev, (c) => {
+        c.small_change_lines = 0;
+      }),
+    "fast path off",
+  );
   write(dev, "src/app.js", "export const app = 2;\n");
   assert.deepEqual(smallOf(dev), [false, null, 80]);
   throwsGate(() => gate.save({ summary: SHORT, verified: { "src/app.js": ["x"] } }, dev), /at least 80 characters/);
   const p = join(dev, ".learning/config.json");
   const good = readFileSync(p, "utf8");
-  for (const [key, bad] of [["small_change_lines", '"10"'], ["small_change_lines", "-1"], ["small_change_lines", "1.5"],
-    ["small_summary_chars", "30.0"], ["small_summary_chars", "true"], ["small_summary_chars", "null"]]) {
+  for (const [key, bad] of [
+    ["small_change_lines", '"10"'],
+    ["small_change_lines", "-1"],
+    ["small_change_lines", "1.5"],
+    ["small_summary_chars", "30.0"],
+    ["small_summary_chars", "true"],
+    ["small_summary_chars", "null"],
+  ]) {
     writeFileSync(p, good.replace(new RegExp(`"${key}": [^,\\n]+`), `"${key}": ${bad}`));
     throwsGate(() => gate.status(dev), new RegExp(`"${key}" must be a non-negative integer`));
   }
@@ -99,13 +115,23 @@ test("small_change_lines: 0 turns the fast path off; the new keys are strict int
 test("no fast path while the base branch's gate predates it, so CI agrees", (t) => {
   const { dev } = setup(t);
   write(dev, "src/app.js", "export const app = 2;\n");
-  gate.save({ summary: SHORT, verified: { "src/app.js": ["x"] } }, dev);  // main's gate knows the fast path...
+  gate.save({ summary: SHORT, verified: { "src/app.js": ["x"] } }, dev); // main's gate knows the fast path...
   commitAll(dev, "small change + report");
-  onMain(dev, () => writeFileSync(join(dev, REPO_GATE),                  // ...until main goes back to one that doesn't
-    read(dev, REPO_GATE).replace(/^\/\/ ownership-gate-features: .*\n/m, "")), "older gate");
+  onMain(
+    dev,
+    () =>
+      writeFileSync(
+        join(dev, REPO_GATE), // ...until main goes back to one that doesn't
+        read(dev, REPO_GATE).replace(/^\/\/ ownership-gate-features: .*\n/m, ""),
+      ),
+    "older gate",
+  );
   const st = gate.status(dev);
   assert.equal(st.small_change, false);
-  assert.ok(st.notes.some((n) => n.includes("would count as a small change (2 changed lines)")), st.notes.join("\n"));
+  assert.ok(
+    st.notes.some((n) => n.includes("would count as a small change (2 changed lines)")),
+    st.notes.join("\n"),
+  );
   const [passed, problems] = gate.verify(dev);
   assert.ok(!passed && problems.some((m) => m.includes("summary is missing or too short")), problems.join("\n"));
   throwsGate(() => gate.save({ summary: SHORT, verified: { "src/app.js": ["x"] } }, dev), /at least 80 characters/);

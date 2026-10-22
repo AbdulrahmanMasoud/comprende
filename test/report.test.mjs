@@ -37,7 +37,8 @@ for (const bad of ["# no data block\n", null]) {
     const { dev } = setup(t);
     write(dev, "src/app.js", "export const app = 2;\n");
     const rel = join(dev, gate.reportRelpath("feature/rate-limit"));
-    if (bad === null) { // a valid report from an older gate version
+    if (bad === null) {
+      // a valid report from an older gate version
       gate.save(payload(), dev);
       const text = readFileSync(rel, "utf8").replaceAll(`"version": ${gate.const("GATE_VERSION")}`, '"version": 1');
       writeFileSync(rel, text);
@@ -46,7 +47,10 @@ for (const bad of ["# no data block\n", null]) {
       writeFileSync(rel, bad);
     }
     const st = gate.status(dev);
-    assert.ok(st.notes.some((n) => n.includes("can't be used")), JSON.stringify(st.notes));
+    assert.ok(
+      st.notes.some((n) => n.includes("can't be used")),
+      JSON.stringify(st.notes),
+    );
     if (bad !== null) {
       assert.deepEqual(st.must_verify, ["src/app.js"]); // unreadable report: not a clean slate
     }
@@ -61,14 +65,14 @@ test("save --input deletes report.local.json only after the report is written", 
   write(dev, "src/app.js", "export const app = 2;\n");
   const report = join(dev, gate.reportRelpath("feature/rate-limit"));
   write(dev, INPUT, JSON.stringify({ summary: "too short", verified: { "src/app.js": ["x"] } }));
-  assert.notEqual(runGate(dev, ["save", "--input", INPUT]).status, 0);       // refused: kept
+  assert.notEqual(runGate(dev, ["save", "--input", INPUT]).status, 0); // refused: kept
   assert.ok(existsSync(join(dev, INPUT)) && !existsSync(report));
   write(dev, INPUT, JSON.stringify(payload()));
   const r = runGate(dev, ["save", "--input", INPUT]);
   assert.equal(r.status, 0, r.stderr);
-  assert.ok(existsSync(report) && !existsSync(join(dev, INPUT)));            // saved: removed
+  assert.ok(existsSync(report) && !existsSync(join(dev, INPUT))); // saved: removed
   assert.match(r.stdout, /Removed \.learning\/report\.local\.json/);
-  const other = join(".git", "my-report.json");                              // any other input stays
+  const other = join(".git", "my-report.json"); // any other input stays
   write(dev, other, JSON.stringify(payload()));
   assert.equal(runGate(dev, ["save", "--input", other]).status, 0);
   assert.ok(existsSync(join(dev, other)));

@@ -134,7 +134,8 @@ function init(root) {
 var NUMBERED = /^([0-9]{4})-/;
 function decision(root, title) {
   const folder = join2(root, ".learning", "decisions");
-  if (!fs2.statSync(folder, { throwIfNoEntry: false })?.isDirectory()) exit("No .learning/decisions/ here. Run `learning.mjs init` first.");
+  if (!fs2.statSync(folder, { throwIfNoEntry: false })?.isDirectory())
+    exit("No .learning/decisions/ here. Run `learning.mjs init` first.");
   const numbers = fs2.readdirSync(folder).filter((name) => name.endsWith(".md")).map((name) => NUMBERED.exec(name)).filter((m) => m !== null).map((m) => Number.parseInt(m[1], 10));
   const num = Math.max(0, ...numbers) + 1;
   const path = join2(folder, `${String(num).padStart(4, "0")}-${slug(title) || "decision"}.md`);

@@ -5,7 +5,21 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import { parse as parseYaml } from "yaml";
-import { commitAll, ENV, gate, git, payload, read, REPO_GATE, runGate, setup, sh, SUMMARY, tmp, write } from "./helpers.mjs";
+import {
+  commitAll,
+  ENV,
+  gate,
+  git,
+  payload,
+  read,
+  REPO_GATE,
+  runGate,
+  setup,
+  sh,
+  SUMMARY,
+  tmp,
+  write,
+} from "./helpers.mjs";
 
 /** JS equivalent of impl.code_print_exit (node flavour). */
 function codePrintExit(message, code, toStderr = false) {
@@ -53,8 +67,11 @@ test("the workflow runs the base branch's gate, not the PR's", (t) => {
   const runnerTemp = join(dir, "runner");
   mkdirSync(runnerTemp);
   const env = {
-    ...ENV, BASE_REF: "main", HEAD_REF: "feature/rate-limit",
-    RUNNER_TEMP: runnerTemp, GITHUB_ACTIONS: "true",
+    ...ENV,
+    BASE_REF: "main",
+    HEAD_REF: "feature/rate-limit",
+    RUNNER_TEMP: runnerTemp,
+    GITHUB_ACTIONS: "true",
   };
   const r = sh(ci, "bash", ["-e", "-c", script], { check: false, env });
   assert.equal(r.status, 1, r.stdout + r.stderr);
@@ -104,8 +121,7 @@ test("a shallow clone gets an actionable error", (t) => {
   git(dev, "commit", "-qam", "x");
   git(dev, "push", "-q", "--no-verify", "-u", "origin", "feature/rate-limit");
   const shallow = join(dir, "shallow");
-  git(dir, "clone", "-q", "--depth", "1", "--branch", "feature/rate-limit",
-    `file://${s.remote}`, shallow);
+  git(dir, "clone", "-q", "--depth", "1", "--branch", "feature/rate-limit", `file://${s.remote}`, shallow);
   const r = runGate(shallow, ["verify", "--base", "origin/main", "--branch", "feature/rate-limit"]);
   assert.ok(r.status === 1 && r.stderr.includes("fetch-depth: 0"));
 });
@@ -114,10 +130,13 @@ test("the job summary shows reviewers the summary and what was verified", (t) =>
   const { dev, tmp } = setup(t);
   write(dev, "src/app.js", "export const app = 2;\n");
   write(dev, "src/auth/login.js", "export function login(u) { return u; }\n");
-  gate.save({
-    summary: SUMMARY + " <script>alert(1)</script> ![x](https://evil.example/p.png)",
-    verified: { "src/app.js": ["limit math"], "src/auth/login.js": ["token check <b>"] },
-  }, dev);
+  gate.save(
+    {
+      summary: SUMMARY + " <script>alert(1)</script> ![x](https://evil.example/p.png)",
+      verified: { "src/app.js": ["limit math"], "src/auth/login.js": ["token check <b>"] },
+    },
+    dev,
+  );
   commitAll(dev, "with report");
   const summaryFile = join(tmp, "summary.md");
   const env = { ...ENV, GITHUB_ACTIONS: "true", GITHUB_STEP_SUMMARY: summaryFile };
