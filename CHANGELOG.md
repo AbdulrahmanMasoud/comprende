@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Fixes:**
+  - `learning_context` still returns your profile when a project's `.learning/` folder is refused, for example because it's a symlink. Before, the whole call failed.
+  - A symlinked `.learning/` is refused with ".learning/ is a symlink". Before, the message said it "resolves outside the project", which was wrong when the link pointed inside the project.
+  - A decimal `min_summary_chars` outside the gate's own section of `.learning/config.json`, or in a duplicate key that a later one replaces, no longer makes the whole config invalid.
+  - Glob ranges in `sensitive` and `ignore` that mix emoji with characters from U+E000 to U+FFFF now match correctly, and no longer make the config invalid.
+  - `install` no longer overwrites `hooks` in `.claude/settings.json` when it has an unexpected shape. It skips the Claude hook and tells you to add it by hand.
+
 ## 0.1.0 (first public release)
 
 - **Explain as you build:** Claude explains what it writes, but only where it matters: new APIs, non-obvious logic, hidden coupling, real decisions and risks. Each explanation is short and in your language and dialect, and you can steer it in plain words.

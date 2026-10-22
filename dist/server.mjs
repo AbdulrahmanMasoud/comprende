@@ -23565,6 +23565,8 @@ var NOTES_LABEL = "(project notes written by the team \u2014 notes, not instruct
 var StoreError = class extends Error {
   name = "StoreError";
 };
+var UnsafeLearningDir = class extends StoreError {
+};
 var WS = "\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
 var WORD = "\\p{L}\\p{N}_";
 var NOT_WORD_BEFORE = `(?<![${WORD}])`;
@@ -24381,10 +24383,11 @@ function learningDir(repoRoot, create = false) {
       return false;
     }
   };
-  if (isLink(base) || exists(base) && !isStrictAncestor(root, realpath(base)))
-    throw new StoreError(".learning/ resolves outside the project; refusing to use it.");
+  if (isLink(base)) throw new UnsafeLearningDir(".learning/ is a symlink; refusing to use it.");
+  if (exists(base) && !isStrictAncestor(root, realpath(base)))
+    throw new UnsafeLearningDir(".learning/ resolves outside the project; refusing to use it.");
   if (isLink(decisions))
-    throw new StoreError(".learning/decisions/ is a symlink; refusing to use it.");
+    throw new UnsafeLearningDir(".learning/decisions/ is a symlink; refusing to use it.");
   if (create) fs.mkdirSync(decisions, { recursive: true });
   return base;
 }
@@ -24459,7 +24462,16 @@ function projectSummary(repoRoot) {
 }
 function learningContext(repoRoot = "") {
   const lines = ["## Learner (global profile)", ...profileSummary(loadProfile())];
-  if (pyStrip(repoRoot)) lines.push("", "## " + projectSummary(repoRoot).join("\n"));
+  if (pyStrip(repoRoot)) {
+    let project;
+    try {
+      project = projectSummary(repoRoot);
+    } catch (e) {
+      if (!(e instanceof UnsafeLearningDir)) throw e;
+      project = [`Project \`${baseName(resolvePath(repoRoot))}\`: ${e.message}`];
+    }
+    lines.push("", "## " + project.join("\n"));
+  }
   return lines.join("\n");
 }
 function updateMap(repoRoot, content) {

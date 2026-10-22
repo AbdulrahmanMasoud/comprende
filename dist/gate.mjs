@@ -132,7 +132,7 @@ function globToRegExp(pat) {
           k += 2;
         } else items.push([body[k], body[k]]);
       }
-      const valid = items.filter(([lo, hi]) => lo <= hi);
+      const valid = items.filter(([lo, hi]) => lo.codePointAt(0) <= hi.codePointAt(0));
       if (!valid.length) {
         res.push(negate ? "[\\s\\S]" : "(?!)");
         continue;
@@ -226,6 +226,62 @@ function readBlob(root, sha) {
     return null;
   }
 }
+function valueSource(raw, path) {
+  let i = 0;
+  let found = null;
+  const ws = () => {
+    while (" 	\n\r".includes(raw[i]) && i < raw.length) i++;
+  };
+  const str = () => {
+    const start = i++;
+    while (raw[i] !== '"') i += raw[i] === "\\" ? 2 : 1;
+    return JSON.parse(raw.slice(start, ++i));
+  };
+  const skip = () => {
+    if (raw[i] === '"') return void str();
+    if (raw[i] !== "{" && raw[i] !== "[") {
+      while (i < raw.length && !",]} 	\n\r".includes(raw[i])) i++;
+      return;
+    }
+    let depth = 0;
+    do {
+      if (raw[i] === '"') {
+        str();
+        continue;
+      }
+      if (raw[i] === "{" || raw[i] === "[") depth++;
+      else if (raw[i] === "}" || raw[i] === "]") depth--;
+      i++;
+    } while (depth > 0);
+  };
+  const walk = (depth) => {
+    i++;
+    ws();
+    if (raw[i] === "}") return void i++;
+    for (; ; ) {
+      ws();
+      const key = str();
+      ws();
+      i++;
+      ws();
+      if (key !== path[depth]) skip();
+      else if (depth === path.length - 1) {
+        const start = i;
+        skip();
+        found = raw.slice(start, i);
+      } else {
+        found = null;
+        if (raw[i] === "{") walk(depth + 1);
+        else skip();
+      }
+      ws();
+      if (raw[i++] === "}") return;
+    }
+  };
+  ws();
+  if (raw[i] === "{") walk(0);
+  return found;
+}
 function parseConfig(raw, where) {
   let data;
   try {
@@ -252,7 +308,8 @@ function parseConfig(raw, where) {
     if (typeof cfg[key] !== "string") throw new GateError(`${where}: "${key}" must be a string.`);
   }
   const m = cfg.min_summary_chars;
-  const floatLiteral = /"min_summary_chars"\s*:\s*-?\d*(?:\.\d*|[eE])/.test(raw);
+  const literal = valueSource(raw, section === data ? ["min_summary_chars"] : ["ownership_check", "min_summary_chars"]);
+  const floatLiteral = literal !== null && /[.eE]/.test(literal);
   if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral) throw new GateError(`${where}: "min_summary_chars" must be a non-negative integer.`);
   return { ...cfg, _configured: true };
 }
@@ -1146,8 +1203,12 @@ function mergeClaudeSettings(path) {
     if (!isObj(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; add the hook by hand.`;
     settings = parsed;
   }
-  const hooks = isObj(settings.hooks) ? settings.hooks : settings.hooks = {};
-  const groups = Array.isArray(hooks.PreToolUse) ? hooks.PreToolUse : hooks.PreToolUse = [];
+  if (settings.hooks !== void 0 && !isObj(settings.hooks))
+    return `SKIPPED Claude hook: "hooks" in ${path} is not an object; add the hook by hand.`;
+  const hooks = settings.hooks ??= {};
+  if (hooks.PreToolUse !== void 0 && !Array.isArray(hooks.PreToolUse))
+    return `SKIPPED Claude hook: "hooks.PreToolUse" in ${path} is not a list; add the hook by hand.`;
+  const groups = hooks.PreToolUse ??= [];
   for (const g of groups) {
     for (const h of g?.hooks ?? []) {
       if ((h?.command ?? "").includes("gate.mjs") && (h?.command ?? "").includes("claude-hook")) return `Claude hook already present (${path})`;

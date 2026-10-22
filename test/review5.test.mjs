@@ -126,6 +126,32 @@ test("min_summary_chars must be an integer literal", (t) => {
   }
 });
 
+test("only the gate's own min_summary_chars is checked for a float literal", (t) => {
+  const { dev } = setup(t);
+  const p = join(dev, ".learning/config.json");
+  const cfg = JSON.parse(readFileSync(p, "utf8"));
+  writeFileSync(p, JSON.stringify({ ...cfg, notes: { min_summary_chars: 1.5 } }, null, 2));
+  gate.status(dev);
+  // A duplicate key: the last one wins, as JSON.parse reads it.
+  writeFileSync(p, readFileSync(p, "utf8").replace('"min_summary_chars": 80', '"min_summary_chars": 1.5, "min_summary_chars": 80'));
+  gate.status(dev);
+});
+
+test("glob ranges compare code points, not UTF-16 code units", () => {
+  assert.equal(gate.isSensitive("😀", "100644", { sensitive: ["[-😀]"] }), true);
+  // Reversed in code points, so empty (Python drops it) instead of a regex error.
+  assert.equal(gate.isSensitive("😀", "100644", { sensitive: ["[😀-￿]"] }), false);
+});
+
+test("settings.json with hooks of the wrong shape is left untouched", (t) => {
+  const p = join(tmp(t), "settings.json");
+  for (const body of ['{"hooks": []}', '{"hooks": {"PreToolUse": {"matcher": "Bash"}}}']) {
+    writeFileSync(p, body);
+    assert.match(gate.mergeClaudeSettings(p), /SKIPPED/);
+    assert.equal(readFileSync(p, "utf8"), body);
+  }
+});
+
 test("an option can't swallow the next option as its value", (t) => {
   const { dev } = setup(t);
   const r = gateCli(["status", "--repo", dev, "--base", "--branch", "x"]);

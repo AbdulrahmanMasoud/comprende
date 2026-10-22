@@ -34,6 +34,9 @@ export class StoreError extends Error {
   override name = "StoreError";
 }
 
+/** The project's .learning/ isn't safe to use. learning_context still returns the profile. */
+class UnsafeLearningDir extends StoreError {}
+
 // ====================================================================== Python semantics
 
 /** Python's `str.isspace()` set, which is also what `\s` matches in a str pattern. */
@@ -1017,10 +1020,11 @@ export function learningDir(repoRoot: unknown, create = false): string {
       return false;
     }
   };
-  if (isLink(base) || (exists(base) && !isStrictAncestor(root, realpath(base))))
-    throw new StoreError(".learning/ resolves outside the project; refusing to use it.");
+  if (isLink(base)) throw new UnsafeLearningDir(".learning/ is a symlink; refusing to use it.");
+  if (exists(base) && !isStrictAncestor(root, realpath(base)))
+    throw new UnsafeLearningDir(".learning/ resolves outside the project; refusing to use it.");
   if (isLink(decisions))
-    throw new StoreError(".learning/decisions/ is a symlink; refusing to use it.");
+    throw new UnsafeLearningDir(".learning/decisions/ is a symlink; refusing to use it.");
   if (create) fs.mkdirSync(decisions, { recursive: true });
   return base;
 }
@@ -1113,7 +1117,16 @@ export function projectSummary(repoRoot: unknown): string[] {
 
 export function learningContext(repoRoot: unknown = ""): string {
   const lines = ["## Learner (global profile)", ...profileSummary(loadProfile())];
-  if (pyStrip(repoRoot)) lines.push("", "## " + projectSummary(repoRoot).join("\n"));
+  if (pyStrip(repoRoot)) {
+    let project: string[];
+    try {
+      project = projectSummary(repoRoot);
+    } catch (e) {
+      if (!(e instanceof UnsafeLearningDir)) throw e;
+      project = [`Project \`${baseName(resolvePath(repoRoot))}\`: ${e.message}`];
+    }
+    lines.push("", "## " + project.join("\n"));
+  }
   return lines.join("\n");
 }
 

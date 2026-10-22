@@ -207,8 +207,28 @@ test("symlinked .learning: update_map refused and nothing created outside", (t) 
   const outside = join(tmpPath, "outside");
   mkdirSync(outside);
   symlinkSync(outside, join(repo, ".learning"));
-  throwsGate(() => store.updateMap(repo, "Entry: x"), /resolves outside the project/);
+  throwsGate(() => store.updateMap(repo, "Entry: x"), /\.learning\/ is a symlink/);
   assert.deepEqual(readdirSync(outside), []); // no map.md, no decisions/, nothing
+});
+
+test("symlinked .learning inside the repo: the refusal says symlink, not outside", (t) => {
+  const { store, tmpPath } = isolated(t);
+  const repo = makeRepo(tmpPath);
+  mkdirSync(join(repo, "docs", "learning"), { recursive: true });
+  symlinkSync(join(repo, "docs", "learning"), join(repo, ".learning"));
+  const e = throwsGate(() => store.updateMap(repo, "Entry: x"), /\.learning\/ is a symlink/);
+  assert.ok(!e.message.includes("outside"), e.message);
+});
+
+test("learning_context keeps the profile when .learning is refused", (t) => {
+  const { store, tmpPath } = isolated(t);
+  const repo = makeRepo(tmpPath);
+  store.recordTopic("git", "knows");
+  mkdirSync(join(tmpPath, "outside"));
+  symlinkSync(join(tmpPath, "outside"), join(repo, ".learning"));
+  const ctx = store.learningContext(repo);
+  assert.ok(ctx.includes("git"), ctx);
+  assert.ok(ctx.includes(".learning/ is a symlink"), ctx);
 });
 
 test("symlinked .learning/decisions: add_decision refused and nothing written at the target", (t) => {

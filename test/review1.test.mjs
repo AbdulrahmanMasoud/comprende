@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  ENV, commitAll, gate, git, gitTry, payload, runGate, saveAndCommit, setup, throwsGate, tmp, write,
+  ENV, commitAll, gate, git, gitTry, payload, runGate, saveAndCommit, setup, sh, throwsGate, tmp, write,
 } from "./helpers.mjs";
 
 const read = (root, rel) => readFileSync(join(root, rel), "utf8");
@@ -86,11 +86,14 @@ test("submodule bump is visible even with ignore=all", (t) => {
 });
 
 // 4. Non-UTF-8 file names fail closed instead of passing silently.
+// The name goes straight into the index: APFS (macOS) refuses to create a file
+// with it, and the gate only reads names from git anyway.
 test("non-UTF-8 filename fails closed", (t) => {
   const { dev } = setup(t);
-  const name = Buffer.concat([Buffer.from(join(dev, "src/caf")), Buffer.from([0xe9]), Buffer.from(".js")]);
-  writeFileSync(name, Buffer.from("x\n"));
-  commitAll(dev, "latin-1 name");
+  const blob = sh(dev, "git", ["hash-object", "-w", "--stdin"], { input: "x\n" }).stdout.trim();
+  const entry = Buffer.concat([Buffer.from(`100644 ${blob}\tsrc/caf`), Buffer.from([0xe9]), Buffer.from(".js\n")]);
+  sh(dev, "git", ["update-index", "--add", "--index-info"], { input: entry });
+  git(dev, "commit", "-qm", "latin-1 name");
   throwsGate(() => gate.verify(dev), /not valid UTF-8/);
 });
 

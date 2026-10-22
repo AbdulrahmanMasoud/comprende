@@ -181,8 +181,9 @@ function globToRegExp(pat: string): RegExp {
           k += 2;
         } else items.push([body[k], body[k]]);
       }
-      // Python drops empty (reversed) ranges rather than failing.
-      const valid = items.filter(([lo, hi]) => lo <= hi);
+      // Python drops empty (reversed) ranges rather than failing. Compare code
+      // points: in UTF-16 order, U+E000–U+FFFF sorts after every emoji.
+      const valid = items.filter(([lo, hi]) => lo.codePointAt(0)! <= hi.codePointAt(0)!);
       if (!valid.length) {
         res.push(negate ? "[\\s\\S]" : "(?!)");
         continue;
@@ -288,6 +289,67 @@ function readBlob(root: string, sha: string): Buffer | null {
 
 // ---------------------------------------------------------------- config
 
+/** The source text of the value at `path` in `raw` (valid JSON), or null if
+ *  absent. A later duplicate key replaces an earlier one, as in JSON.parse.
+ *  Lets the config tell `80.0` from `80`, which JSON.parse can't. */
+function valueSource(raw: string, path: string[]): string | null {
+  let i = 0;
+  let found: string | null = null;
+  const ws = () => {
+    while (" \t\n\r".includes(raw[i]) && i < raw.length) i++;
+  };
+  const str = (): string => {
+    const start = i++;
+    while (raw[i] !== '"') i += raw[i] === "\\" ? 2 : 1;
+    return JSON.parse(raw.slice(start, ++i)) as string;
+  };
+  // Skip one value without recursion, so deep nesting can't overflow the stack.
+  const skip = () => {
+    if (raw[i] === '"') return void str();
+    if (raw[i] !== "{" && raw[i] !== "[") {
+      while (i < raw.length && !",]} \t\n\r".includes(raw[i])) i++;
+      return;
+    }
+    let depth = 0;
+    do {
+      if (raw[i] === '"') {
+        str();
+        continue;
+      }
+      if (raw[i] === "{" || raw[i] === "[") depth++;
+      else if (raw[i] === "}" || raw[i] === "]") depth--;
+      i++;
+    } while (depth > 0);
+  };
+  const walk = (depth: number): void => {
+    i++; // {
+    ws();
+    if (raw[i] === "}") return void i++;
+    for (;;) {
+      ws();
+      const key = str();
+      ws();
+      i++; // :
+      ws();
+      if (key !== path[depth]) skip();
+      else if (depth === path.length - 1) {
+        const start = i;
+        skip();
+        found = raw.slice(start, i);
+      } else {
+        found = null;
+        if (raw[i] === "{") walk(depth + 1);
+        else skip();
+      }
+      ws();
+      if (raw[i++] === "}") return;
+    }
+  };
+  ws();
+  if (raw[i] === "{") walk(0);
+  return found;
+}
+
 function parseConfig(raw: string, where: string): Config {
   let data: unknown;
   try {
@@ -316,7 +378,8 @@ function parseConfig(raw: string, where: string): Config {
     if (typeof cfg[key] !== "string") throw new GateError(`${where}: "${key}" must be a string.`);
   }
   const m = cfg.min_summary_chars;
-  const floatLiteral = /"min_summary_chars"\s*:\s*-?\d*(?:\.\d*|[eE])/.test(raw);
+  const literal = valueSource(raw, section === data ? ["min_summary_chars"] : ["ownership_check", "min_summary_chars"]);
+  const floatLiteral = literal !== null && /[.eE]/.test(literal);
   if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral) throw new GateError(`${where}: "min_summary_chars" must be a non-negative integer.`);
   return { ...(cfg as unknown as Config), _configured: true };
 }
@@ -1379,8 +1442,13 @@ export function mergeClaudeSettings(path: string): string {
     if (!isObj(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; add the hook by hand.`;
     settings = parsed;
   }
-  const hooks = (isObj(settings.hooks) ? settings.hooks : (settings.hooks = {})) as Record<string, unknown>;
-  const groups = (Array.isArray(hooks.PreToolUse) ? hooks.PreToolUse : (hooks.PreToolUse = [])) as { hooks?: { command?: string }[] }[];
+  // Never replace a value we don't understand: that would drop the user's settings.
+  if (settings.hooks !== undefined && !isObj(settings.hooks))
+    return `SKIPPED Claude hook: "hooks" in ${path} is not an object; add the hook by hand.`;
+  const hooks = (settings.hooks ??= {}) as Record<string, unknown>;
+  if (hooks.PreToolUse !== undefined && !Array.isArray(hooks.PreToolUse))
+    return `SKIPPED Claude hook: "hooks.PreToolUse" in ${path} is not a list; add the hook by hand.`;
+  const groups = (hooks.PreToolUse ??= []) as { hooks?: { command?: string }[] }[];
   for (const g of groups) {
     for (const h of g?.hooks ?? []) {
       if ((h?.command ?? "").includes("gate.mjs") && (h?.command ?? "").includes("claude-hook")) return `Claude hook already present (${path})`;
