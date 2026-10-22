@@ -2,6 +2,8 @@
 
 ## 0.2.0
 
+**Upgrading:** once a repo upgrades its gate (`gate.mjs install --upgrade`, merged into the base branch), the fast path for small changes is on by default, even if `.learning/config.json` doesn't list the new keys yet. To keep the old behaviour, set `"small_change_lines": 0`.
+
 - **README opens with a Quick start:** three short paths, for a solo developer, a team lead and a team member. The same section is in README.ar.md.
 - **Terminal demo:** `docs/demo.tape`, a [VHS](https://github.com/charmbracelet/vhs) script that shows a push being blocked, a report being saved and the push going through. Render it with `vhs docs/demo.tape`. A test runs the same commands, so the demo stays true.
 - **A fast path for small changes:**
@@ -10,7 +12,6 @@
   - **What it changes:** `save` and `verify` accept a summary of `small_summary_chars` instead of `min_summary_chars`, and the protocol asks one question instead of 3–6. Everything else is unchanged: there's still a report that fingerprints every file and needs at least one verified file.
   - **Status:** `status` prints "Small change (N changed lines)". `--json` has `small_change`, `changed_lines` and the `min_summary_chars` that applies.
   - **Validation:** the new keys must be non-negative integers, like `min_summary_chars`.
-  - **Upgrading turns it on:** repos that upgrade the gate get the fast path with the defaults, even if their config doesn't list the keys yet. Set `small_change_lines` to `0` to keep the old behaviour.
   - **Compatibility, and why `GATE_VERSION` stays 3:**
     - CI runs the base branch's gate. A new gate that offers the fast path while the base still runs an older gate would let a developer save a 30-character summary that CI then rejects.
     - Bumping `GATE_VERSION` doesn't fix that. Gates accept only reports of their own version, so every old gate would reject every new report and the reverse, forcing plugin and repo upgrades in lockstep.
