@@ -5,8 +5,11 @@
 import { build } from "esbuild";
 import { copyFileSync, existsSync, readFileSync, chmodSync } from "node:fs";
 
-const version = readFileSync("src/gate.ts", "utf8").match(/export const GATE_VERSION = (\d+)/)?.[1];
+const gateSrc = readFileSync("src/gate.ts", "utf8");
+const version = gateSrc.match(/export const GATE_VERSION = (\d+)/)?.[1];
 if (!version) throw new Error("GATE_VERSION not found in src/gate.ts");
+const features = gateSrc.match(/export const GATE_FEATURES = "([^"]*)"/)?.[1];
+if (features === undefined) throw new Error("GATE_FEATURES not found in src/gate.ts");
 
 const common = {
   bundle: true,
@@ -22,7 +25,9 @@ const header = (name) =>
 const entries = [
   // The gate must import only node: built-ins (checked below), so a repo can
   // never shadow a module it loads.
-  { name: "gate", banner: `${header("gate")}// ownership-gate-version: ${version}` },
+  // The version and features lines are read by other gates (status notes, and
+  // whether the base branch's copy supports a feature such as the fast path).
+  { name: "gate", banner: `${header("gate")}// ownership-gate-version: ${version}\n// ownership-gate-features: ${features}` },
   { name: "learning", banner: header("learning") },
   // The MCP server bundles its SDK; esbuild needs a `require` shim for the
   // CommonJS bits of its dependencies.

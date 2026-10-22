@@ -110,7 +110,8 @@ test("a hooksPath symlinked out of the repo is refused", (t) => {
 // 6. The summary is measured like Python: code points, Python whitespace.
 test("summary length counts characters, not UTF-16 units or exotic whitespace", (t) => {
   const { dev } = setup(t);
-  write(dev, "src/app.js", "export const app = 2;\n");
+  // More than small_change_lines, so the full min_summary_chars (80) applies.
+  write(dev, "src/app.js", Array.from({ length: 12 }, (_, i) => `export const app${i} = ${i};\n`).join(""));
   throwsGate(() => gate.save({ summary: "😀".repeat(40), verified: { "src/app.js": ["x"] } }, dev), /at least 80 characters/);
   throwsGate(() => gate.save({ summary: "ok" + "\x1c".repeat(80), verified: { "src/app.js": ["x"] } }, dev), /at least 80 characters/);
   gate.save({ summary: "😀".repeat(80), verified: { "src/app.js": ["x"] } }, dev);

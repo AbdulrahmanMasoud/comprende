@@ -78,6 +78,7 @@ Teammates with the plugin don't need to do anything else: the first time they op
   - a PR summary in the developer's own words
 
   A wrong answer gets a short explanation and a *different* follow-up question, never the same one again.
+- **Small changes, quickly:** a typo fix or a one-line tweak gets **one** question and needs only a 30-character summary. That applies when it adds and removes at most 10 lines (lockfiles and other ignored files not counted), and touches nothing sensitive, binary or a submodule. The report is still saved and still fingerprints every file.
 - **If they skip it:** Claude won't push, the git hook won't push, and CI won't let the PR merge.
 
 ### What the lead sees
@@ -103,6 +104,8 @@ The lead **never** sees scores, wrong answers, or how many tries it took. Those 
   "sensitive": ["**/auth/**", "**/payments/**", "**/migrations/**", "**/security/**"],
   "ignore": ["**/package-lock.json", "**/yarn.lock", "..."],
   "min_summary_chars": 80,
+  "small_change_lines": 10,
+  "small_summary_chars": 30,
   "skip_label": "skip-ownership-check"
 }}
 ```
@@ -110,6 +113,7 @@ The lead **never** sees scores, wrong answers, or how many tries it took. Those 
 - **`mode`:** `required` blocks the merge; `suggested` only warns; `off` turns the gate off.
 - **`sensitive`:** these files must be explicitly verified. Submodule bumps always count as sensitive.
 - **`ignore`:** these files never need questions, but they're still tracked.
+- **`small_change_lines`, `small_summary_chars`:** the fast path for small changes. If the added + removed lines across non-ignored files are at most `small_change_lines`, the summary only needs `small_summary_chars`. Nothing sensitive, binary or a submodule can be in the change. `0` turns it off. The fast path only applies once the base branch runs a gate that knows it, so local checks and CI always agree.
 - **Emergencies:** the `skip-ownership-check` label skips the check, and it's visible in the PR timeline.
 - **Where the rules come from:** CI reads the config and runs the gate from the **base branch**, so a PR can't switch off its own check.
 

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **A fast path for small changes:**
+  - **New config keys:** `small_change_lines` (default 10, `0` turns it off) and `small_summary_chars` (default 30).
+  - **What counts as small:** the change adds and removes at most `small_change_lines` lines across its non-ignored files, counted with `git diff --numstat` from the fork point. It also has no sensitive file, no submodule and no binary file.
+  - **What it changes:** `save` and `verify` accept a summary of `small_summary_chars` instead of `min_summary_chars`, and the protocol asks one question instead of 3–6. Everything else is unchanged: there's still a report that fingerprints every file and needs at least one verified file.
+  - **Status:** `status` prints "Small change (N changed lines)". `--json` has `small_change`, `changed_lines` and the `min_summary_chars` that applies.
+  - **Validation:** the new keys must be non-negative integers, like `min_summary_chars`.
+  - **Upgrading turns it on:** repos that upgrade the gate get the fast path with the defaults, even if their config doesn't list the keys yet. Set `small_change_lines` to `0` to keep the old behaviour.
+  - **Compatibility, and why `GATE_VERSION` stays 3:**
+    - CI runs the base branch's gate. A new gate that offers the fast path while the base still runs an older gate would let a developer save a 30-character summary that CI then rejects.
+    - Bumping `GATE_VERSION` doesn't fix that. Gates accept only reports of their own version, so every old gate would reject every new report and the reverse, forcing plugin and repo upgrades in lockstep.
+    - Instead, `gate.mjs` now lists its features in its header (`// ownership-gate-features: small-change`). The fast path applies only when the base branch's `gate.mjs` lists it. Otherwise `status` explains why the change needs the full check.
+    - The report format is unchanged, so old and new gates keep reading each other's reports.
+    - With an older plugin in a repo whose gate has the fast path, the plugin stays stricter (always `min_summary_chars`). It's never more lenient than CI.
 - **Explain-as-you-build is always on:** SessionStart adds one fixed line, under 60 words, in every session. It asks Claude to follow the comprende skill whenever it writes or changes code. Before, the skill only loaded when the request sounded like a wish to learn. `COMPRENDE_QUIET=1` drops the line; gated repos still get the gate message.
 - **Missing or old Node.js is reported, never silent:**
   - If `node` isn't on PATH, the SessionStart hook still prints valid JSON. It tells Claude to say, in one line, that Comprende needs Node.js 20+ and where to get it. The check is plain POSIX `sh`.

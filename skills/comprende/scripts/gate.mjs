@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Generated from src/gate.ts by build.mjs. Edit the source, then run `npm run build`.
 // ownership-gate-version: 3
+// ownership-gate-features: small-change
 
 // src/gate.ts
 import { spawnSync } from "node:child_process";
@@ -29,6 +30,7 @@ import { devNull, homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 var GATE_VERSION = 3;
+var GATE_FEATURES = "small-change";
 var LEARNING = ".learning";
 var CHECKS_DIR = `${LEARNING}/checks`;
 var CONFIG_PATH = `${LEARNING}/config.json`;
@@ -46,6 +48,11 @@ var DEFAULT_CONFIG = {
   // them after a report makes it stale, like any other file.
   ignore: ["**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml", "**/poetry.lock", "**/Cargo.lock", "**/go.sum"],
   min_summary_chars: 80,
+  // A change with at most this many added + removed lines (ignored files not
+  // counted; nothing sensitive, binary or a submodule) needs only a summary of
+  // small_summary_chars. 0 turns the fast path off.
+  small_change_lines: 10,
+  small_summary_chars: 30,
   skip_label: "skip-ownership-check"
 };
 var GATE_FILES = [CONFIG_PATH, GATE_REL, ".github/workflows/ownership-check.yml", ".claude/settings.json", ".github/CODEOWNERS"];
@@ -307,10 +314,12 @@ function parseConfig(raw, where) {
   for (const key of ["base", "skip_label"]) {
     if (typeof cfg[key] !== "string") throw new GateError(`${where}: "${key}" must be a string.`);
   }
-  const m = cfg.min_summary_chars;
-  const literal = valueSource(raw, section === data ? ["min_summary_chars"] : ["ownership_check", "min_summary_chars"]);
-  const floatLiteral = literal !== null && /[.eE]/.test(literal);
-  if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral) throw new GateError(`${where}: "min_summary_chars" must be a non-negative integer.`);
+  for (const key of ["min_summary_chars", "small_change_lines", "small_summary_chars"]) {
+    const m = cfg[key];
+    const literal = valueSource(raw, section === data ? [key] : ["ownership_check", key]);
+    const floatLiteral = literal !== null && /[.eE]/.test(literal);
+    if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral) throw new GateError(`${where}: "${key}" must be a non-negative integer.`);
+  }
   return { ...cfg, _configured: true };
 }
 var MAX_CONFIG_BYTES = 256 * 1024;
@@ -657,6 +666,44 @@ function needsVerification(changes, st, old, cfg) {
   return out;
 }
 var VERSION_RE = /^\/\/ ownership-gate-version: (\d+)/m;
+var FEATURES_RE = /^\/\/ ownership-gate-features: (.*)$/m;
+function baseGateHas(root, baseRef, feature) {
+  if (!hasFile(root, baseRef, GATE_REL)) return false;
+  try {
+    const head = showSmall(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
+    return (FEATURES_RE.exec(head)?.[1] ?? "").trim().split(/\s+/).includes(feature);
+  } catch {
+    return false;
+  }
+}
+function changedLines(root, mb, rev, paths) {
+  const args = ["diff", "--numstat", "-z", "--no-renames", "--no-ext-diff", "--no-textconv", "--diff-algorithm=myers", "--ignore-submodules=none"];
+  const raw = rev ? gitBytes(root, [...args, mb, rev]) : withWorktreeIndex(root, (env) => gitBytes(root, [...args, "--cached", mb], { env }));
+  let total = 0;
+  for (const rec of splitNul(raw)) {
+    const t1 = rec.indexOf(9);
+    const t2 = t1 < 0 ? -1 : rec.indexOf(9, t1 + 1);
+    if (t2 < 0 || !paths.has(decodePath(rec.subarray(t2 + 1)))) continue;
+    const added = rec.subarray(0, t1).toString("latin1");
+    const removed = rec.subarray(t1 + 1, t2).toString("latin1");
+    if (added === "-" || removed === "-") return null;
+    total += Number(added) + Number(removed);
+  }
+  return total;
+}
+function smallChange(root, baseRef, mb, rev, changes, cfg) {
+  const no = (lines2 = null, note = null) => ({ small: false, lines: lines2, note });
+  const entries = Object.entries(changes);
+  if (!cfg.small_change_lines || !entries.length) return no();
+  if (entries.some(([p, c]) => isSensitive(p, c.mode, cfg) || c.base_mode === "160000")) return no();
+  const counted = new Set(entries.filter(([p]) => !matches(p, cfg.ignore)).map(([p]) => p));
+  const lines = changedLines(root, mb, rev, counted);
+  if (lines === null || lines > cfg.small_change_lines) return no(lines);
+  if (!baseGateHas(root, baseRef, "small-change")) {
+    return no(lines, `This would count as a small change (${lines} changed lines), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`);
+  }
+  return { small: true, lines, note: null };
+}
 function status(repo, base2, branch) {
   const root = repoRoot(repo);
   const baseRef = resolveBase(root, loadConfig(root), base2);
@@ -701,6 +748,8 @@ function status(repo, base2, branch) {
       notes.push(`The base branch runs gate v${v[1]} but this one is v${GATE_VERSION}: merge the base branch first, or CI will reject the report.`);
     }
   }
+  const small = smallChange(root, baseRef, mb, null, changes, cfg);
+  if (small.note) notes.push(small.note);
   return {
     mode: cfg.mode,
     configured: cfg._configured,
@@ -710,6 +759,9 @@ function status(repo, base2, branch) {
     report_exists: report !== null,
     files,
     must_verify: needsVerification(changes, st, report, cfg),
+    small_change: small.small,
+    changed_lines: small.lines,
+    min_summary_chars: small.small ? cfg.small_summary_chars : cfg.min_summary_chars,
     notes
   };
 }
@@ -723,6 +775,9 @@ function formatStatus(s) {
     lines.push(`- ${f.path} [${tags.join(", ")}]`);
   }
   if (s.must_verify.length) lines.push("Must be verified before saving: " + s.must_verify.join(", "));
+  if (s.small_change) {
+    lines.push(`Small change (${s.changed_lines} changed lines): one question is enough, and the summary needs at least ${s.min_summary_chars} characters.`);
+  }
   lines.push(...s.notes);
   return lines.join("\n");
 }
@@ -734,8 +789,10 @@ function save(payload, repo, base2, branch) {
   const [changes, untracked, mb] = collectChanges(root, baseRef, null);
   if (!Object.keys(changes).length) throw new GateError(`No changes vs ${baseRef} \u2014 nothing to report.`);
   const summary = pyStrip(String(payload.summary ?? ""));
-  if (pyLen(summary) < cfg.min_summary_chars) {
-    throw new GateError(`The summary must be the developer's own description of what changed, why, and what could break \u2014 at least ${cfg.min_summary_chars} characters.`);
+  const len = pyLen(summary);
+  const minChars = len < cfg.min_summary_chars && smallChange(root, baseRef, mb, null, changes, cfg).small ? cfg.small_summary_chars : cfg.min_summary_chars;
+  if (len < minChars) {
+    throw new GateError(`The summary must be the developer's own description of what changed, why, and what could break \u2014 at least ${minChars} characters.`);
   }
   const rawVerified = payload.verified ?? {};
   if (!isObj(rawVerified)) throw new GateError('"verified" must map file paths to lists of concepts.');
@@ -787,7 +844,9 @@ function verify(repo, base2, branch, rev = "HEAD", labels = []) {
   if (by("stale").length) problems.push("Changed after the check (differs from what was verified): " + by("stale").join(", "));
   if (by("rebased").length) problems.push("Verified before a rebase \u2014 save the report again, no new questions needed: " + by("rebased").join(", "));
   if (unverifiedSensitive.length) problems.push("Sensitive files not explicitly verified: " + unverifiedSensitive.join(", "));
-  if (pyLen(pyStrip(report.summary)) < cfg.min_summary_chars) problems.push("The developer's summary is missing or too short.");
+  const len = pyLen(pyStrip(report.summary));
+  const shortOk = () => len >= cfg.small_summary_chars && smallChange(root, baseRef, mb, rev, changes, cfg).small;
+  if (len < cfg.min_summary_chars && !shortOk()) problems.push("The developer's summary is missing or too short.");
   if (problems.length && !(by("rebased").length && problems.length === 1)) problems.push(CHECK_ME_HINT);
   return [problems.length === 0, problems, cfg.mode];
 }
@@ -1541,6 +1600,7 @@ ${HELP}`);
 process.exitCode = main(process.argv.slice(2));
 export {
   CHECK_NAME,
+  GATE_FEATURES,
   GATE_FILES,
   GATE_VERSION,
   GateError,

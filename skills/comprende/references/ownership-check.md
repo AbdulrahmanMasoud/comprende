@@ -33,13 +33,14 @@ After a meaningful piece is done (a module, a layer, a feature step), ask **one 
 
 Run it even if every in-flight check went well, because people forget, skim, and lose focus. In-flight checks verify the parts, while the final check verifies the whole picture and the parts that stuck.
 
-1. **Get the diff state.** Use the `gate_status` MCP tool, or `node .learning/gate.mjs status`. It lists every changed file as `new`, `stale` (changed since it was last verified), or `ok`, and marks the sensitive ones.
-2. **Ask 3–6 questions** sized to the diff's size and risk, not to the person's seniority. A senior gets fewer, sharper questions, but still gets them. Cover:
+1. **Get the diff state.** Use the `gate_status` MCP tool, or `node .learning/gate.mjs status`. It lists every changed file as `new`, `stale` (changed since it was last verified), or `ok`, and marks the sensitive ones. It also says when the change is **small** (`small_change` in `--json`).
+2. **For a small change, ask ONE question**, about the one thing the change does: why it was needed, or what it affects. Then skip to the summary (step 4). The summary can be shorter: status gives the minimum (`min_summary_chars`). A change counts as small when it adds and removes at most `small_change_lines` lines (default 10, ignored files not counted), and nothing in it is sensitive, binary or a submodule. A typo fix shouldn't feel like an exam.
+3. **Otherwise, ask 3–6 questions** sized to the diff's size and risk, not to the person's seniority. A senior gets fewer, sharper questions, but still gets them. Cover:
    - **The whole flow.** At least one question that crosses modules: "Walk me through a request from arrival to response. What does it pass through?"
    - **Retention.** One or two concepts already checked in-flight, asked in a *different form*. If they were asked "why the Lua script?", ask now "what breaks under load if we drop the Lua script?"
    - **Gaps.** Deferred questions, `stale` files, and every **sensitive** file. Sensitive files must be verified explicitly.
-3. **Have them write the PR summary themselves**, in 3–5 lines: what changed, why, and what could break. This is the strongest single signal. Someone who owns the change writes it in a minute, and someone who doesn't can't fake it well. Don't write it for them or "polish" it into something they didn't say. Fixing typos is fine.
-4. **Save the report** once every area is understood (see below).
+4. **Have them write the PR summary themselves**, in 3–5 lines: what changed, why, and what could break. This is the strongest single signal. Someone who owns the change writes it in a minute, and someone who doesn't can't fake it well. Don't write it for them or "polish" it into something they didn't say. Fixing typos is fine.
+5. **Save the report** once every area is understood (see below).
 
 ## Question types
 

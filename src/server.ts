@@ -313,7 +313,8 @@ const TOOLS: Record<string, Tool> = {
       "Ownership check status of the current change: each changed file is new,\n" +
       "stale (changed since it was verified), or ok, with sensitive, ignored and\n" +
       "untracked files marked, plus the exact list that must be verified before\n" +
-      "saving. Use before the final check to know what to ask about.",
+      "saving, and whether the change counts as small (then ask one question; the\n" +
+      "summary minimum is lower). Use before the final check to know what to ask about.",
     annotations: READ_ONLY,
     shape: { repo_root: RepoRoot, base: Base("base").default(""), branch: Branch("branch").default("") },
     params: [["repo_root"], ["base", ""], ["branch", ""]],

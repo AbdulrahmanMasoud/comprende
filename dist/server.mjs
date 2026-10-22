@@ -24764,7 +24764,7 @@ var TOOLS = {
     fn: (repoRoot, content) => call(() => updateMap(repoRoot, content))
   },
   gate_status: {
-    description: "Ownership check status of the current change: each changed file is new,\nstale (changed since it was verified), or ok, with sensitive, ignored and\nuntracked files marked, plus the exact list that must be verified before\nsaving. Use before the final check to know what to ask about.",
+    description: "Ownership check status of the current change: each changed file is new,\nstale (changed since it was verified), or ok, with sensitive, ignored and\nuntracked files marked, plus the exact list that must be verified before\nsaving, and whether the change counts as small (then ask one question; the\nsummary minimum is lower). Use before the final check to know what to ask about.",
     annotations: READ_ONLY,
     shape: { repo_root: RepoRoot, base: Base("base").default(""), branch: Branch("branch").default("") },
     params: [["repo_root"], ["base", ""], ["branch", ""]],

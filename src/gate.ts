@@ -26,6 +26,10 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { fileURLToPath } from "node:url";
 
 export const GATE_VERSION = 3;
+// What this gate accepts beyond its version, written into the bundle's header
+// by build.mjs. A gate only offers a feature locally when the base branch's
+// copy (the one CI runs) lists it too.
+export const GATE_FEATURES = "small-change";
 const LEARNING = ".learning";
 const CHECKS_DIR = `${LEARNING}/checks`;
 const CONFIG_PATH = `${LEARNING}/config.json`;
@@ -41,6 +45,8 @@ interface Config {
   sensitive: string[];
   ignore: string[];
   min_summary_chars: number;
+  small_change_lines: number;
+  small_summary_chars: number;
   skip_label: string;
   _configured: boolean;
 }
@@ -53,6 +59,11 @@ const DEFAULT_CONFIG: Omit<Config, "_configured"> = {
   // them after a report makes it stale, like any other file.
   ignore: ["**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml", "**/poetry.lock", "**/Cargo.lock", "**/go.sum"],
   min_summary_chars: 80,
+  // A change with at most this many added + removed lines (ignored files not
+  // counted; nothing sensitive, binary or a submodule) needs only a summary of
+  // small_summary_chars. 0 turns the fast path off.
+  small_change_lines: 10,
+  small_summary_chars: 30,
   skip_label: "skip-ownership-check",
 };
 
@@ -377,10 +388,12 @@ function parseConfig(raw: string, where: string): Config {
   for (const key of ["base", "skip_label"]) {
     if (typeof cfg[key] !== "string") throw new GateError(`${where}: "${key}" must be a string.`);
   }
-  const m = cfg.min_summary_chars;
-  const literal = valueSource(raw, section === data ? ["min_summary_chars"] : ["ownership_check", "min_summary_chars"]);
-  const floatLiteral = literal !== null && /[.eE]/.test(literal);
-  if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral) throw new GateError(`${where}: "min_summary_chars" must be a non-negative integer.`);
+  for (const key of ["min_summary_chars", "small_change_lines", "small_summary_chars"]) {
+    const m = cfg[key];
+    const literal = valueSource(raw, section === data ? [key] : ["ownership_check", key]);
+    const floatLiteral = literal !== null && /[.eE]/.test(literal);
+    if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral) throw new GateError(`${where}: "${key}" must be a non-negative integer.`);
+  }
   return { ...(cfg as unknown as Config), _configured: true };
 }
 
@@ -835,6 +848,63 @@ function needsVerification(changes: Changes, st: Record<string, State>, old: Rep
 }
 
 const VERSION_RE = /^\/\/ ownership-gate-version: (\d+)/m;
+const FEATURES_RE = /^\/\/ ownership-gate-features: (.*)$/m;
+
+/** Does the base branch's gate (the copy CI runs) list `feature` in its header? */
+function baseGateHas(root: string, baseRef: string, feature: string): boolean {
+  if (!hasFile(root, baseRef, GATE_REL)) return false;
+  try {
+    const head = showSmall(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
+    return (FEATURES_RE.exec(head)?.[1] ?? "").trim().split(/\s+/).includes(feature);
+  } catch {
+    return false;
+  }
+}
+
+/** Added + removed lines in `paths` between the fork point and `rev` (the
+ *  working tree, as `git add -A` would commit it, when rev is null); null if
+ *  one of them is binary. The diff options are fixed, so local diff config
+ *  (algorithm, textconv, external tools) can't change the count. */
+function changedLines(root: string, mb: string, rev: string | null, paths: Set<string>): number | null {
+  const args = ["diff", "--numstat", "-z", "--no-renames", "--no-ext-diff", "--no-textconv", "--diff-algorithm=myers", "--ignore-submodules=none"];
+  const raw = rev ? gitBytes(root, [...args, mb, rev]) : withWorktreeIndex(root, (env) => gitBytes(root, [...args, "--cached", mb], { env }));
+  let total = 0;
+  for (const rec of splitNul(raw)) {
+    const t1 = rec.indexOf(9);
+    const t2 = t1 < 0 ? -1 : rec.indexOf(9, t1 + 1);
+    if (t2 < 0 || !paths.has(decodePath(rec.subarray(t2 + 1)))) continue;
+    const added = rec.subarray(0, t1).toString("latin1");
+    const removed = rec.subarray(t1 + 1, t2).toString("latin1");
+    if (added === "-" || removed === "-") return null;
+    total += Number(added) + Number(removed);
+  }
+  return total;
+}
+
+interface Small {
+  small: boolean;
+  lines: number | null; // null: not counted (nothing to count, or something sensitive / binary)
+  note: string | null;
+}
+
+/** The fast path: a change is small when its non-ignored files add and remove
+ *  at most small_change_lines lines in total, and nothing in it is sensitive, a
+ *  submodule or binary. It then needs a summary of small_summary_chars instead
+ *  of min_summary_chars; everything else is checked as usual. It only applies
+ *  when the base branch's gate knows it, so local and CI always agree. */
+function smallChange(root: string, baseRef: string, mb: string, rev: string | null, changes: Changes, cfg: Config): Small {
+  const no = (lines: number | null = null, note: string | null = null): Small => ({ small: false, lines, note });
+  const entries = Object.entries(changes);
+  if (!cfg.small_change_lines || !entries.length) return no();
+  if (entries.some(([p, c]) => isSensitive(p, c.mode, cfg) || c.base_mode === "160000")) return no();
+  const counted = new Set(entries.filter(([p]) => !matches(p, cfg.ignore)).map(([p]) => p));
+  const lines = changedLines(root, mb, rev, counted);
+  if (lines === null || lines > cfg.small_change_lines) return no(lines);
+  if (!baseGateHas(root, baseRef, "small-change")) {
+    return no(lines, `This would count as a small change (${lines} changed lines), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`);
+  }
+  return { small: true, lines, note: null };
+}
 
 export function status(repo?: string | null, base?: string | null, branch?: string | null) {
   const root = repoRoot(repo);
@@ -882,9 +952,13 @@ export function status(repo?: string | null, base?: string | null, branch?: stri
       notes.push(`The base branch runs gate v${v[1]} but this one is v${GATE_VERSION}: merge the base branch first, or CI will reject the report.`);
     }
   }
+  const small = smallChange(root, baseRef, mb, null, changes, cfg);
+  if (small.note) notes.push(small.note);
   return {
     mode: cfg.mode, configured: cfg._configured, base: baseRef, branch: br, report: reportRelpath(br),
-    report_exists: report !== null, files, must_verify: needsVerification(changes, st, report, cfg), notes,
+    report_exists: report !== null, files, must_verify: needsVerification(changes, st, report, cfg),
+    small_change: small.small, changed_lines: small.lines,
+    min_summary_chars: small.small ? cfg.small_summary_chars : cfg.min_summary_chars, notes,
   };
 }
 type Status = ReturnType<typeof status>;
@@ -899,6 +973,9 @@ function formatStatus(s: Status): string {
     lines.push(`- ${f.path} [${tags.join(", ")}]`);
   }
   if (s.must_verify.length) lines.push("Must be verified before saving: " + s.must_verify.join(", "));
+  if (s.small_change) {
+    lines.push(`Small change (${s.changed_lines} changed lines): one question is enough, and the summary needs at least ${s.min_summary_chars} characters.`);
+  }
   lines.push(...s.notes);
   return lines.join("\n");
 }
@@ -912,8 +989,11 @@ export function save(payload: Record<string, unknown>, repo?: string | null, bas
   if (!Object.keys(changes).length) throw new GateError(`No changes vs ${baseRef} — nothing to report.`);
 
   const summary = pyStrip(String(payload.summary ?? ""));
-  if (pyLen(summary) < cfg.min_summary_chars) {
-    throw new GateError(`The summary must be the developer's own description of what changed, why, and what could break — at least ${cfg.min_summary_chars} characters.`);
+  const len = pyLen(summary);
+  // Only count lines when it can matter: a long enough summary passes either way.
+  const minChars = len < cfg.min_summary_chars && smallChange(root, baseRef, mb, null, changes, cfg).small ? cfg.small_summary_chars : cfg.min_summary_chars;
+  if (len < minChars) {
+    throw new GateError(`The summary must be the developer's own description of what changed, why, and what could break — at least ${minChars} characters.`);
   }
   const rawVerified = payload.verified ?? {};
   if (!isObj(rawVerified)) throw new GateError('"verified" must map file paths to lists of concepts.');
@@ -969,7 +1049,9 @@ export function verify(repo?: string | null, base?: string | null, branch?: stri
   if (by("stale").length) problems.push("Changed after the check (differs from what was verified): " + by("stale").join(", "));
   if (by("rebased").length) problems.push("Verified before a rebase — save the report again, no new questions needed: " + by("rebased").join(", "));
   if (unverifiedSensitive.length) problems.push("Sensitive files not explicitly verified: " + unverifiedSensitive.join(", "));
-  if (pyLen(pyStrip(report.summary)) < cfg.min_summary_chars) problems.push("The developer's summary is missing or too short.");
+  const len = pyLen(pyStrip(report.summary));
+  const shortOk = () => len >= cfg.small_summary_chars && smallChange(root, baseRef, mb, rev, changes, cfg).small;
+  if (len < cfg.min_summary_chars && !shortOk()) problems.push("The developer's summary is missing or too short.");
   if (problems.length && !(by("rebased").length && problems.length === 1)) problems.push(CHECK_ME_HINT);
   return [problems.length === 0, problems, cfg.mode];
 }
