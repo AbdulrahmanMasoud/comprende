@@ -1,10 +1,9 @@
-// Storage for explain-as-you-build memory. Port of mcp/src/explain_mcp/store.py;
-// no MCP here.
+// Storage for Comprende's memory (no MCP here).
 //
 // Two kinds of memory, kept in two places on purpose:
 //
 // - The learner profile is about a *person*, so it lives in their home folder
-//   (~/.explain-as-you-build/profile.json) and follows them across projects.
+//   (~/.comprende/profile.json) and follows them across projects.
 // - The project map and decision records are about a *codebase*, so they live in
 //   <repo>/.learning/ — the same files the skill's file-only mode uses, so both
 //   modes read and write each other's work.
@@ -694,8 +693,8 @@ export function today(): string {
 }
 
 export function home(): string {
-  const custom = process.env.EXPLAIN_HOME;
-  return custom ? expandUser(custom) : joinPath(expandUser("~"), ".explain-as-you-build");
+  const custom = process.env.COMPRENDE_HOME;
+  return custom ? expandUser(custom) : joinPath(expandUser("~"), ".comprende");
 }
 
 export function slug(text: unknown): string {

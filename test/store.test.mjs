@@ -9,11 +9,11 @@ import { join } from "node:path";
 
 import { ENV, callTool, throwsGate, tmp } from "./helpers.mjs";
 
-// impl.py's _Store, bound to one test's EXPLAIN_HOME.
+// impl.py's _Store, bound to one test's COMPRENDE_HOME.
 const MAX_EVIDENCE = 3;
 
 function makeStore(homeDir) {
-  const env = { ...ENV, EXPLAIN_HOME: homeDir };
+  const env = { ...ENV, COMPRENDE_HOME: homeDir };
   const call = (name, args) => callTool(name, args, env);
   return {
     env,
@@ -38,7 +38,7 @@ function makeStore(homeDir) {
 }
 
 /** The isolated_home fixture: every test gets its own profile folder,
- *  never the real ~/.explain-as-you-build. Returns the test's tmp_path too. */
+ *  never the real ~/.comprende. Returns the test's tmp_path too. */
 function isolated(t) {
   const tmpPath = tmp(t);
   return { tmpPath, store: makeStore(join(tmpPath, "home")) };

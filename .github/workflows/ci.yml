@@ -27,6 +27,6 @@ jobs:
       - name: dist/ matches the source
         run: |
           npm run build
-          git diff --exit-code -- dist skills/explain-as-you-build/scripts \
+          git diff --exit-code -- dist skills/comprende/scripts \
             || { echo "::error::dist/ is out of date. Run 'npm run build' and commit the result."; exit 1; }
       - run: npm test

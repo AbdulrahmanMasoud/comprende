@@ -18,7 +18,7 @@ export const SUMMARY =
   "if Redis is down we let requests through, which is the main thing that could go wrong.";
 
 const base = { ...process.env };
-for (const k of ["GITHUB_HEAD_REF", "GITHUB_ACTIONS", "GITHUB_STEP_SUMMARY", "EXPLAIN_HOME", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete base[k];
+for (const k of ["GITHUB_HEAD_REF", "GITHUB_ACTIONS", "GITHUB_STEP_SUMMARY", "COMPRENDE_HOME", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete base[k];
 export const ENV = Object.freeze({
   ...base,
   GIT_AUTHOR_NAME: "Dev", GIT_AUTHOR_EMAIL: "dev@example.com",

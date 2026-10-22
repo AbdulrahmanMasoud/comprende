@@ -1,10 +1,9 @@
-// Manage a project's .learning/ folder for the explain-as-you-build skill.
-// Port of skills/explain-as-you-build/scripts/learning.py (usage below).
+// Manage a project's .learning/ folder for the Comprende skill (usage below).
 // Bundled into a single file that needs only Node's built-ins.
 import * as fs from "node:fs";
 import { exists, isDir, joinPath, pyIntDigits, pySplitlines, readTextStrict, realpath, today } from "./store.js";
 
-const USAGE = `Manage a project's .learning/ folder for the explain-as-you-build skill.
+const USAGE = `Manage a project's .learning/ folder for the comprende skill.
 
 Usage:
   learning.mjs init <repo-root>

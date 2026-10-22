@@ -4,7 +4,7 @@ Without memory, every session restarts from zero: calibration is lost, concepts 
 
 ## With the MCP server
 
-When the `explain-as-you-build` MCP tools are available, the learner profile moves out of the repo into the user's home folder (`~/.explain-as-you-build/profile.json`) and follows them across projects. The project files (`map.md`, `decisions/`) stay exactly as described below — the server reads and writes the same format, so file mode and MCP mode share one history.
+When the `comprende` MCP tools are available, the learner profile moves out of the repo into the user's home folder (`~/.comprende/profile.json`) and follows them across projects. The project files (`map.md`, `decisions/`) stay exactly as described below — the server reads and writes the same format, so file mode and MCP mode share one history.
 
 - Start: `learning_context(repo_root)` replaces reading `me.local.md` and `map.md`.
 - Instead of editing `me.local.md`: `record_topic(topic, "knows" | "learning" | "explained", note)`. Same rules — neutral evidence, never a verdict.

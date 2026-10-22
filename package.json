@@ -1,5 +1,5 @@
 {
-  "name": "explain-as-you-build",
+  "name": "comprende",
   "version": "0.1.0",
   "private": true,
   "description": "Claude Code plugin: explain code while building it, and an ownership gate for teams.",

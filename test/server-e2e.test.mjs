@@ -22,7 +22,7 @@ const textOf = (result) => result.content.map((c) => c.text ?? "").join("");
 async function sessionFlow(home, repo) {
   const transport = new StdioClientTransport({
     command: NODE, args: [SERVER],
-    env: { ...ENV, EXPLAIN_HOME: home },
+    env: { ...ENV, COMPRENDE_HOME: home },
   });
   const session = new Client({ name: "e2e-test", version: "0.0.0" });
   await session.connect(transport); // connect() runs the initialize handshake

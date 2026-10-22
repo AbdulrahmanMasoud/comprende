@@ -1,5 +1,5 @@
 /**
- * Ownership gate for the explain-as-you-build plugin.
+ * Ownership gate for the comprende plugin.
  *
  * Ties an "I understand this change" report to the exact change it covers, and
  * refuses pushes/merges when the report is missing or the change moved on.
@@ -1098,7 +1098,7 @@ export function sessionStart(stdinText: string): Record<string, unknown> {
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return {};
     const lines = [
-      `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the explain-as-you-build skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`,
+      `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`,
     ];
     const repoGate = join(root, GATE_REL);
     if (process.env.OWNERSHIP_GATE_NO_AUTO_HOOK !== "1" && isFile(repoGate) && !isSymlink(repoGate)) {
@@ -1163,7 +1163,7 @@ export function prePush(stdinText: string, repo?: string | null): number {
  *  (as a data: URL module, which can import only node: built-ins), so nothing
  *  next to gate.mjs can be loaded instead. */
 const PRE_PUSH_HOOK = (pin: string) => `#!/bin/sh
-# explain-as-you-build ownership gate (installed by gate.mjs install-hooks)
+# comprende ownership gate (installed by gate.mjs install-hooks)
 # pinned-sha256: ${pin}
 root="$(git rev-parse --show-toplevel)" || exit 0
 gate="$root/${GATE_REL}"
@@ -1351,7 +1351,7 @@ export function installHooks(repo?: string | null, auto = false): string[] {
   let verb = "installed";
   if (exists(hook)) {
     const text = readFileSync(hook, "utf8");
-    if (!text.includes("explain-as-you-build ownership gate")) return [`SKIPPED pre-push hook: ${hook} already exists. Add this line to it: ${manualLine}`];
+    if (!text.includes("comprende ownership gate")) return [`SKIPPED pre-push hook: ${hook} already exists. Add this line to it: ${manualLine}`];
     if (text.includes(`pinned-sha256: ${pin}`)) return [`pre-push hook already installed (${hook})`];
     verb = "re-pinned";
   }
@@ -1497,7 +1497,7 @@ function jobSummary(root: string, branch: string, rev: string, base: string | nu
 
 // ---------------------------------------------------------------- CLI
 
-const HELP = `Ownership gate (explain-as-you-build)
+const HELP = `Ownership gate (comprende)
 
 Commands (run from inside the repo, or pass --repo):
   status         Which changed files are new / stale / ok vs. the report   [--json]

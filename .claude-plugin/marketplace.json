@@ -1,14 +1,14 @@
 {
-  "name": "explain-as-you-build",
+  "name": "comprende",
   "owner": {
     "name": "YOUR_NAME"
   },
-  "description": "Learn while Claude builds, and make sure every developer owns the code they ship.",
+  "description": "Proof of understanding for AI-written code: learn while Claude builds, and make sure every developer owns the code they ship.",
   "plugins": [
     {
-      "name": "explain-as-you-build",
+      "name": "comprende",
       "source": ".",
-      "description": "Claude explains the code it writes, briefly and only where it matters, and an optional ownership gate makes sure the developer who ships a change actually understands it."
+      "description": "Proof of understanding for AI-written code. Claude explains the code it writes, briefly and only where it matters, and an optional ownership gate makes sure the developer who ships a change actually understands it."
     }
   ]
 }

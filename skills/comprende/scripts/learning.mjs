@@ -162,7 +162,7 @@ var SECRET_PATTERNS = [
 var DECISION_NAME = new RegExp("^\\p{Nd}{4}-", "u");
 
 // src/learning.ts
-var USAGE = `Manage a project's .learning/ folder for the explain-as-you-build skill.
+var USAGE = `Manage a project's .learning/ folder for the comprende skill.
 
 Usage:
   learning.mjs init <repo-root>

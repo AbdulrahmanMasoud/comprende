@@ -44,7 +44,7 @@ for (const e of entries) {
       .map((m) => m[1])
       .filter((s) => !s.startsWith("node:") && !s.startsWith("data:text/javascript;base64,"));
     if (bare.length) throw new Error(`${out} imports non-builtin modules: ${[...new Set(bare)].join(", ")}`);
-    copyFileSync(out, `skills/explain-as-you-build/scripts/${e.name}.mjs`);
+    copyFileSync(out, `skills/comprende/scripts/${e.name}.mjs`);
   }
   console.log(`built ${out}`);
 }

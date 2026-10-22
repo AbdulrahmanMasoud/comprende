@@ -1,13 +1,13 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
-  "name": "explain-as-you-build",
+  "name": "comprende",
   "version": "0.1.0",
-  "description": "Claude explains the code it writes, briefly and only where it matters, and an optional ownership gate makes sure the developer who ships a change actually understands it.",
+  "description": "Proof of understanding for AI-written code. Claude explains the code it writes, briefly and only where it matters, and an optional ownership gate makes sure the developer who ships a change actually understands it.",
   "author": {
     "name": "YOUR_NAME"
   },
-  "homepage": "https://github.com/YOUR_GITHUB_USER/explain-as-you-build",
-  "repository": "https://github.com/YOUR_GITHUB_USER/explain-as-you-build",
+  "homepage": "https://github.com/YOUR_GITHUB_USER/comprende",
+  "repository": "https://github.com/YOUR_GITHUB_USER/comprende",
   "license": "MIT",
-  "keywords": ["learning", "code-explanation", "onboarding", "code-review", "ownership", "teams"]
+  "keywords": ["proof-of-understanding", "ai-code", "vibe-coding", "learning", "code-explanation", "onboarding", "code-review", "ownership", "teams"]
 }

@@ -1,4 +1,4 @@
-// MCP server for explain-as-you-build. Port of mcp/src/explain_mcp/server.py.
+// MCP server for Comprende.
 //
 // This file is deliberately thin: it only describes the tools to the model and
 // forwards calls to store.ts. All the real logic lives there, which keeps it
@@ -378,7 +378,7 @@ function bind(name: string, params: Param[], kwargs: Record<string, unknown>): u
 }
 
 function buildServer(): McpServer {
-  const server = new McpServer({ name: "explain-as-you-build", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "comprende", version: "0.1.0" }, { instructions: INSTRUCTIONS });
   for (const [name, tool] of Object.entries(TOOLS)) {
     server.registerTool(
       name,

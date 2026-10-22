@@ -1,9 +1,9 @@
 ---
-name: explain-as-you-build
+name: comprende
 description: "Explain code while building it, so the user ends up understanding what was built, why, and how — without drowning them in text. Use this skill whenever Claude writes, changes, or walks through code and the user wants to learn or understand it, even if they don't say 'explain' — e.g. 'teach me while you build', 'explain as you go', 'I want to understand every line', 'walk me through what you did', 'why did you do it this way', onboarding onto an unfamiliar codebase, or a user who is clearly learning a stack. Also use it in Arabic or any other language ('اشرحلي وانت بتبني', 'عايز افهم الكود'). It auto-calibrates: explains only what is new, non-obvious, risky, or decision-bearing — for juniors and seniors alike — and in large projects it focuses on the diff, not the whole codebase. Also use it for the team ownership gate: quizzing a developer on their change before a PR ('check me', 'اختبرني') or turning the gate on for a repo."
 ---
 
-# Explain As You Build
+# Comprende: explain as you build
 
 The goal: when the session ends, the user can **own** the code — read it, change it, and defend the decisions behind it. Not "has seen a lot of explanation". An explanation nobody finishes reading is worth zero, so short and sharp beats complete.
 
@@ -76,7 +76,7 @@ See `references/examples.md` for good vs. bad explanations side by side. Read it
 
 ## Memory across sessions
 
-**If the `explain-as-you-build` MCP tools are available** (`learning_context`, `record_topic`, …), use them — they carry the user's profile across all their projects. Call `learning_context` once at the start with the project's absolute path; `record_topic` when you see evidence or after explaining something new; `record_checkpoint` after a quick check; `search_decisions` before changing an area with history; `add_decision` / `update_map` for lasting decisions and structure. Record evidence in batches at natural pauses, not after every chunk.
+**If the `comprende` MCP tools are available** (`learning_context`, `record_topic`, …), use them — they carry the user's profile across all their projects. Call `learning_context` once at the start with the project's absolute path; `record_topic` when you see evidence or after explaining something new; `record_checkpoint` after a quick check; `search_decisions` before changing an area with history; `add_decision` / `update_map` for lasting decisions and structure. Record evidence in batches at natural pauses, not after every chunk.
 
 **Otherwise**, when you can write files in the user's project, a small `.learning/` folder lets the next session start calibrated instead of from zero: `me.local.md` (what this user knows — personal, git-ignored), `map.md` (project map and gotchas — shared), and `decisions/` (why things are the way they are — shared).
 

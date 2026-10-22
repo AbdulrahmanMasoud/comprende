@@ -24,7 +24,7 @@ test("reserved paths hide only plain markdown", (t) => {
 
 test("store never follows a symlinked map and labels notes as data", (t) => {
   const s = setup(t);
-  const env = { ...ENV, EXPLAIN_HOME: join(s.tmp, "home") };
+  const env = { ...ENV, COMPRENDE_HOME: join(s.tmp, "home") };
   const learningContext = (repoRoot) => callTool("learning_context", { repo_root: String(repoRoot) }, env);
   const dev = s.dev;
   const secret = join(s.tmp, "secret.txt");

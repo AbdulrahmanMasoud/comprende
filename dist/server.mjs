@@ -24109,8 +24109,8 @@ function today() {
   return isoDate(/* @__PURE__ */ new Date());
 }
 function home() {
-  const custom2 = process.env.EXPLAIN_HOME;
-  return custom2 ? expandUser(custom2) : joinPath(expandUser("~"), ".explain-as-you-build");
+  const custom2 = process.env.COMPRENDE_HOME;
+  return custom2 ? expandUser(custom2) : joinPath(expandUser("~"), ".comprende");
 }
 function slug(text) {
   const s = pyStripChars(pyStrip(text).toLowerCase().replace(/[^a-z0-9]+/gu, "-"), "-");
@@ -24798,7 +24798,7 @@ function bind(name, params, kwargs) {
   return params.map((p) => Object.hasOwn(kwargs, p[0]) ? kwargs[p[0]] : p[1]);
 }
 function buildServer() {
-  const server = new McpServer({ name: "explain-as-you-build", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "comprende", version: "0.1.0" }, { instructions: INSTRUCTIONS });
   for (const [name, tool] of Object.entries(TOOLS)) {
     server.registerTool(
       name,

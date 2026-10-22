@@ -1,8 +1,11 @@
 <p align="center"><img src=".claude-plugin/icon.png" width="120" alt=""></p>
 
-<h1 align="center">explain-as-you-build</h1>
+<h1 align="center">Comprende</h1>
+
+<p align="center"><b>Proof of understanding for AI-written code.</b></p>
 
 <p align="center">
+AI writes the code. Comprende makes sure you understand it.<br>
 Claude explains the code it writes, briefly and only where it matters.<br>
 For teams, an optional <b>ownership gate</b> makes sure the developer who ships a change actually understands it.
 </p>
@@ -21,8 +24,8 @@ AI writes code fast. The risk is a developer who asks for a feature, clicks appr
 In Claude Code:
 
 ```
-/plugin marketplace add YOUR_GITHUB_USER/explain-as-you-build
-/plugin install explain-as-you-build@explain-as-you-build
+/plugin marketplace add YOUR_GITHUB_USER/comprende
+/plugin install comprende@comprende
 ```
 
 The only requirement is **Node.js 20+**. Nothing else gets installed: the plugin ships as ready-to-run files that use only Node's built-ins. The [**GitHub CLI**](https://cli.github.com/) is optional: it's used to set up branch rules automatically.
@@ -38,7 +41,7 @@ Just build things. Claude decides what deserves an explanation. You can steer it
 | "just build", "كمّل ساكت" | Stops explaining until you ask again. Risks are still flagged in one line |
 | "check me", "اختبرني" | Runs an ownership check on your current change |
 
-Claude remembers what you already know across projects, so it doesn't explain the same thing twice. This memory lives in `~/.explain-as-you-build/` on your machine and is never committed.
+Claude remembers what you already know across projects, so it doesn't explain the same thing twice. This memory lives in `~/.comprende/` on your machine and is never committed.
 
 ## For teams: the ownership gate
 
@@ -129,7 +132,7 @@ The lead **never** sees scores, wrong answers, or how many tries it took. Those 
 
 ```
 .claude-plugin/       plugin + marketplace manifests, icon
-skills/explain-as-you-build/
+skills/comprende/
   SKILL.md            when and how Claude explains
   references/         signals, formats, examples, memory, the ownership-check protocol
   scripts/            gate.mjs and learning.mjs (copies of the built files, for the skill on its own)
@@ -158,7 +161,7 @@ The tests cover:
 
 To try a local copy: `claude plugin marketplace add ./` from the repo root.
 
-**Releasing:** `plugin.json` sets `version`, so people who installed the plugin only get an update when it changes. Bump it (and add a CHANGELOG entry) with every release. Users update with `/plugin marketplace update explain-as-you-build`, or by turning on auto-update for this marketplace in `/plugin`.
+**Releasing:** `plugin.json` sets `version`, so people who installed the plugin only get an update when it changes. Bump it (and add a CHANGELOG entry) with every release. Users update with `/plugin marketplace update comprende`, or by turning on auto-update for this marketplace in `/plugin`.
 
 Issues and PRs are welcome. For security-relevant problems, see [SECURITY.md](SECURITY.md).
 

@@ -1,6 +1,10 @@
 <div dir="rtl">
 
-# explain-as-you-build
+# Comprende
+
+**Comprende?** يعني "فاهم؟". وده بالظبط السؤال اللي الأداة دي بتسأله.
+
+**إثبات فهم للكود اللي الـ AI بيكتبه.**
 
 Claude بيشرح الكود اللي بيكتبه، باختصار وفي الأماكن المهمة بس. وللتيمز فيه **بوابة فهم** اختيارية، بتتأكد إن المطوّر اللي بيشحن التغيير فاهمه فعلاً.
 
@@ -11,8 +15,8 @@ Claude بيشرح الكود اللي بيكتبه، باختصار وفي ال�
 جوه Claude Code:
 
 ```
-/plugin marketplace add YOUR_GITHUB_USER/explain-as-you-build
-/plugin install explain-as-you-build@explain-as-you-build
+/plugin marketplace add YOUR_GITHUB_USER/comprende
+/plugin install comprende@comprende
 ```
 
 المتطلبات:
