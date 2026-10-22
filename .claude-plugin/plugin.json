@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "comprende",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Proof of understanding for AI-written code. Claude explains the code it writes, briefly and only where it matters, and an optional ownership gate makes sure the developer who ships a change actually understands it.",
   "author": {
     "name": "Abdulrahman Masoud",

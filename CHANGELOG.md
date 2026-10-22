@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - **README opens with a Quick start:** three short paths, for a solo developer, a team lead and a team member. The same section is in README.ar.md.
 - **Terminal demo:** `docs/demo.tape`, a [VHS](https://github.com/charmbracelet/vhs) script that shows a push being blocked, a report being saved and the push going through. Render it with `vhs docs/demo.tape`. A test runs the same commands, so the demo stays true.

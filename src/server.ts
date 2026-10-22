@@ -379,7 +379,7 @@ function bind(name: string, params: Param[], kwargs: Record<string, unknown>): u
 }
 
 function buildServer(): McpServer {
-  const server = new McpServer({ name: "comprende", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "comprende", version: "0.2.0" }, { instructions: INSTRUCTIONS });
   for (const [name, tool] of Object.entries(TOOLS)) {
     server.registerTool(
       name,

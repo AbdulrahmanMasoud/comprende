@@ -24810,7 +24810,7 @@ function bind(name, params, kwargs) {
   return params.map((p) => Object.hasOwn(kwargs, p[0]) ? kwargs[p[0]] : p[1]);
 }
 function buildServer() {
-  const server = new McpServer({ name: "comprende", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "comprende", version: "0.2.0" }, { instructions: INSTRUCTIONS });
   for (const [name, tool] of Object.entries(TOOLS)) {
     server.registerTool(
       name,
