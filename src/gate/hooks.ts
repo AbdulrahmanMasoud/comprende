@@ -1,12 +1,14 @@
 // The hook entry points: Claude Code's PreToolUse and SessionStart, and git's pre-push,
 // plus installing the pinned pre-push hook.
+
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { isFile, isSymlink, lstat } from "../util.js";
 import { verify } from "./commands.js";
 import { loadConfig } from "./config.js";
-import { exists, isFile, isSymlink, lstat, MAX_CONFIG_BYTES, readSmall } from "./files.js";
+import { MAX_CONFIG_BYTES, readRepoFile } from "./files.js";
 import { git, repoRoot, resolveBase } from "./git.js";
 import { isPushCommand } from "./push-detect.js";
 import { uncommittedReport } from "./report.js";
@@ -14,7 +16,7 @@ import { CONFIG_PATH, GATE_REL, GateError, SELF, splitLines, ZERO_SHA } from "./
 
 function projectHasGateHook(root: string): boolean {
   try {
-    const settings = JSON.parse(readSmall(join(root, ".claude", "settings.json"), MAX_CONFIG_BYTES));
+    const settings = JSON.parse(readRepoFile(join(root, ".claude", "settings.json"), MAX_CONFIG_BYTES));
     const groups = settings?.hooks?.PreToolUse ?? [];
     return groups.some((g: { hooks?: { command?: string }[] }) =>
       (g.hooks ?? []).some((h) => (h.command ?? "").includes("gate.mjs") && (h.command ?? "").includes("claude-hook")),
@@ -84,7 +86,7 @@ export function sessionStart(stdinText: string): Record<string, unknown> {
   if (Number.parseInt(node, 10) < MIN_NODE)
     lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
-  lines.push(...gateContext(stdinText));
+  lines.push(...gatedRepoContext(stdinText));
   return lines.length
     ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } }
     : {};
@@ -93,7 +95,7 @@ export function sessionStart(stdinText: string): Record<string, unknown> {
 /** In a repo that uses the gate: install the local pre-push hook if this clone
  *  lacks it, and tell Claude the repo is gated so the ownership-check protocol
  *  is followed. Elsewhere: nothing. */
-function gateContext(stdinText: string): string[] {
+function gatedRepoContext(stdinText: string): string[] {
   try {
     const payload = JSON.parse(stdinText || "{}");
     const root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
@@ -228,7 +230,7 @@ export function installHooks(repo?: string | null, auto = false): string[] {
   const hook = join(hooksDir, "pre-push");
   if (isSymlink(hook)) return [`SKIPPED pre-push hook: ${hook} is a symlink.`];
   let verb = "installed";
-  if (exists(hook)) {
+  if (existsSync(hook)) {
     const text = readFileSync(hook, "utf8");
     if (!text.includes("comprende ownership gate"))
       return [`SKIPPED pre-push hook: ${hook} already exists. Add this line to it: ${manualLine}`];

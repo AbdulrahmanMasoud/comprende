@@ -6,20 +6,22 @@
 // user git config can't make local and CI disagree. If the base moves on
 // (merge or rebase), the report still holds when a 3-way merge proves the only
 // new differences came from the base; anything else is "stale".
+
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Config, isSensitive, noQuestions } from "./config.js";
+import { dict, get, isRecord, own } from "../util.js";
+import { type Config, isSensitive, needsNoQuestions } from "./config.js";
 import {
   decodePath,
   git,
   gitBytes,
   gitEnv,
-  hasFile,
   readBlob,
+  readFileAtRev,
   refExists,
+  revHasFile,
   run,
-  showSmall,
   splitNul,
   WORKTREE_SAFE,
   withWorktreeIndex,
@@ -27,14 +29,10 @@ import {
 import { matches } from "./glob.js";
 import type { Report } from "./report.js";
 import {
-  dict,
   FEATURES_RE,
   GATE_FILES,
   GATE_REL,
   GateError,
-  get,
-  isObj,
-  own,
   REGULAR_MODES,
   REPORT_INPUT,
   sorted,
@@ -123,7 +121,7 @@ export function collectChanges(root: string, base: string, rev?: string | null):
   return [Object.fromEntries(sorted(Object.keys(changes)).map((k) => [k, changes[k]])), untracked, mb];
 }
 
-function merge3(ours: Buffer, base: Buffer, theirs: Buffer): Buffer | null {
+function threeWayMerge(ours: Buffer, base: Buffer, theirs: Buffer): Buffer | null {
   const dir = mkdtempSync(join(tmpdir(), "ownership-gate-merge-"));
   try {
     const paths = (
@@ -147,7 +145,7 @@ function merge3(ours: Buffer, base: Buffer, theirs: Buffer): Buffer | null {
 }
 
 const isChange = (v: unknown): v is Change =>
-  isObj(v) && ["mode", "blob", "base", "base_mode"].every((k) => typeof v[k] === "string");
+  isRecord(v) && ["mode", "blob", "base", "base_mode"].every((k) => typeof v[k] === "string");
 
 /** 'exact' if `current` is the verified change; 'merged' if it is the verified
  *  change carried onto a newer base; null otherwise. For 'merged', the only
@@ -155,7 +153,7 @@ const isChange = (v: unknown): v is Change =>
  *  verified content with a 3-way merge and require the result to equal the
  *  current content byte for byte. The file mode is merged the same way.
  *  Anything else (a conflict, a binary file, a missing object) is a change. */
-function matchKind(root: string, verified: unknown, current: Change): "exact" | "merged" | null {
+function compareWithVerified(root: string, verified: unknown, current: Change): "exact" | "merged" | null {
   if (!isChange(verified)) return null;
   if (
     verified.mode === current.mode &&
@@ -174,14 +172,14 @@ function matchKind(root: string, verified: unknown, current: Change): "exact" | 
   if (blobs.some((b) => b === null)) return null;
   const [vBlob, vBase, cBase, cBlob] = blobs as Buffer[];
   if (blobs.some((b) => (b as Buffer).subarray(0, 8000).includes(0))) return null; // binary: must be re-verified
-  const merged = merge3(vBlob, vBase, cBase);
+  const merged = threeWayMerge(vBlob, vBase, cBase);
   return merged?.equals(cBlob) ? "merged" : null;
 }
 
 /** Blob ids introduced on the branch (reachable from target, not from the fork
  *  point). Content verified before a rebase isn't among them, and CI won't
  *  have it — so such files must be re-saved. */
-function branchBlobs(root: string, target: string, mb: string): Set<string> {
+function blobsInBranchHistory(root: string, target: string, mb: string): Set<string> {
   const out = git(root, ["rev-list", "--objects", target, "--not", mb], { check: false });
   return new Set(
     splitLines(out)
@@ -198,7 +196,7 @@ export type State = "new" | "ok" | "stale" | "rebased";
 /** new: not in the report · ok: the verified change · stale: changed since ·
  *  rebased: the verified change on a newer base, but the verified content is
  *  no longer in the branch's history (e.g. after a rebase) — re-save, no questions. */
-export function states(
+export function fileStates(
   root: string,
   changes: Changes,
   old: Report | null,
@@ -213,10 +211,10 @@ export function states(
       out[p] = "new";
       continue;
     }
-    const kind = matchKind(root, get(oldFiles, p), c);
+    const kind = compareWithVerified(root, get(oldFiles, p), c);
     if (kind === "exact") out[p] = "ok";
     else if (kind === "merged") {
-      reachable ??= branchBlobs(root, target, mb);
+      reachable ??= blobsInBranchHistory(root, target, mb);
       out[p] = reachable.has((get(oldFiles, p) as Change).blob) ? "ok" : "rebased";
     } else out[p] = "stale";
   }
@@ -237,7 +235,7 @@ export function needsVerification(
   const oldVerified = old ? old.verified : dict<string[]>();
   const out: string[] = [];
   for (const [path, c] of Object.entries(changes)) {
-    if (noQuestions(path, c.mode, cfg)) continue;
+    if (needsNoQuestions(path, c.mode, cfg)) continue;
     if (SAME.includes(st[path]) && get(oldVerified, path)?.length) continue;
     if (isSensitive(path, c.mode, cfg) || (old !== null && !SAME.includes(st[path]))) out.push(path);
   }
@@ -245,10 +243,10 @@ export function needsVerification(
 }
 
 /** Does the base branch's gate (the copy CI runs) list `feature` in its header? */
-function baseGateHas(root: string, baseRef: string, feature: string): boolean {
-  if (!hasFile(root, baseRef, GATE_REL)) return false;
+function baseGateHasFeature(root: string, baseRef: string, feature: string): boolean {
+  if (!revHasFile(root, baseRef, GATE_REL)) return false;
   try {
-    const head = showSmall(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
+    const head = readFileAtRev(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
     return (FEATURES_RE.exec(head)?.[1] ?? "").trim().split(/\s+/).includes(feature);
   } catch {
     return false;
@@ -314,7 +312,7 @@ export function smallChange(
   const counted = new Set(entries.filter(([p]) => !matches(p, cfg.ignore)).map(([p]) => p));
   const lines = changedLines(root, mb, rev, counted);
   if (lines === null || lines > cfg.small_change_lines) return no(lines);
-  if (!baseGateHas(root, baseRef, "small-change")) {
+  if (!baseGateHasFeature(root, baseRef, "small-change")) {
     return no(
       lines,
       `This would count as a small change (${changedLinesText(lines)}), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`,

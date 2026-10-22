@@ -2,20 +2,11 @@
 // The same files the skill's file-only mode (learning.mjs) writes. They come
 // from the repo, so they're read only as plain files inside the project and
 // shown to the model as notes, never instructions.
+
 import * as fs from "node:fs";
 import { basename, dirname, join, sep } from "node:path";
-import {
-  atomicWrite,
-  checkNoSecrets,
-  isDirectory,
-  isFile,
-  isSymlink,
-  lines,
-  resolveUserPath,
-  StoreError,
-  slug,
-  today,
-} from "./common.js";
+import { isDirectory, isFile, isSymlink, today } from "../util.js";
+import { atomicWrite, checkNoSecrets, lines, resolveUserPath, StoreError, slug } from "./common.js";
 import { loadProfile, profileSummary } from "./profile.js";
 
 const MAP_MAX_LINES = 40;

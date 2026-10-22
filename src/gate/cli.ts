@@ -10,17 +10,19 @@
  * file is copied into each repo as .learning/gate.mjs, and runs in the git
  * hook, the Claude Code hook, the MCP server, and CI, with nothing to install.
  */
+
 import { appendFileSync, readFileSync, readSync } from "node:fs";
+import { isRecord } from "../util.js";
 import { collectChanges, isPlumbing } from "./changes.js";
-import { ci, jobSummary, mdSafe } from "./ci-summary.js";
-import { formatStatus, removeReportInput, save, status, verify } from "./commands.js";
+import { annotate, escapeMarkdown, jobSummary } from "./ci-summary.js";
+import { deleteReportInputFile, formatStatus, save, status, verify } from "./commands.js";
 import { type Config, isSensitive } from "./config.js";
 import { currentBranch, repoRoot } from "./git.js";
 import { ALWAYS_ON, claudeHook, installHooks, prePush, sessionStart } from "./hooks.js";
 import { isPushCommand } from "./push-detect.js";
-import { parseReport, readReport, renderReport, reportRelpath } from "./report.js";
+import { parseReport, readReport, renderReport, reportPath } from "./report.js";
 import { CHECK_NAME, install, mergeClaudeSettings, protect, WORKFLOW } from "./setup.js";
-import { GATE_FILES, GATE_REL, GATE_VERSION, GateError, isObj, sorted } from "./shared.js";
+import { GATE_FILES, GATE_REL, GATE_VERSION, GateError, sorted } from "./shared.js";
 
 const HELP = `Ownership gate (comprende)
 
@@ -124,9 +126,9 @@ function testCall(fn: string, a: unknown[]): unknown {
     case "is_sensitive":
       return isSensitive(String(a[0]), String(a[1]), a[2] as Config);
     case "md_safe":
-      return mdSafe(String(a[0]));
+      return escapeMarkdown(String(a[0]));
     case "report_relpath":
-      return reportRelpath(String(a[0]));
+      return reportPath(String(a[0]));
     case "render_report":
       return renderReport(a[0] as Parameters<typeof renderReport>[0]);
     case "parse_report":
@@ -171,9 +173,9 @@ export function main(argv: string[]): number {
         } catch (e) {
           throw new GateError(`Input is not valid JSON: ${(e as Error).message}`);
         }
-        if (!isObj(payload)) throw new GateError('Input must be a JSON object with "summary" and "verified".');
+        if (!isRecord(payload)) throw new GateError('Input must be a JSON object with "summary" and "verified".');
         const saved = save(payload, o("repo"), o("base"), o("branch"));
-        out(o("input") ? saved + removeReportInput(o("input") as string, o("repo")) : saved);
+        out(o("input") ? saved + deleteReportInputFile(o("input") as string, o("repo")) : saved);
         return 0;
       }
       case "verify": {
@@ -208,11 +210,11 @@ export function main(argv: string[]): number {
           }
         }
         if (passed) {
-          if (messages.length) ci(mode === "skipped" ? "warning" : "notice", messages);
+          if (messages.length) annotate(mode === "skipped" ? "warning" : "notice", messages);
           out(messages.length ? messages[0] : mode === "off" ? "Ownership check is off." : "Ownership check passed.");
           return 0;
         }
-        ci(mode === "required" ? "error" : "warning", messages);
+        annotate(mode === "required" ? "error" : "warning", messages);
         process.stderr.write(`Ownership check failed:\n- ${messages.join("\n- ")}\n`);
         return mode === "required" ? 1 : 0;
       }
@@ -254,7 +256,7 @@ export function main(argv: string[]): number {
       if (!code) throw e; // a real bug: let it surface with a stack trace
     }
     process.stderr.write(`ownership gate: ${msg}\n`);
-    ci("error", [msg]);
+    annotate("error", [msg]);
     return 1;
   }
 }

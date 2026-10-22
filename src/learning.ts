@@ -2,7 +2,8 @@
 // Bundled into a single file that needs only Node's built-ins.
 import * as fs from "node:fs";
 import { join } from "node:path";
-import { resolveUserPath, slug, today } from "./store/common.js";
+import { resolveUserPath, slug } from "./store/common.js";
+import { today } from "./util.js";
 
 const USAGE = `Manage a project's .learning/ folder for the comprende skill.
 

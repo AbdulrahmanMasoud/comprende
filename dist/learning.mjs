@@ -12,14 +12,6 @@ import * as os from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 var SLUG_MAX_CHARS = 60;
 var truncate = (s, n) => s.length <= n ? s : Array.from(s).slice(0, n).join("");
-function today() {
-  const d = /* @__PURE__ */ new Date();
-  return isoDate(d.getFullYear(), d.getMonth(), d.getDate());
-}
-function isoDate(year, month, day) {
-  const d = new Date(year, month, day);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 function slug(text) {
   const s = text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return truncate(s, SLUG_MAX_CHARS);
@@ -49,6 +41,13 @@ var SECRET_PATTERNS = [
   new RegExp(`${START}[a-z]+://[^/\\s:]+:[^@\\s]+@`, "iu")
   // user:pass@host URLs
 ];
+
+// src/util.ts
+function today() {
+  const d = /* @__PURE__ */ new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 // src/learning.ts
 var USAGE = `Manage a project's .learning/ folder for the comprende skill.

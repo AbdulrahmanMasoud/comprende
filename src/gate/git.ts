@@ -1,11 +1,12 @@
 // Running git safely: a fixed environment, no commands from the repo's own config,
 // and a temporary index for reading the working tree as `git add -A` would commit it.
+
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, rmSync, statSync, utimesSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync, utimesSync } from "node:fs";
 import { devNull, homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { isFile } from "../util.js";
 import type { Config } from "./config.js";
-import { exists, isFile } from "./files.js";
 import { GateError, sorted, splitLines } from "./shared.js";
 
 /** Environment for every git call. core.fsmonitor can name a command in the
@@ -69,7 +70,7 @@ export function gitBytes(
 export const git = (root: string, args: string[], opts: { env?: Record<string, string>; check?: boolean } = {}) =>
   gitBytes(root, args, opts).toString("utf8");
 
-const gitOk = (root: string, args: string[]) => {
+const gitSucceeds = (root: string, args: string[]) => {
   try {
     return run("git", args, { cwd: root, env: gitEnv() }).status === 0;
   } catch {
@@ -79,7 +80,7 @@ const gitOk = (root: string, args: string[]) => {
 
 export function repoRoot(path?: string | null): string {
   let start = resolve((path || process.cwd()).replace(/^~(?=$|[/\\])/, homedir()));
-  if (!exists(start)) throw new GateError(`Path does not exist: ${start}`);
+  if (!existsSync(start)) throw new GateError(`Path does not exist: ${start}`);
   if (isFile(start)) start = dirname(start);
   let out: RunResult;
   try {
@@ -93,9 +94,10 @@ export function repoRoot(path?: string | null): string {
 }
 
 export const refExists = (root: string, ref: string) =>
-  gitOk(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
+  gitSucceeds(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
 
-export const hasFile = (root: string, rev: string, rel: string) => gitOk(root, ["cat-file", "-e", `${rev}:${rel}`]);
+export const revHasFile = (root: string, rev: string, rel: string) =>
+  gitSucceeds(root, ["cat-file", "-e", `${rev}:${rel}`]);
 
 export function readBlob(root: string, sha: string): Buffer | null {
   try {
@@ -107,7 +109,7 @@ export function readBlob(root: string, sha: string): Buffer | null {
 }
 
 /** `git show rev:rel` with the same size bound (checked before reading). */
-export function showSmall(root: string, rev: string, rel: string, limit: number): string {
+export function readFileAtRev(root: string, rev: string, rel: string, limit: number): string {
   const size = git(root, ["cat-file", "-s", `${rev}:${rel}`], { check: false }).trim();
   if (!/^\d+$/.test(size)) throw new GateError(`${rel} at ${rev} isn't readable.`);
   if (Number(size) > limit)
@@ -179,7 +181,7 @@ export function withWorktreeIndex<T>(root: string, fn: (env: Record<string, stri
   const dir = mkdtempSync(join(tmpdir(), "ownership-gate-index-"));
   const tmp = join(dir, "index");
   try {
-    if (exists(real)) {
+    if (existsSync(real)) {
       copyFileSync(real, tmp);
       // Keep the copy's mtime at (or just below) the real index's. Git's
       // "racy clean" check re-reads files modified at or after the index's

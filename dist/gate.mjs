@@ -6,6 +6,33 @@
 // src/gate/cli.ts
 import { appendFileSync, readFileSync as readFileSync3, readSync as readSync2 } from "node:fs";
 
+// src/util.ts
+import { lstatSync, statSync } from "node:fs";
+var dict = () => /* @__PURE__ */ Object.create(null);
+var own = (o, k) => Object.hasOwn(o, k);
+var get = (o, k) => Object.hasOwn(o, k) ? o[k] : void 0;
+var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+function today() {
+  const d = /* @__PURE__ */ new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+var lstat = (p) => {
+  try {
+    return lstatSync(p);
+  } catch {
+    return null;
+  }
+};
+var isSymlink = (p) => lstat(p)?.isSymbolicLink() ?? false;
+var isFile = (p) => {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
+  }
+};
+
 // src/gate/changes.ts
 import { mkdtempSync as mkdtempSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
@@ -18,13 +45,11 @@ import { join as join3 } from "node:path";
 import {
   chmodSync,
   closeSync,
-  existsSync,
-  lstatSync,
   mkdirSync,
   openSync,
   readSync,
   renameSync,
-  statSync,
+  statSync as statSync2,
   unlinkSync,
   writeFileSync
 } from "node:fs";
@@ -56,44 +81,19 @@ var SELF = (() => {
     return "";
   }
 })();
-var isObj = (x) => typeof x === "object" && x !== null && !Array.isArray(x);
-var own = (o, k) => Object.hasOwn(o, k);
-var get = (o, k) => Object.hasOwn(o, k) ? o[k] : void 0;
-var dict = () => /* @__PURE__ */ Object.create(null);
 var sorted = (xs) => [...xs].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
 var splitLines = (s) => {
   const parts = s.split(/\r\n|\r|\n/);
   if (parts.length && parts[parts.length - 1] === "") parts.pop();
   return parts;
 };
-var today = () => {
-  const d = /* @__PURE__ */ new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-};
 var VERSION_RE = /^\/\/ ownership-gate-version: (\d+)/m;
 var FEATURES_RE = /^\/\/ ownership-gate-features: (.*)$/m;
 
 // src/gate/files.ts
-var lstat = (p) => {
-  try {
-    return lstatSync(p);
-  } catch {
-    return null;
-  }
-};
-var isSymlink = (p) => lstat(p)?.isSymbolicLink() ?? false;
-var isFile = (p) => {
-  try {
-    return statSync(p).isFile();
-  } catch {
-    return false;
-  }
-};
-var exists = (p) => existsSync(p);
 var MAX_CONFIG_BYTES = 256 * 1024;
 var MAX_REPORT_BYTES = 4 * 1024 * 1024;
-function readSmall(path, limit) {
+function readRepoFile(path, limit) {
   const st = lstat(path);
   if (!st || st.isSymbolicLink() || !st.isFile())
     throw new GateError(`${basename(path)} must be a regular file, not a symlink or special file.`);
@@ -117,7 +117,7 @@ function atomicWrite(path, content) {
   mkdirSync(dirname(path), { recursive: true });
   const existingMode = (() => {
     try {
-      return statSync(path).mode & 511;
+      return statSync2(path).mode & 511;
     } catch {
       return null;
     }
@@ -138,7 +138,7 @@ function atomicWrite(path, content) {
 
 // src/gate/git.ts
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, rmSync, statSync as statSync2, utimesSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync as statSync3, utimesSync } from "node:fs";
 import { devNull, homedir, tmpdir } from "node:os";
 import { dirname as dirname2, isAbsolute, join as join2, resolve } from "node:path";
 function gitEnv(extra) {
@@ -180,7 +180,7 @@ function gitBytes(root, args, opts = {}) {
   return r.stdout;
 }
 var git = (root, args, opts = {}) => gitBytes(root, args, opts).toString("utf8");
-var gitOk = (root, args) => {
+var gitSucceeds = (root, args) => {
   try {
     return run("git", args, { cwd: root, env: gitEnv() }).status === 0;
   } catch {
@@ -189,7 +189,7 @@ var gitOk = (root, args) => {
 };
 function repoRoot(path) {
   let start = resolve((path || process.cwd()).replace(/^~(?=$|[/\\])/, homedir()));
-  if (!exists(start)) throw new GateError(`Path does not exist: ${start}`);
+  if (!existsSync(start)) throw new GateError(`Path does not exist: ${start}`);
   if (isFile(start)) start = dirname2(start);
   let out;
   try {
@@ -201,8 +201,8 @@ function repoRoot(path) {
   if (out.status !== 0 || !top) throw new GateError(`Not inside a git working tree: ${start}`);
   return resolve(top);
 }
-var refExists = (root, ref) => gitOk(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
-var hasFile = (root, rev, rel) => gitOk(root, ["cat-file", "-e", `${rev}:${rel}`]);
+var refExists = (root, ref) => gitSucceeds(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
+var revHasFile = (root, rev, rel) => gitSucceeds(root, ["cat-file", "-e", `${rev}:${rel}`]);
 function readBlob(root, sha) {
   try {
     const r = run("git", ["cat-file", "blob", sha], { cwd: root, env: gitEnv() });
@@ -211,7 +211,7 @@ function readBlob(root, sha) {
     return null;
   }
 }
-function showSmall(root, rev, rel, limit) {
+function readFileAtRev(root, rev, rel, limit) {
   const size = git(root, ["cat-file", "-s", `${rev}:${rel}`], { check: false }).trim();
   if (!/^\d+$/.test(size)) throw new GateError(`${rel} at ${rev} isn't readable.`);
   if (Number(size) > limit)
@@ -266,9 +266,9 @@ function withWorktreeIndex(root, fn) {
   const dir = mkdtempSync(join2(tmpdir(), "ownership-gate-index-"));
   const tmp = join2(dir, "index");
   try {
-    if (exists(real)) {
+    if (existsSync(real)) {
       copyFileSync(real, tmp);
-      const st = statSync2(real, { bigint: true });
+      const st = statSync3(real, { bigint: true });
       const t = Number(st.mtimeNs / 1000000n) / 1e3 - 1e-3;
       utimesSync(tmp, t, t);
     }
@@ -381,7 +381,7 @@ var DEFAULT_CONFIG = {
   small_summary_chars: 30,
   skip_label: "skip-ownership-check"
 };
-function valueSource(raw, path) {
+function jsonValueText(raw, path) {
   let i = 0;
   let found = null;
   const ws = () => {
@@ -444,8 +444,8 @@ function parseConfig(raw, where) {
   } catch (e) {
     throw new GateError(`${where}: not valid JSON (${e.message}).`);
   }
-  const section = isObj(data) ? isObj(data.ownership_check) ? data.ownership_check : "ownership_check" in data ? data.ownership_check : data : null;
-  if (!isObj(section)) throw new GateError(`${where}: expected an object like {"ownership_check": {...}}.`);
+  const section = isRecord(data) ? isRecord(data.ownership_check) ? data.ownership_check : "ownership_check" in data ? data.ownership_check : data : null;
+  if (!isRecord(section)) throw new GateError(`${where}: expected an object like {"ownership_check": {...}}.`);
   const cfg = { ...DEFAULT_CONFIG, ...section };
   if (!["required", "suggested", "off"].includes(cfg.mode))
     throw new GateError(`${where}: mode must be required, suggested or off.`);
@@ -466,7 +466,7 @@ function parseConfig(raw, where) {
   }
   for (const key of ["min_summary_chars", "small_change_lines", "small_summary_chars"]) {
     const m = cfg[key];
-    const literal = valueSource(raw, section === data ? [key] : ["ownership_check", key]);
+    const literal = jsonValueText(raw, section === data ? [key] : ["ownership_check", key]);
     const floatLiteral = literal !== null && /[.eE]/.test(literal);
     if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral)
       throw new GateError(`${where}: "${key}" must be a non-negative integer.`);
@@ -476,27 +476,27 @@ function parseConfig(raw, where) {
 var suggestedDefaults = () => ({ ...DEFAULT_CONFIG, mode: "suggested", _configured: false });
 function loadConfig(root, rev) {
   if (rev) {
-    if (!hasFile(root, rev, CONFIG_PATH)) return suggestedDefaults();
-    return parseConfig(showSmall(root, rev, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} at ${rev}`);
+    if (!revHasFile(root, rev, CONFIG_PATH)) return suggestedDefaults();
+    return parseConfig(readFileAtRev(root, rev, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} at ${rev}`);
   }
   const path = join3(root, CONFIG_PATH);
   if (!lstat(path)) return suggestedDefaults();
-  return parseConfig(readSmall(path, MAX_CONFIG_BYTES), CONFIG_PATH);
+  return parseConfig(readRepoFile(path, MAX_CONFIG_BYTES), CONFIG_PATH);
 }
-function rulesForVerify(root, baseRef) {
-  if (hasFile(root, baseRef, CONFIG_PATH))
-    return parseConfig(showSmall(root, baseRef, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} on ${baseRef}`);
+function rulesFromBase(root, baseRef) {
+  if (revHasFile(root, baseRef, CONFIG_PATH))
+    return parseConfig(readFileAtRev(root, baseRef, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} on ${baseRef}`);
   return { ...DEFAULT_CONFIG, _configured: false };
 }
-function rulesForLocal(root, baseRef) {
-  if (hasFile(root, baseRef, CONFIG_PATH)) return rulesForVerify(root, baseRef);
+function rulesFromBaseOrWorktree(root, baseRef) {
+  if (revHasFile(root, baseRef, CONFIG_PATH)) return rulesFromBase(root, baseRef);
   return loadConfig(root);
 }
 function isSensitive(path, mode, cfg) {
   if (mode === "160000") return true;
   return matches(path, cfg.sensitive) || matches(`${path}/_`, cfg.sensitive);
 }
-var noQuestions = (path, mode, cfg) => matches(path, cfg.ignore) && !isSensitive(path, mode, cfg);
+var needsNoQuestions = (path, mode, cfg) => matches(path, cfg.ignore) && !isSensitive(path, mode, cfg);
 
 // src/gate/changes.ts
 var PLUMBING_RE = /^\.learning\/(checks\/[^/]+\.md|decisions\/[^/]+\.md|map\.md|[^/]+\.local\.md)$/;
@@ -551,7 +551,7 @@ function collectChanges(root, base, rev) {
   }
   return [Object.fromEntries(sorted(Object.keys(changes)).map((k) => [k, changes[k]])), untracked, mb];
 }
-function merge3(ours, base, theirs) {
+function threeWayMerge(ours, base, theirs) {
   const dir = mkdtempSync2(join4(tmpdir2(), "ownership-gate-merge-"));
   try {
     const paths = [
@@ -571,8 +571,8 @@ function merge3(ours, base, theirs) {
     rmSync2(dir, { recursive: true, force: true });
   }
 }
-var isChange = (v) => isObj(v) && ["mode", "blob", "base", "base_mode"].every((k) => typeof v[k] === "string");
-function matchKind(root, verified, current) {
+var isChange = (v) => isRecord(v) && ["mode", "blob", "base", "base_mode"].every((k) => typeof v[k] === "string");
+function compareWithVerified(root, verified, current) {
   if (!isChange(verified)) return null;
   if (verified.mode === current.mode && verified.blob === current.blob && verified.base === current.base && verified.base_mode === current.base_mode)
     return "exact";
@@ -585,17 +585,17 @@ function matchKind(root, verified, current) {
   if (blobs.some((b) => b === null)) return null;
   const [vBlob, vBase, cBase, cBlob] = blobs;
   if (blobs.some((b) => b.subarray(0, 8e3).includes(0))) return null;
-  const merged = merge3(vBlob, vBase, cBase);
+  const merged = threeWayMerge(vBlob, vBase, cBase);
   return merged?.equals(cBlob) ? "merged" : null;
 }
-function branchBlobs(root, target, mb) {
+function blobsInBranchHistory(root, target, mb) {
   const out = git(root, ["rev-list", "--objects", target, "--not", mb], { check: false });
   return new Set(
     splitLines(out).filter(Boolean).map((l) => l.split(" ", 1)[0])
   );
 }
 var SAME = ["ok", "rebased"];
-function states(root, changes, old, target, mb) {
+function fileStates(root, changes, old, target, mb) {
   const oldFiles = old ? old.files : dict();
   let reachable = null;
   const out = dict();
@@ -604,10 +604,10 @@ function states(root, changes, old, target, mb) {
       out[p] = "new";
       continue;
     }
-    const kind = matchKind(root, get(oldFiles, p), c);
+    const kind = compareWithVerified(root, get(oldFiles, p), c);
     if (kind === "exact") out[p] = "ok";
     else if (kind === "merged") {
-      reachable ??= branchBlobs(root, target, mb);
+      reachable ??= blobsInBranchHistory(root, target, mb);
       out[p] = reachable.has(get(oldFiles, p).blob) ? "ok" : "rebased";
     } else out[p] = "stale";
   }
@@ -617,16 +617,16 @@ function needsVerification(changes, st, old, cfg) {
   const oldVerified = old ? old.verified : dict();
   const out = [];
   for (const [path, c] of Object.entries(changes)) {
-    if (noQuestions(path, c.mode, cfg)) continue;
+    if (needsNoQuestions(path, c.mode, cfg)) continue;
     if (SAME.includes(st[path]) && get(oldVerified, path)?.length) continue;
     if (isSensitive(path, c.mode, cfg) || old !== null && !SAME.includes(st[path])) out.push(path);
   }
   return out;
 }
-function baseGateHas(root, baseRef, feature) {
-  if (!hasFile(root, baseRef, GATE_REL)) return false;
+function baseGateHasFeature(root, baseRef, feature) {
+  if (!revHasFile(root, baseRef, GATE_REL)) return false;
   try {
-    const head = showSmall(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
+    const head = readFileAtRev(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
     return (FEATURES_RE.exec(head)?.[1] ?? "").trim().split(/\s+/).includes(feature);
   } catch {
     return false;
@@ -665,7 +665,7 @@ function smallChange(root, baseRef, mb, rev, changes, cfg) {
   const counted = new Set(entries.filter(([p]) => !matches(p, cfg.ignore)).map(([p]) => p));
   const lines = changedLines(root, mb, rev, counted);
   if (lines === null || lines > cfg.small_change_lines) return no(lines);
-  if (!baseGateHas(root, baseRef, "small-change")) {
+  if (!baseGateHasFeature(root, baseRef, "small-change")) {
     return no(
       lines,
       `This would count as a small change (${changedLinesText(lines)}), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`
@@ -677,14 +677,14 @@ function smallChange(root, baseRef, mb, rev, changes, cfg) {
 // src/gate/report.ts
 import { join as join5 } from "node:path";
 var DATA_MARKER = "<!-- ownership-data: generated by the ownership gate; do not edit by hand -->";
-function stableJson(value, indent) {
-  const sortDeep = (v) => Array.isArray(v) ? v.map(sortDeep) : isObj(v) ? Object.fromEntries(sorted(Object.keys(v)).map((k) => [k, sortDeep(v[k])])) : v;
+function sortedKeysJson(value, indent) {
+  const sortDeep = (v) => Array.isArray(v) ? v.map(sortDeep) : isRecord(v) ? Object.fromEntries(sorted(Object.keys(v)).map((k) => [k, sortDeep(v[k])])) : v;
   return JSON.stringify(sortDeep(value), null, indent);
 }
-function quoteAll(s) {
+function percentEncode(s) {
   return encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
-var reportRelpath = (branch) => `${CHECKS_DIR}/${quoteAll(branch)}.md`;
+var reportPath = (branch) => `${CHECKS_DIR}/${percentEncode(branch)}.md`;
 function renderReport(data) {
   const lines = [
     `# Ownership check \u2014 ${data.branch}`,
@@ -703,10 +703,10 @@ function renderReport(data) {
       "",
       `Also in this change (reviewed, no specific questions): ${unverified.map((p) => `\`${p}\``).join(", ")}`
     );
-  lines.push("", DATA_MARKER, "```json", stableJson(data, 1), "```", "");
+  lines.push("", DATA_MARKER, "```json", sortedKeysJson(data, 1), "```", "");
   return lines.join("\n");
 }
-function extractData(text) {
+function extractDataBlock(text) {
   const after = text.split(DATA_MARKER).slice(1).join(DATA_MARKER);
   const m = /```json\n([\s\S]*?)\n```/.exec(after);
   return m ? m[1] : null;
@@ -714,7 +714,7 @@ function extractData(text) {
 function parseReport(text) {
   if (!text.includes(DATA_MARKER))
     throw new GateError("Report is missing its data block \u2014 run the check again to regenerate it.");
-  const block = extractData(text);
+  const block = extractDataBlock(text);
   if (block === null) throw new GateError("Report data block is malformed \u2014 run the check again to regenerate it.");
   let data;
   try {
@@ -722,7 +722,7 @@ function parseReport(text) {
   } catch (e) {
     throw new GateError(`Report data is not valid JSON (${e.message}) \u2014 run the check again.`);
   }
-  if (!(isObj(data) && isObj(data.files) && isObj(data.verified) && typeof data.summary === "string")) {
+  if (!(isRecord(data) && isRecord(data.files) && isRecord(data.verified) && typeof data.summary === "string")) {
     throw new GateError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
   }
   for (const v of Object.values(data.verified)) {
@@ -737,27 +737,27 @@ function parseReport(text) {
   return data;
 }
 function readReport(root, branch, rev) {
-  const rel = reportRelpath(branch);
+  const rel = reportPath(branch);
   if (rev) {
-    if (!hasFile(root, rev, rel)) return null;
-    return parseReport(showSmall(root, rev, rel, MAX_REPORT_BYTES));
+    if (!revHasFile(root, rev, rel)) return null;
+    return parseReport(readFileAtRev(root, rev, rel, MAX_REPORT_BYTES));
   }
   const path = join5(root, rel);
-  return lstat(path) ? parseReport(readSmall(path, MAX_REPORT_BYTES)) : null;
+  return lstat(path) ? parseReport(readRepoFile(path, MAX_REPORT_BYTES)) : null;
 }
-var unusable = (e) => [
+var unusableReport = (e) => [
   { files: {}, verified: {}, summary: "", _outdated: true },
   `Existing report can't be used (${e.message}); its files need verifying again.`
 ];
-function parseLenient(text) {
+function parseReportLeniently(text) {
   try {
     return [parseReport(text), null];
   } catch (e) {
     let files = {};
     if (text.includes(DATA_MARKER)) {
       try {
-        const data = JSON.parse(extractData(text) ?? "null");
-        if (isObj(data) && isObj(data.files)) files = data.files;
+        const data = JSON.parse(extractDataBlock(text) ?? "null");
+        if (isRecord(data) && isRecord(data.files)) files = data.files;
       } catch {
       }
     }
@@ -768,21 +768,21 @@ function parseLenient(text) {
   }
 }
 function previousReport(root, branch, baseRef) {
-  const rel = reportRelpath(branch);
+  const rel = reportPath(branch);
   const path = join5(root, rel);
   if (lstat(path)) {
     try {
-      return parseLenient(readSmall(path, MAX_REPORT_BYTES));
+      return parseReportLeniently(readRepoFile(path, MAX_REPORT_BYTES));
     } catch (e) {
-      return unusable(e);
+      return unusableReport(e);
     }
   }
   const mb = git(root, ["merge-base", baseRef, "HEAD"], { check: false }).trim();
   if (mb) {
     for (const commit of git(root, ["rev-list", `${mb}..HEAD`, "--", rel], { check: false }).split(/\s+/).filter(Boolean)) {
       for (const rev of [commit, `${commit}^`]) {
-        if (hasFile(root, rev, rel)) {
-          const [report, note] = parseLenient(showSmall(root, rev, rel, MAX_REPORT_BYTES));
+        if (revHasFile(root, rev, rel)) {
+          const [report, note] = parseReportLeniently(readFileAtRev(root, rev, rel, MAX_REPORT_BYTES));
           return [report, note ?? "Using the last committed report (the file was removed)."];
         }
       }
@@ -792,12 +792,12 @@ function previousReport(root, branch, baseRef) {
 }
 function uncommittedReport(root) {
   try {
-    const rel = reportRelpath(currentBranch(root));
-    const saved = stableJson(parseReport(readSmall(join5(root, rel), MAX_REPORT_BYTES)));
-    if (!hasFile(root, "HEAD", rel)) return rel;
+    const rel = reportPath(currentBranch(root));
+    const saved = sortedKeysJson(parseReport(readRepoFile(join5(root, rel), MAX_REPORT_BYTES)));
+    if (!revHasFile(root, "HEAD", rel)) return rel;
     let committed = null;
     try {
-      committed = stableJson(parseReport(showSmall(root, "HEAD", rel, MAX_REPORT_BYTES)));
+      committed = sortedKeysJson(parseReport(readFileAtRev(root, "HEAD", rel, MAX_REPORT_BYTES)));
     } catch {
     }
     return saved === committed ? null : rel;
@@ -807,7 +807,7 @@ function uncommittedReport(root) {
 }
 
 // src/gate/ci-summary.ts
-function mdSafe(text) {
+function escapeMarkdown(text) {
   let t = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   for (const ch of ["\\", "[", "]", "|", "`", "*", "_"]) t = t.split(ch).join(`\\${ch}`);
   return t;
@@ -816,7 +816,7 @@ function jobSummary(root, branch, rev, base, passed, messages, mode) {
   const icon = passed ? "\u2705" : mode === "required" ? "\u274C" : "\u26A0\uFE0F";
   const title = mode === "off" ? "Ownership check is off" : mode === "skipped" ? "Ownership check skipped by label" : passed ? "Ownership check passed" : "Ownership check failed";
   const out = [`## ${icon} ${title}`, ""];
-  if (messages.length) out.push(...messages.map((m) => `- ${mdSafe(m)}`), "");
+  if (messages.length) out.push(...messages.map((m) => `- ${escapeMarkdown(m)}`), "");
   let report = null;
   try {
     report = readReport(root, branch, rev);
@@ -826,13 +826,13 @@ function jobSummary(root, branch, rev, base, passed, messages, mode) {
   if (report) {
     let cfg = DEFAULT_CONFIG;
     try {
-      cfg = rulesForVerify(root, resolveBase(root, loadConfig(root, rev), base));
+      cfg = rulesFromBase(root, resolveBase(root, loadConfig(root, rev), base));
     } catch {
     }
     out.push(
       "### The developer's summary",
       "",
-      ...splitLines(report.summary.trim()).map((l) => `> ${mdSafe(l)}`),
+      ...splitLines(report.summary.trim()).map((l) => `> ${escapeMarkdown(l)}`),
       "",
       "### Verified understanding",
       "",
@@ -841,9 +841,11 @@ function jobSummary(root, branch, rev, base, passed, messages, mode) {
     );
     for (const path of sorted(Object.keys(report.verified))) {
       const entry = get(report.files, path);
-      const mode2 = isObj(entry) && typeof entry.mode === "string" ? entry.mode : "100644";
+      const mode2 = isRecord(entry) && typeof entry.mode === "string" ? entry.mode : "100644";
       const tag = isSensitive(path, mode2, cfg) ? " \u{1F512}" : "";
-      out.push(`| ${mdSafe(path)}${tag} | ${(get(report.verified, path) ?? []).map(mdSafe).join("; ")} |`);
+      out.push(
+        `| ${escapeMarkdown(path)}${tag} | ${(get(report.verified, path) ?? []).map(escapeMarkdown).join("; ")} |`
+      );
     }
     const rest = sorted(Object.keys(report.files).filter((p) => !own(report.verified, p)));
     if (rest.length)
@@ -851,26 +853,26 @@ function jobSummary(root, branch, rev, base, passed, messages, mode) {
         "",
         `<details><summary>Also in this change, no specific questions (${rest.length})</summary>`,
         "",
-        ...rest.map((p) => `- ${mdSafe(p)}`),
+        ...rest.map((p) => `- ${escapeMarkdown(p)}`),
         "",
         "</details>"
       );
     out.push(
       "",
-      `<sub>\u{1F512} sensitive \xB7 report: \`${reportRelpath(branch)}\` \xB7 gate v${GATE_VERSION}. The report shows what was verified, never scores or mistakes.</sub>`
+      `<sub>\u{1F512} sensitive \xB7 report: \`${reportPath(branch)}\` \xB7 gate v${GATE_VERSION}. The report shows what was verified, never scores or mistakes.</sub>`
     );
   }
   return `${out.join("\n")}
 `.slice(0, 6e4);
 }
-function ci(kind, messages) {
+function annotate(kind, messages) {
   if (process.env.GITHUB_ACTIONS === "true")
     for (const m of messages) process.stdout.write(`::${kind} title=Ownership check::${m}
 `);
 }
 
 // src/gate/commands.ts
-import { realpathSync, unlinkSync as unlinkSync2 } from "node:fs";
+import { existsSync as existsSync2, realpathSync, unlinkSync as unlinkSync2 } from "node:fs";
 import { basename as basename2, dirname as dirname3, join as join6, resolve as resolve2 } from "node:path";
 var CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
 var BLANK = "[\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
@@ -880,11 +882,11 @@ var charCount = (s) => [...s].length;
 function status(repo, base, branch) {
   const root = repoRoot(repo);
   const baseRef = resolveBase(root, loadConfig(root), base);
-  const cfg = rulesForLocal(root, baseRef);
+  const cfg = rulesFromBaseOrWorktree(root, baseRef);
   const br = currentBranch(root, branch);
   const [changes, untracked, mb] = collectChanges(root, baseRef, null);
   const [report, note] = previousReport(root, br, baseRef);
-  const st = states(root, changes, report, "HEAD", mb);
+  const st = fileStates(root, changes, report, "HEAD", mb);
   const oldVerified = report ? report.verified : dict();
   const files = Object.entries(changes).map(([p, c]) => ({
     path: p,
@@ -904,7 +906,7 @@ function status(repo, base, branch) {
   if (isFile(localGate) && !isSymlink(localGate)) {
     let head = "";
     try {
-      head = readSmall(localGate, 8 * 1024 * 1024).slice(0, 4096);
+      head = readRepoFile(localGate, 8 * 1024 * 1024).slice(0, 4096);
     } catch {
     }
     const v = VERSION_RE.exec(head);
@@ -914,10 +916,10 @@ function status(repo, base, branch) {
       );
     }
   }
-  if (exists(localGate) && hasFile(root, baseRef, GATE_REL)) {
+  if (existsSync2(localGate) && revHasFile(root, baseRef, GATE_REL)) {
     let head = "";
     try {
-      head = showSmall(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
+      head = readFileAtRev(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
     } catch {
     }
     const v = VERSION_RE.exec(head);
@@ -934,7 +936,7 @@ function status(repo, base, branch) {
     configured: cfg._configured,
     base: baseRef,
     branch: br,
-    report: reportRelpath(br),
+    report: reportPath(br),
     report_exists: report !== null,
     files,
     must_verify: needsVerification(changes, st, report, cfg),
@@ -968,7 +970,7 @@ function formatStatus(s) {
 function save(payload, repo, base, branch) {
   const root = repoRoot(repo);
   const baseRef = resolveBase(root, loadConfig(root), base);
-  const cfg = rulesForLocal(root, baseRef);
+  const cfg = rulesFromBaseOrWorktree(root, baseRef);
   const br = currentBranch(root, branch);
   const [changes, untracked, mb] = collectChanges(root, baseRef, null);
   if (!Object.keys(changes).length) throw new GateError(`No changes vs ${baseRef} \u2014 nothing to report.`);
@@ -981,7 +983,7 @@ function save(payload, repo, base, branch) {
     );
   }
   const rawVerified = payload.verified ?? {};
-  if (!isObj(rawVerified)) throw new GateError('"verified" must map file paths to lists of concepts.');
+  if (!isRecord(rawVerified)) throw new GateError('"verified" must map file paths to lists of concepts.');
   const verified = dict();
   for (const [path, concepts0] of Object.entries(rawVerified)) {
     const concepts = typeof concepts0 === "string" ? [concepts0] : Array.isArray(concepts0) ? concepts0 : [];
@@ -994,7 +996,7 @@ function save(payload, repo, base, branch) {
       `Not part of this change: ${unknown.join(", ")}. Changed files: ${Object.keys(changes).join(", ")}`
     );
   const [old] = previousReport(root, br, baseRef);
-  const st = states(root, changes, old, "HEAD", mb);
+  const st = fileStates(root, changes, old, "HEAD", mb);
   const missing = needsVerification(changes, st, old, cfg).filter((p) => !own(verified, p));
   if (missing.length)
     throw new GateError(
@@ -1005,11 +1007,11 @@ function save(payload, repo, base, branch) {
       if (own(changes, p) && SAME.includes(st[p]) && !own(verified, p)) verified[p] = concepts;
     }
   }
-  const askable = Object.entries(changes).filter(([p, c]) => !noQuestions(p, c.mode, cfg));
+  const askable = Object.entries(changes).filter(([p, c]) => !needsNoQuestions(p, c.mode, cfg));
   if (askable.length && !Object.keys(verified).length)
     throw new GateError("No verified files \u2014 the check needs at least one area the developer explained.");
   const data = { version: GATE_VERSION, branch: br, base: baseRef, date: today(), summary, verified, files: changes };
-  const rel = reportRelpath(br);
+  const rel = reportPath(br);
   atomicWrite(join6(root, rel), renderReport(data));
   const extra = sorted([...untracked].filter((p) => own(changes, p)));
   const note = extra.length ? ` Untracked files included: ${extra.join(", ")} \u2014 commit them too, or they'll show as changed.` : "";
@@ -1019,7 +1021,7 @@ function save(payload, repo, base, branch) {
 function verify(repo, base, branch, rev = "HEAD", labels = []) {
   const root = repoRoot(repo);
   const baseRef = resolveBase(root, loadConfig(root, rev), base);
-  const cfg = rulesForVerify(root, baseRef);
+  const cfg = rulesFromBase(root, baseRef);
   if (cfg.mode === "off") return [true, [], "off"];
   if (labels.includes(cfg.skip_label)) return [true, [`Skipped by the '${cfg.skip_label}' label.`], "skipped"];
   const br = currentBranch(root, branch);
@@ -1027,11 +1029,11 @@ function verify(repo, base, branch, rev = "HEAD", labels = []) {
   if (!Object.keys(changes).length) return [true, [], cfg.mode];
   const report = readReport(root, br, rev);
   if (report === null) {
-    if (Object.entries(changes).every(([p, c]) => noQuestions(p, c.mode, cfg)))
+    if (Object.entries(changes).every(([p, c]) => needsNoQuestions(p, c.mode, cfg)))
       return [true, ["Only ignored files changed (e.g. lockfiles) \u2014 no report needed."], cfg.mode];
-    return [false, [`No ownership report for branch '${br}' (${reportRelpath(br)}). ${CHECK_ME_HINT}`], cfg.mode];
+    return [false, [`No ownership report for branch '${br}' (${reportPath(br)}). ${CHECK_ME_HINT}`], cfg.mode];
   }
-  const st = states(root, changes, report, rev, mb);
+  const st = fileStates(root, changes, report, rev, mb);
   const by = (s) => Object.keys(changes).filter((p) => st[p] === s);
   const problems = [];
   const unverifiedSensitive = Object.entries(changes).filter(([p, c]) => isSensitive(p, c.mode, cfg) && !get(report.verified, p)?.length).map(([p]) => p);
@@ -1050,7 +1052,7 @@ function verify(repo, base, branch, rev = "HEAD", labels = []) {
   if (problems.length && !(by("rebased").length && problems.length === 1)) problems.push(CHECK_ME_HINT);
   return [problems.length === 0, problems, cfg.mode];
 }
-function removeReportInput(input, repo) {
+function deleteReportInputFile(input, repo) {
   try {
     const abs = resolve2(input);
     const root = realpathSync(repoRoot(repo));
@@ -1064,7 +1066,7 @@ function removeReportInput(input, repo) {
 
 // src/gate/hooks.ts
 import { createHash } from "node:crypto";
-import { chmodSync as chmodSync2, mkdirSync as mkdirSync2, readFileSync, realpathSync as realpathSync2, writeFileSync as writeFileSync3 } from "node:fs";
+import { chmodSync as chmodSync2, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync, realpathSync as realpathSync2, writeFileSync as writeFileSync3 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { isAbsolute as isAbsolute2, join as join7, relative, resolve as resolve3, sep } from "node:path";
 
@@ -1135,7 +1137,7 @@ function tokenize(command) {
   flush();
   return tokens;
 }
-function segments(command) {
+function commandSegments(command) {
   command = command.replace(/\\\n/g, " ").replace(/\n/g, ";");
   const tokens = tokenize(command) ?? command.split(/\s+/).filter(Boolean);
   const segs = [];
@@ -1152,7 +1154,7 @@ function segments(command) {
 var programName = (t) => t.split("/").pop() ?? t;
 function isPushCommand(command, depth = 0) {
   if (depth > 3) return false;
-  for (let tokens of segments(command)) {
+  for (let tokens of commandSegments(command)) {
     let i = 0;
     while (i < tokens.length) {
       const tok = tokens[i];
@@ -1189,7 +1191,7 @@ function isPushCommand(command, depth = 0) {
 // src/gate/hooks.ts
 function projectHasGateHook(root) {
   try {
-    const settings = JSON.parse(readSmall(join7(root, ".claude", "settings.json"), MAX_CONFIG_BYTES));
+    const settings = JSON.parse(readRepoFile(join7(root, ".claude", "settings.json"), MAX_CONFIG_BYTES));
     const groups = settings?.hooks?.PreToolUse ?? [];
     return groups.some(
       (g) => (g.hooks ?? []).some((h) => (h.command ?? "").includes("gate.mjs") && (h.command ?? "").includes("claude-hook"))
@@ -1240,10 +1242,10 @@ function sessionStart(stdinText) {
   if (Number.parseInt(node, 10) < MIN_NODE)
     lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
-  lines.push(...gateContext(stdinText));
+  lines.push(...gatedRepoContext(stdinText));
   return lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {};
 }
-function gateContext(stdinText) {
+function gatedRepoContext(stdinText) {
   try {
     const payload = JSON.parse(stdinText || "{}");
     const root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
@@ -1365,7 +1367,7 @@ function installHooks(repo, auto = false) {
   const hook = join7(hooksDir, "pre-push");
   if (isSymlink(hook)) return [`SKIPPED pre-push hook: ${hook} is a symlink.`];
   let verb = "installed";
-  if (exists(hook)) {
+  if (existsSync3(hook)) {
     const text = readFileSync(hook, "utf8");
     if (!text.includes("comprende ownership gate"))
       return [`SKIPPED pre-push hook: ${hook} already exists. Add this line to it: ${manualLine}`];
@@ -1379,7 +1381,7 @@ function installHooks(repo, auto = false) {
 }
 
 // src/gate/setup.ts
-import { chmodSync as chmodSync3, copyFileSync as copyFileSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync2 } from "node:fs";
+import { chmodSync as chmodSync3, copyFileSync as copyFileSync2, existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync2 } from "node:fs";
 import { dirname as dirname4, join as join8, resolve as resolve4 } from "node:path";
 var WORKFLOW = `name: Ownership check
 
@@ -1453,7 +1455,7 @@ function rulesetBody(approvals = 1, codeOwners = true) {
     ]
   };
 }
-function gh(root, args, input) {
+function runGh(root, args, input) {
   let r;
   try {
     r = run("gh", args, { cwd: root, input });
@@ -1484,17 +1486,17 @@ function protect(repo, apply = false, approvals = 1, codeOwners = true) {
   const root = repoRoot(repo);
   if (!Number.isInteger(approvals) || approvals < 0 || approvals > 10)
     throw new GateError("--approvals must be between 0 and 10.");
-  const nwo = gh(root, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).trim();
+  const nwo = runGh(root, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).trim();
   if (!/^[\w.-]+\/[\w.-]+$/.test(nwo))
     throw new GateError(`Couldn't tell which GitHub repo this is (got ${JSON.stringify(nwo)}).`);
   let existing = [];
   try {
-    existing = JSON.parse(gh(root, ["api", `repos/${nwo}/rulesets`]) || "[]");
+    existing = JSON.parse(runGh(root, ["api", `repos/${nwo}/rulesets`]) || "[]");
   } catch (e) {
     if (e instanceof GateError) throw e;
   }
   for (const r of Array.isArray(existing) ? existing : []) {
-    if (isObj(r) && r.name === RULESET_NAME)
+    if (isRecord(r) && r.name === RULESET_NAME)
       return [`Ruleset '${RULESET_NAME}' already exists on ${nwo}: https://github.com/${nwo}/rules/${String(r.id)}`];
   }
   const body = rulesetBody(approvals, codeOwners);
@@ -1513,19 +1515,19 @@ function protect(repo, apply = false, approvals = 1, codeOwners = true) {
   let created = {};
   try {
     created = JSON.parse(
-      gh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}"
+      runGh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}"
     );
   } catch (e) {
     if (e instanceof GateError) throw e;
   }
-  return [...plan, `Created: https://github.com/${nwo}/rules/${String(isObj(created) ? created.id : void 0)}`];
+  return [...plan, `Created: https://github.com/${nwo}/rules/${String(isRecord(created) ? created.id : void 0)}`];
 }
 function mergeClaudeSettings(path) {
   let settings = {};
   if (lstat(path)) {
     let raw;
     try {
-      raw = readSmall(path, MAX_CONFIG_BYTES);
+      raw = readRepoFile(path, MAX_CONFIG_BYTES);
     } catch (e) {
       return `SKIPPED Claude hook: ${e.message}`;
     }
@@ -1535,10 +1537,10 @@ function mergeClaudeSettings(path) {
     } catch {
       return `SKIPPED Claude hook: ${path} is not valid JSON; add the hook by hand (see README).`;
     }
-    if (!isObj(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; add the hook by hand.`;
+    if (!isRecord(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; add the hook by hand.`;
     settings = parsed;
   }
-  if (settings.hooks !== void 0 && !isObj(settings.hooks))
+  if (settings.hooks !== void 0 && !isRecord(settings.hooks))
     return `SKIPPED Claude hook: "hooks" in ${path} is not an object; add the hook by hand.`;
   settings.hooks ??= {};
   const hooks = settings.hooks;
@@ -1565,7 +1567,7 @@ function ignoreReportInput(root) {
   let text = Buffer.alloc(0);
   if (st) {
     try {
-      text = Buffer.from(readSmall(path, MAX_CONFIG_BYTES), "utf8");
+      text = Buffer.from(readRepoFile(path, MAX_CONFIG_BYTES), "utf8");
       if (!text.equals(readFileSync2(path))) throw new GateError("it isn't valid UTF-8");
     } catch (e) {
       return `SKIPPED .gitignore: ${e.message}; add ${REPORT_INPUT} to it by hand.`;
@@ -1577,7 +1579,7 @@ function ignoreReportInput(root) {
   atomicWrite(path, withIgnoreLine(text).toString("utf8"));
   return `added ${REPORT_INPUT} to .gitignore`;
 }
-function codeowners(root, owner) {
+function setUpCodeowners(root, owner) {
   const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
   if (!owner) {
     return "MANUAL STEP 2: add to .github/CODEOWNERS (or rerun install with --owner @handle) and turn on 'Require review from Code Owners' \u2014 otherwise a PR could edit the workflow to skip the check:\n  " + lines.join("\n  ");
@@ -1585,7 +1587,7 @@ function codeowners(root, owner) {
   if (!/^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/.test(owner))
     throw new GateError(`--owner must be a GitHub @user, @org/team, or an email; got ${JSON.stringify(owner)}.`);
   const path = join8(root, ".github", "CODEOWNERS");
-  const existing = exists(path) ? readFileSync2(path, "utf8") : "";
+  const existing = existsSync4(path) ? readFileSync2(path, "utf8") : "";
   const have = new Set(
     splitLines(existing).filter((l) => l.trim() && !l.trimStart().startsWith("#")).map((l) => l.trim().split(/\s+/)[0])
   );
@@ -1606,8 +1608,8 @@ function install(repo, upgrade = false, owner) {
   const done = [];
   const target = join8(root, GATE_REL);
   if (!SELF) throw new GateError("Can't locate this gate's own file to install it.");
-  if (exists(target) && resolve4(target) === resolve4(SELF)) done.push(`${GATE_REL} is this file`);
-  else if (exists(target) && !upgrade) {
+  if (existsSync4(target) && resolve4(target) === resolve4(SELF)) done.push(`${GATE_REL} is this file`);
+  else if (existsSync4(target) && !upgrade) {
     const same = readFileSync2(target).equals(readFileSync2(SELF));
     done.push(`${GATE_REL} ${same ? "up to date" : "exists (pass --upgrade to replace)"}`);
   } else {
@@ -1617,7 +1619,7 @@ function install(repo, upgrade = false, owner) {
     done.push(`wrote ${GATE_REL}`);
   }
   const cfgPath = join8(root, CONFIG_PATH);
-  if (exists(cfgPath)) done.push(`${CONFIG_PATH} exists (kept)`);
+  if (existsSync4(cfgPath)) done.push(`${CONFIG_PATH} exists (kept)`);
   else {
     const cfg = { ...DEFAULT_CONFIG };
     try {
@@ -1632,7 +1634,7 @@ function install(repo, upgrade = false, owner) {
   }
   const wf = join8(root, ".github", "workflows", "ownership-check.yml");
   const wfRel = ".github/workflows/ownership-check.yml";
-  if (exists(wf)) done.push(`${wfRel} exists (kept)`);
+  if (existsSync4(wf)) done.push(`${wfRel} exists (kept)`);
   else {
     atomicWrite(wf, WORKFLOW);
     done.push(`wrote ${wfRel}`);
@@ -1643,7 +1645,7 @@ function install(repo, upgrade = false, owner) {
   done.push(
     `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch \u2014 without it CI only warns.`
   );
-  done.push(codeowners(root, owner));
+  done.push(setUpCodeowners(root, owner));
   return done;
 }
 
@@ -1738,9 +1740,9 @@ function testCall(fn, a) {
     case "is_sensitive":
       return isSensitive(String(a[0]), String(a[1]), a[2]);
     case "md_safe":
-      return mdSafe(String(a[0]));
+      return escapeMarkdown(String(a[0]));
     case "report_relpath":
-      return reportRelpath(String(a[0]));
+      return reportPath(String(a[0]));
     case "render_report":
       return renderReport(a[0]);
     case "parse_report":
@@ -1787,9 +1789,9 @@ ${HELP}`);
         } catch (e) {
           throw new GateError(`Input is not valid JSON: ${e.message}`);
         }
-        if (!isObj(payload)) throw new GateError('Input must be a JSON object with "summary" and "verified".');
+        if (!isRecord(payload)) throw new GateError('Input must be a JSON object with "summary" and "verified".');
         const saved = save(payload, o("repo"), o("base"), o("branch"));
-        out(o("input") ? saved + removeReportInput(o("input"), o("repo")) : saved);
+        out(o("input") ? saved + deleteReportInputFile(o("input"), o("repo")) : saved);
         return 0;
       }
       case "verify": {
@@ -1823,11 +1825,11 @@ ${HELP}`);
           }
         }
         if (passed) {
-          if (messages.length) ci(mode === "skipped" ? "warning" : "notice", messages);
+          if (messages.length) annotate(mode === "skipped" ? "warning" : "notice", messages);
           out(messages.length ? messages[0] : mode === "off" ? "Ownership check is off." : "Ownership check passed.");
           return 0;
         }
-        ci(mode === "required" ? "error" : "warning", messages);
+        annotate(mode === "required" ? "error" : "warning", messages);
         process.stderr.write(`Ownership check failed:
 - ${messages.join("\n- ")}
 `);
@@ -1874,7 +1876,7 @@ ${HELP}`);
     }
     process.stderr.write(`ownership gate: ${msg}
 `);
-    ci("error", [msg]);
+    annotate("error", [msg]);
     return 1;
   }
 }

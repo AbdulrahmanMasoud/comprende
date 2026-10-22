@@ -1,13 +1,15 @@
 // Turning the gate on for a repo: install (gate copy, config, CI workflow, Claude hook,
 // .gitignore line, CODEOWNERS) and protect (the GitHub ruleset that makes the check required).
-import { chmodSync, copyFileSync, mkdirSync, readFileSync } from "node:fs";
+
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { isRecord, lstat } from "../util.js";
 import { withIgnoreLine } from "./changes.js";
 import { DEFAULT_CONFIG } from "./config.js";
-import { atomicWrite, exists, lstat, MAX_CONFIG_BYTES, readSmall } from "./files.js";
+import { atomicWrite, MAX_CONFIG_BYTES, readRepoFile } from "./files.js";
 import { type RunResult, repoRoot, resolveBase, run } from "./git.js";
 import { installHooks } from "./hooks.js";
-import { CONFIG_PATH, GATE_FILES, GATE_REL, GateError, isObj, REPORT_INPUT, SELF, splitLines } from "./shared.js";
+import { CONFIG_PATH, GATE_FILES, GATE_REL, GateError, REPORT_INPUT, SELF, splitLines } from "./shared.js";
 
 export const WORKFLOW = `name: Ownership check
 
@@ -92,7 +94,7 @@ function rulesetBody(approvals = 1, codeOwners = true) {
   };
 }
 
-function gh(root: string, args: string[], input?: string): string {
+function runGh(root: string, args: string[], input?: string): string {
   let r: RunResult;
   try {
     r = run("gh", args, { cwd: root, input });
@@ -127,17 +129,17 @@ export function protect(repo?: string | null, apply = false, approvals = 1, code
   const root = repoRoot(repo);
   if (!Number.isInteger(approvals) || approvals < 0 || approvals > 10)
     throw new GateError("--approvals must be between 0 and 10.");
-  const nwo = gh(root, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).trim();
+  const nwo = runGh(root, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).trim();
   if (!/^[\w.-]+\/[\w.-]+$/.test(nwo))
     throw new GateError(`Couldn't tell which GitHub repo this is (got ${JSON.stringify(nwo)}).`);
   let existing: unknown = [];
   try {
-    existing = JSON.parse(gh(root, ["api", `repos/${nwo}/rulesets`]) || "[]");
+    existing = JSON.parse(runGh(root, ["api", `repos/${nwo}/rulesets`]) || "[]");
   } catch (e) {
     if (e instanceof GateError) throw e;
   }
   for (const r of Array.isArray(existing) ? existing : []) {
-    if (isObj(r) && r.name === RULESET_NAME)
+    if (isRecord(r) && r.name === RULESET_NAME)
       return [`Ruleset '${RULESET_NAME}' already exists on ${nwo}: https://github.com/${nwo}/rules/${String(r.id)}`];
   }
   const body = rulesetBody(approvals, codeOwners);
@@ -158,12 +160,12 @@ export function protect(repo?: string | null, apply = false, approvals = 1, code
   let created: unknown = {};
   try {
     created = JSON.parse(
-      gh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}",
+      runGh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}",
     );
   } catch (e) {
     if (e instanceof GateError) throw e;
   }
-  return [...plan, `Created: https://github.com/${nwo}/rules/${String(isObj(created) ? created.id : undefined)}`];
+  return [...plan, `Created: https://github.com/${nwo}/rules/${String(isRecord(created) ? created.id : undefined)}`];
 }
 
 export function mergeClaudeSettings(path: string): string {
@@ -171,7 +173,7 @@ export function mergeClaudeSettings(path: string): string {
   if (lstat(path)) {
     let raw: string;
     try {
-      raw = readSmall(path, MAX_CONFIG_BYTES);
+      raw = readRepoFile(path, MAX_CONFIG_BYTES);
     } catch (e) {
       return `SKIPPED Claude hook: ${(e as Error).message}`;
     }
@@ -181,11 +183,11 @@ export function mergeClaudeSettings(path: string): string {
     } catch {
       return `SKIPPED Claude hook: ${path} is not valid JSON; add the hook by hand (see README).`;
     }
-    if (!isObj(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; add the hook by hand.`;
+    if (!isRecord(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; add the hook by hand.`;
     settings = parsed;
   }
   // Never replace a value we don't understand: that would drop the user's settings.
-  if (settings.hooks !== undefined && !isObj(settings.hooks))
+  if (settings.hooks !== undefined && !isRecord(settings.hooks))
     return `SKIPPED Claude hook: "hooks" in ${path} is not an object; add the hook by hand.`;
   settings.hooks ??= {};
   const hooks = settings.hooks as Record<string, unknown>;
@@ -213,7 +215,7 @@ function ignoreReportInput(root: string): string {
   let text = Buffer.alloc(0);
   if (st) {
     try {
-      text = Buffer.from(readSmall(path, MAX_CONFIG_BYTES), "utf8");
+      text = Buffer.from(readRepoFile(path, MAX_CONFIG_BYTES), "utf8");
       if (!text.equals(readFileSync(path))) throw new GateError("it isn't valid UTF-8");
     } catch (e) {
       return `SKIPPED .gitignore: ${(e as Error).message}; add ${REPORT_INPUT} to it by hand.`;
@@ -226,7 +228,7 @@ function ignoreReportInput(root: string): string {
   return `added ${REPORT_INPUT} to .gitignore`;
 }
 
-function codeowners(root: string, owner?: string | null): string {
+function setUpCodeowners(root: string, owner?: string | null): string {
   const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
   if (!owner) {
     return (
@@ -237,7 +239,7 @@ function codeowners(root: string, owner?: string | null): string {
   if (!/^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/.test(owner))
     throw new GateError(`--owner must be a GitHub @user, @org/team, or an email; got ${JSON.stringify(owner)}.`);
   const path = join(root, ".github", "CODEOWNERS");
-  const existing = exists(path) ? readFileSync(path, "utf8") : "";
+  const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
   const have = new Set(
     splitLines(existing)
       .filter((l) => l.trim() && !l.trimStart().startsWith("#"))
@@ -259,8 +261,8 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
   const done: string[] = [];
   const target = join(root, GATE_REL);
   if (!SELF) throw new GateError("Can't locate this gate's own file to install it.");
-  if (exists(target) && resolve(target) === resolve(SELF)) done.push(`${GATE_REL} is this file`);
-  else if (exists(target) && !upgrade) {
+  if (existsSync(target) && resolve(target) === resolve(SELF)) done.push(`${GATE_REL} is this file`);
+  else if (existsSync(target) && !upgrade) {
     const same = readFileSync(target).equals(readFileSync(SELF));
     done.push(`${GATE_REL} ${same ? "up to date" : "exists (pass --upgrade to replace)"}`);
   } else {
@@ -271,7 +273,7 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
   }
 
   const cfgPath = join(root, CONFIG_PATH);
-  if (exists(cfgPath)) done.push(`${CONFIG_PATH} exists (kept)`);
+  if (existsSync(cfgPath)) done.push(`${CONFIG_PATH} exists (kept)`);
   else {
     const cfg = { ...DEFAULT_CONFIG };
     try {
@@ -286,7 +288,7 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
 
   const wf = join(root, ".github", "workflows", "ownership-check.yml");
   const wfRel = ".github/workflows/ownership-check.yml";
-  if (exists(wf)) done.push(`${wfRel} exists (kept)`);
+  if (existsSync(wf)) done.push(`${wfRel} exists (kept)`);
   else {
     atomicWrite(wf, WORKFLOW);
     done.push(`wrote ${wfRel}`);
@@ -298,6 +300,6 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
   done.push(
     `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch — without it CI only warns.`,
   );
-  done.push(codeowners(root, owner));
+  done.push(setUpCodeowners(root, owner));
   return done;
 }

@@ -3,8 +3,6 @@
 import {
   chmodSync,
   closeSync,
-  existsSync,
-  lstatSync,
   mkdirSync,
   openSync,
   readSync,
@@ -14,27 +12,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { lstat } from "../util.js";
 import { GateError } from "./shared.js";
-
-export const lstat = (p: string) => {
-  try {
-    return lstatSync(p);
-  } catch {
-    return null;
-  }
-};
-
-export const isSymlink = (p: string) => lstat(p)?.isSymbolicLink() ?? false;
-
-export const isFile = (p: string) => {
-  try {
-    return statSync(p).isFile();
-  } catch {
-    return false;
-  }
-};
-
-export const exists = (p: string) => existsSync(p);
 
 export const MAX_CONFIG_BYTES = 256 * 1024;
 
@@ -42,7 +21,7 @@ export const MAX_REPORT_BYTES = 4 * 1024 * 1024;
 
 /** Read a repo-controlled file safely: never through a symlink (it could point
  *  at /dev/zero or a secret), never a FIFO, never more than `limit` bytes. */
-export function readSmall(path: string, limit: number): string {
+export function readRepoFile(path: string, limit: number): string {
   const st = lstat(path);
   if (!st || st.isSymbolicLink() || !st.isFile())
     throw new GateError(`${basename(path)} must be a regular file, not a symlink or special file.`);

@@ -2222,20 +2222,20 @@ var require_resolve = __commonJS({
       return false;
     }
     function countKeys(schema) {
-      let count2 = 0;
+      let count = 0;
       for (const key in schema) {
         if (key === "$ref")
           return Infinity;
-        count2++;
+        count++;
         if (SIMPLE_INLINED.has(key))
           continue;
         if (typeof schema[key] == "object") {
-          (0, util_1.eachItem)(schema[key], (sch) => count2 += countKeys(sch));
+          (0, util_1.eachItem)(schema[key], (sch) => count += countKeys(sch));
         }
-        if (count2 === Infinity)
+        if (count === Infinity)
           return Infinity;
       }
-      return count2;
+      return count;
     }
     function getFullPath(resolver, id = "", normalize) {
       if (normalize !== false)
@@ -2986,7 +2986,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve3.call(this, root, ref);
+      let _sch = resolve4.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3013,7 +3013,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve3(root, ref) {
+    function resolve4(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3877,7 +3877,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve3(baseURI, relativeURI, options) {
+    function resolve4(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const {
         parsed: baseParsed,
@@ -4268,7 +4268,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve: resolve3,
+      resolve: resolve4,
       resolveComponent,
       equal,
       serialize,
@@ -5773,8 +5773,8 @@ var require_contains = __commonJS({
         cxt.result(valid, () => cxt.reset());
         function validateItemsWithCount() {
           const schValid = gen.name("_valid");
-          const count2 = gen.let("count", 0);
-          validateItems(schValid, () => gen.if(schValid, () => checkLimits(count2)));
+          const count = gen.let("count", 0);
+          validateItems(schValid, () => gen.if(schValid, () => checkLimits(count)));
         }
         function validateItems(_valid, block) {
           gen.forRange("i", 0, len, (i) => {
@@ -5787,16 +5787,16 @@ var require_contains = __commonJS({
             block();
           });
         }
-        function checkLimits(count2) {
-          gen.code((0, codegen_1._)`${count2}++`);
+        function checkLimits(count) {
+          gen.code((0, codegen_1._)`${count}++`);
           if (max === void 0) {
-            gen.if((0, codegen_1._)`${count2} >= ${min}`, () => gen.assign(valid, true).break());
+            gen.if((0, codegen_1._)`${count} >= ${min}`, () => gen.assign(valid, true).break());
           } else {
-            gen.if((0, codegen_1._)`${count2} > ${max}`, () => gen.assign(valid, false).break());
+            gen.if((0, codegen_1._)`${count} > ${max}`, () => gen.assign(valid, false).break());
             if (min === 1)
               gen.assign(valid, true);
             else
-              gen.if((0, codegen_1._)`${count2} >= ${min}`, () => gen.assign(valid, true));
+              gen.if((0, codegen_1._)`${count} >= ${min}`, () => gen.assign(valid, true));
           }
         }
       }
@@ -7244,12 +7244,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs5, exportName) {
+    function addFormats(ajv, list, fs4, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs5[f]);
+        ajv.addFormat(f, fs4[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -7258,10 +7258,8 @@ var require_dist = __commonJS({
 });
 
 // src/server.ts
-import { spawn, spawnSync } from "node:child_process";
-import * as fs4 from "node:fs";
-import { dirname as dirname4 } from "node:path";
-import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // node_modules/zod/v3/helpers/util.js
 var util;
@@ -11805,14 +11803,14 @@ function codePointLength(str2) {
   const units = str2.length;
   if (!highSurrogate.test(str2))
     return units;
-  let count2 = units;
+  let count = units;
   for (let i = 0; i < units - 1; i++) {
     if ((str2.charCodeAt(i) & 64512) === 55296 && (str2.charCodeAt(i + 1) & 64512) === 56320) {
-      count2--;
+      count--;
       i++;
     }
   }
-  return count2;
+  return count;
 }
 function getLengthableOrigin(input) {
   if (Array.isArray(input))
@@ -14540,7 +14538,7 @@ var recursive = /* @__PURE__ */ new WeakMap();
 var NONE = 0;
 var ASSUMED = 1;
 var PROVEN = 2;
-function isRecursive(inst, stack, resolve3) {
+function isRecursive(inst, stack, resolve4) {
   const cached2 = recursive.get(inst);
   if (cached2 !== void 0)
     return cached2 ? PROVEN : NONE;
@@ -14550,7 +14548,7 @@ function isRecursive(inst, stack, resolve3) {
   let result = NONE;
   const check = (child) => {
     if (result !== PROVEN && child?._zod) {
-      const answer = isRecursive(child, stack, resolve3);
+      const answer = isRecursive(child, stack, resolve4);
       if (answer > result)
         result = answer;
     }
@@ -14561,7 +14559,7 @@ function isRecursive(inst, stack, resolve3) {
       const desc = Object.getOwnPropertyDescriptor(sh, key);
       if (spread && !desc.enumerable)
         continue;
-      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve3) : NONE;
+      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve4) : NONE;
       if (child > answer)
         answer = child;
     }
@@ -14625,7 +14623,7 @@ function isRecursive(inst, stack, resolve3) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve3 ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve4 ? inst._zod.innerType : void 0);
       merge2(inner ? isRecursive(inner, stack, false) : ASSUMED);
       break;
     }
@@ -21412,7 +21410,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve3) => setTimeout(resolve3, pollInterval));
+        await new Promise((resolve4) => setTimeout(resolve4, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -21429,7 +21427,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
       };
@@ -21507,7 +21505,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve3(parseResult.data);
+            resolve4(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -21769,12 +21767,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve3, interval);
+      const timeoutId = setTimeout(resolve4, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -22643,7 +22641,7 @@ var ExperimentalMcpServerTasks = class {
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
 function toolInputElementCount(value, max) {
-  let count2 = 0;
+  let count = 0;
   const stack = [value];
   while (stack.length > 0) {
     const node2 = stack.pop();
@@ -22651,8 +22649,8 @@ function toolInputElementCount(value, max) {
       continue;
     if (Array.isArray(node2)) {
       for (const child of node2) {
-        if (++count2 > max)
-          return count2;
+        if (++count > max)
+          return count;
         if (child !== null && typeof child === "object")
           stack.push(child);
       }
@@ -22660,15 +22658,15 @@ function toolInputElementCount(value, max) {
       for (const key in node2) {
         if (!Object.prototype.hasOwnProperty.call(node2, key))
           continue;
-        if (++count2 > max)
-          return count2;
+        if (++count > max)
+          return count;
         const child = node2[key];
         if (child !== null && typeof child === "object")
           stack.push(child);
       }
     }
   }
-  return count2;
+  return count;
 }
 function resolveMaxToolInputElements(value) {
   if (value === void 0 || value === Infinity)
@@ -22905,7 +22903,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve3) => setTimeout(resolve3, pollInterval));
+      await new Promise((resolve4) => setTimeout(resolve4, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -23569,35 +23567,129 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve3) => {
+    return new Promise((resolve4) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve3();
+        resolve4();
       } else {
-        this._stdout.once("drain", resolve3);
+        this._stdout.once("drain", resolve4);
       }
     });
   }
 };
 
+// src/gate/git.ts
+import { spawnSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync as statSync2, utimesSync } from "node:fs";
+import { devNull, homedir, tmpdir } from "node:os";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+
+// src/util.ts
+import { lstatSync, statSync } from "node:fs";
+var dict = () => /* @__PURE__ */ Object.create(null);
+var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+function today() {
+  const d = /* @__PURE__ */ new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+var lstat = (p) => {
+  try {
+    return lstatSync(p);
+  } catch {
+    return null;
+  }
+};
+var isSymlink = (p) => lstat(p)?.isSymbolicLink() ?? false;
+var isFile = (p) => {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
+  }
+};
+var isDirectory = (p) => {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
+// src/gate/shared.ts
+import { fileURLToPath } from "node:url";
+var LEARNING = ".learning";
+var CHECKS_DIR = `${LEARNING}/checks`;
+var CONFIG_PATH = `${LEARNING}/config.json`;
+var GATE_REL = `${LEARNING}/gate.mjs`;
+var REPORT_INPUT = `${LEARNING}/report.local.json`;
+var ZERO_SHA = "0".repeat(40);
+var GateError = class extends Error {
+};
+var SELF = (() => {
+  try {
+    return fileURLToPath(import.meta.url);
+  } catch {
+    return "";
+  }
+})();
+
+// src/gate/git.ts
+function gitEnv(extra) {
+  const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
+  delete env.GIT_DIFF_OPTS;
+  let n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  env.GIT_CONFIG_COUNT = String(n + 1);
+  env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
+  env[`GIT_CONFIG_VALUE_${n}`] = "false";
+  return { ...env, ...extra ?? {} };
+}
+function run(cmd, args, opts = {}) {
+  const r = spawnSync(cmd, args, {
+    cwd: opts.cwd,
+    env: opts.env,
+    input: opts.input,
+    maxBuffer: 1 << 30,
+    timeout: opts.timeout,
+    windowsHide: true
+  });
+  if (r.error) {
+    const err = r.error;
+    if (err.code === "ENOENT") throw Object.assign(new Error(`${cmd}: not found`), { code: "ENOENT" });
+    throw err;
+  }
+  return { status: r.status ?? 1, stdout: r.stdout ?? Buffer.alloc(0), stderr: r.stderr ?? Buffer.alloc(0) };
+}
+function repoRoot(path) {
+  let start = resolve((path || process.cwd()).replace(/^~(?=$|[/\\])/, homedir()));
+  if (!existsSync(start)) throw new GateError(`Path does not exist: ${start}`);
+  if (isFile(start)) start = dirname(start);
+  let out;
+  try {
+    out = run("git", ["rev-parse", "--show-toplevel"], { cwd: start, env: gitEnv() });
+  } catch (e) {
+    throw new GateError(`Could not run git: ${e.message}`);
+  }
+  const top = out.stdout.toString("utf8").trim();
+  if (out.status !== 0 || !top) throw new GateError(`Not inside a git working tree: ${start}`);
+  return resolve(top);
+}
+var WORKTREE_SAFE = ["-c", "core.fsmonitor=false", "-c", `core.hooksPath=${devNull}`];
+var UTF8 = new TextDecoder("utf-8", { fatal: true });
+
 // src/store/common.ts
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname as dirname2, join as join2, resolve as resolve2 } from "node:path";
 var NOTE_MAX_CHARS = 200;
 var SLUG_MAX_CHARS = 60;
 var StoreError = class extends Error {
   name = "StoreError";
 };
-var dict = () => /* @__PURE__ */ Object.create(null);
-var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 var truncate = (s, n) => s.length <= n ? s : Array.from(s).slice(0, n).join("");
 var lines = (s) => s.split(/\r\n|\r|\n/);
-function today() {
-  const d = /* @__PURE__ */ new Date();
-  return isoDate(d.getFullYear(), d.getMonth(), d.getDate());
-}
 function isoDate(year, month, day) {
   const d = new Date(year, month, day);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -23608,16 +23700,13 @@ function slug(text) {
 }
 var expandHome = (p) => p === "~" || p.startsWith("~/") ? os.homedir() + p.slice(1) : p;
 function resolveUserPath(p) {
-  const abs = resolve(expandHome(p));
+  const abs = resolve2(expandHome(p));
   try {
     return fs.realpathSync(abs);
   } catch {
     return abs;
   }
 }
-var isDirectory = (p) => fs.statSync(p, { throwIfNoEntry: false })?.isDirectory() ?? false;
-var isFile = (p) => fs.statSync(p, { throwIfNoEntry: false })?.isFile() ?? false;
-var isSymlink = (p) => fs.lstatSync(p, { throwIfNoEntry: false })?.isSymbolicLink() ?? false;
 var START = "(?<![\\p{L}\\p{N}_])";
 var END = "(?![\\p{L}\\p{N}_])";
 var SECRET_PATTERNS = [
@@ -23644,9 +23733,9 @@ function checkNoSecrets(...texts) {
   }
 }
 function atomicWrite(path, content) {
-  const dir = dirname(path);
+  const dir = dirname2(path);
   fs.mkdirSync(dir, { recursive: true });
-  const tmp = join(dir, `.${basename(path)}.${randomUUID()}.tmp`);
+  const tmp = join2(dir, `.${basename(path)}.${randomUUID()}.tmp`);
   const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW;
   let fd = fs.openSync(tmp, flags, 384);
   try {
@@ -23665,7 +23754,7 @@ function atomicWrite(path, content) {
 // src/store/profile.ts
 import * as fs2 from "node:fs";
 import * as os2 from "node:os";
-import { dirname as dirname2, join as join2, resolve as resolve2 } from "node:path";
+import { dirname as dirname3, join as join3, resolve as resolve3 } from "node:path";
 var PROFILE_VERSION = 1;
 var MAX_EVIDENCE = 3;
 var MAX_LISTED = 40;
@@ -23673,7 +23762,7 @@ var EVENTS = ["knows", "learning", "explained"];
 var LEVELS = ["comfortable", "learning"];
 function profilePath() {
   const home = process.env.COMPRENDE_HOME;
-  return join2(home ? resolve2(expandHome(home)) : join2(os2.homedir(), ".comprende"), "profile.json");
+  return join3(home ? resolve3(expandHome(home)) : join3(os2.homedir(), ".comprende"), "profile.json");
 }
 var emptyProfile = () => ({ version: PROFILE_VERSION, preferences: dict(), topics: dict() });
 function freshTopic() {
@@ -23685,14 +23774,14 @@ function freshTopic() {
     updated: today()
   };
 }
-var count = (v) => typeof v === "number" && Number.isFinite(v) ? v : 0;
+var countOrZero = (v) => typeof v === "number" && Number.isFinite(v) ? v : 0;
 function normalizeTopic(raw) {
   const cp = isRecord(raw.checkpoints) ? raw.checkpoints : {};
   return {
     level: LEVELS.includes(raw.level) ? raw.level : null,
     explained_on: typeof raw.explained_on === "string" ? raw.explained_on : null,
     evidence: Array.isArray(raw.evidence) ? raw.evidence.filter((n) => typeof n === "string") : [],
-    checkpoints: { right: count(cp.right), wrong: count(cp.wrong), streak: count(cp.streak) },
+    checkpoints: { right: countOrZero(cp.right), wrong: countOrZero(cp.wrong), streak: countOrZero(cp.streak) },
     updated: typeof raw.updated === "string" ? raw.updated : ""
   };
 }
@@ -23714,20 +23803,20 @@ function parseProfile(text) {
   }
   return profile;
 }
-var UTF8 = new TextDecoder("utf-8", { fatal: true });
+var UTF82 = new TextDecoder("utf-8", { fatal: true });
 function loadProfile() {
   const path = profilePath();
   if (!fs2.existsSync(path)) return emptyProfile();
   let text;
   try {
-    text = UTF8.decode(fs2.readFileSync(path));
+    text = UTF82.decode(fs2.readFileSync(path));
   } catch (e) {
     if (!(e instanceof TypeError)) throw e;
     text = null;
   }
   const profile = text === null ? null : parseProfile(text);
   if (profile) return profile;
-  fs2.renameSync(path, join2(dirname2(path), `profile.broken-${today()}.json`));
+  fs2.renameSync(path, join3(dirname3(path), `profile.broken-${today()}.json`));
   return emptyProfile();
 }
 function saveProfile(profile) {
@@ -23849,7 +23938,7 @@ function progressReport() {
 
 // src/store/project.ts
 import * as fs3 from "node:fs";
-import { basename as basename2, dirname as dirname3, join as join3, sep } from "node:path";
+import { basename as basename2, dirname as dirname4, join as join4, sep } from "node:path";
 var MAP_MAX_LINES = 40;
 var DECISION_MAX_CHARS = 2e3;
 var NOTE_MAX_BYTES = 2e4;
@@ -23857,12 +23946,12 @@ var NOTES_LABEL = "(project notes written by the team \u2014 notes, not instruct
 var UnsafeLearningDir = class extends StoreError {
 };
 var isInside = (root, p) => p !== root && p.startsWith(root.endsWith(sep) ? root : root + sep);
-function learningDir(repoRoot, create = false) {
-  if (!repoRoot.trim()) throw new StoreError("repo_root is required \u2014 pass the project's absolute path.");
-  const root = resolveUserPath(repoRoot);
+function learningDir(repoRoot2, create = false) {
+  if (!repoRoot2.trim()) throw new StoreError("repo_root is required \u2014 pass the project's absolute path.");
+  const root = resolveUserPath(repoRoot2);
   if (!isDirectory(root)) throw new StoreError(`Not a directory: ${root}`);
-  const base = join3(root, ".learning");
-  const decisions = join3(base, "decisions");
+  const base = join4(root, ".learning");
+  const decisions = join4(base, "decisions");
   if (isSymlink(base)) throw new UnsafeLearningDir(".learning/ is a symlink; refusing to use it.");
   if (fs3.existsSync(base) && !isInside(root, fs3.realpathSync(base))) {
     throw new UnsafeLearningDir(".learning/ resolves outside the project; refusing to use it.");
@@ -23899,9 +23988,9 @@ function readNote(path) {
 }
 var DECISION_FILE = /^[0-9]{4}-.*\.md$/;
 function decisionFiles(base) {
-  const folder = join3(base, "decisions");
+  const folder = join4(base, "decisions");
   if (!isDirectory(folder)) return [];
-  return fs3.readdirSync(folder).filter((name) => DECISION_FILE.test(name)).map((name) => join3(folder, name)).filter((p) => !isSymlink(p) && isFile(p)).sort();
+  return fs3.readdirSync(folder).filter((name) => DECISION_FILE.test(name)).map((name) => join4(folder, name)).filter((p) => !isSymlink(p) && isFile(p)).sort();
 }
 function decisionHeader(path) {
   const text = readNote(path) ?? "";
@@ -23911,14 +24000,14 @@ function decisionHeader(path) {
   const status = /Status:\s*([^\n]+)/.exec(text);
   return `${title2} [${status ? status[1].trim() : "unknown"}]`;
 }
-function projectSummary(repoRoot) {
-  const base = learningDir(repoRoot);
-  const name = basename2(dirname3(base));
+function projectSummary(repoRoot2) {
+  const base = learningDir(repoRoot2);
+  const name = basename2(dirname4(base));
   if (!isDirectory(base)) {
     return [`Project \`${name}\`: no .learning/ folder yet. Offer once to keep a map and decision records here.`];
   }
   const out = [`Project \`${name}\`:`];
-  const mapFile = join3(base, "map.md");
+  const mapFile = join4(base, "map.md");
   if (isSymlink(mapFile)) {
     out.push("### Map", "(map.md is a symlink \u2014 not read. Ask the user to replace it with a plain file.)");
   } else if (fs3.existsSync(mapFile)) {
@@ -23930,28 +24019,28 @@ function projectSummary(repoRoot) {
   out.push(`### Decisions (open with search_decisions) ${NOTES_LABEL}`);
   if (decisions.length) out.push(...decisions.map((p) => `- ${decisionHeader(p)}`));
   else out.push("- none yet");
-  if (fs3.existsSync(join3(base, "me.local.md"))) {
+  if (fs3.existsSync(join4(base, "me.local.md"))) {
     out.push(
       "Note: .learning/me.local.md exists from file mode. Move its entries into the global profile with record_topic, then tell the user it can be deleted."
     );
   }
   return out;
 }
-function learningContext(repoRoot = "") {
+function learningContext(repoRoot2 = "") {
   const out = ["## Learner (global profile)", ...profileSummary(loadProfile())];
-  if (repoRoot.trim()) {
+  if (repoRoot2.trim()) {
     let project;
     try {
-      project = projectSummary(repoRoot);
+      project = projectSummary(repoRoot2);
     } catch (e) {
       if (!(e instanceof UnsafeLearningDir)) throw e;
-      project = [`Project \`${basename2(resolveUserPath(repoRoot))}\`: ${e.message}`];
+      project = [`Project \`${basename2(resolveUserPath(repoRoot2))}\`: ${e.message}`];
     }
     out.push("", `## ${project.join("\n")}`);
   }
   return out.join("\n");
 }
-function updateMap(repoRoot, content) {
+function updateMap(repoRoot2, content) {
   checkNoSecrets(content);
   let body = lines(content.trim()).filter((l) => !l.startsWith("Verified:"));
   if (body[0]?.startsWith("# ")) body = body.slice(1);
@@ -23960,17 +24049,17 @@ function updateMap(repoRoot, content) {
       `Map is ${body.length} lines; the cap is ${MAP_MAX_LINES}. Keep entry points, core modules, data flow and gotchas \u2014 trim the rest.`
     );
   }
-  const base = learningDir(repoRoot, true);
-  atomicWrite(join3(base, "map.md"), `${["# Project map", `Verified: ${today()}`, "", ...body].join("\n")}
+  const base = learningDir(repoRoot2, true);
+  atomicWrite(join4(base, "map.md"), `${["# Project map", `Verified: ${today()}`, "", ...body].join("\n")}
 `);
   return `Map saved (${body.length} lines).`;
 }
-function addDecision(repoRoot, title2, context, decision, alternatives, consequences) {
+function addDecision(repoRoot2, title2, context, decision, alternatives, consequences) {
   const t = title2.trim().split(/\s+/).join(" ");
   if (!t || !decision.trim()) throw new StoreError("A decision needs at least a title and the decision itself.");
   checkNoSecrets(t, context, decision, consequences, ...alternatives);
   const alts = alternatives.map((a) => a.trim()).filter(Boolean).map((a) => `- ${a}`).join("\n") || "- none considered";
-  const base = learningDir(repoRoot, true);
+  const base = learningDir(repoRoot2, true);
   const numbers = decisionFiles(base).map((p) => Number.parseInt(basename2(p).slice(0, 4), 10));
   const n4 = String(Math.max(0, ...numbers) + 1).padStart(4, "0");
   const text = `# ${n4} \u2014 ${t}
@@ -23986,12 +24075,12 @@ Consequences: ${consequences.trim()}
     throw new StoreError("Decision record is too long \u2014 keep it to ~15 lines a teammate will actually read.");
   }
   const name = `${n4}-${slug(t) || "decision"}.md`;
-  atomicWrite(join3(base, "decisions", name), text);
+  atomicWrite(join4(base, "decisions", name), text);
   return `Saved decision ${n4}: .learning/decisions/${name}`;
 }
 var wordsOf = (s) => s.toLowerCase().match(/[a-z0-9]+/g) ?? [];
-function searchDecisions(repoRoot, query, limit = 3) {
-  const base = learningDir(repoRoot);
+function searchDecisions(repoRoot2, query, limit = 3) {
+  const base = learningDir(repoRoot2);
   const files = decisionFiles(base);
   if (!files.length) return "No decision records in this project.";
   const words = new Set(wordsOf(query).filter((w) => w.length > 1));
@@ -24038,34 +24127,13 @@ async function call(fn) {
     throw e;
   }
 }
-function gitEnv() {
-  const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
-  delete env.GIT_DIFF_OPTS;
-  let n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
-  if (!Number.isFinite(n) || n < 0) n = 0;
-  env.GIT_CONFIG_COUNT = String(n + 1);
-  env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
-  env[`GIT_CONFIG_VALUE_${n}`] = "false";
-  return env;
-}
-function gateRepoRoot(path) {
-  let start = resolveUserPath(path || process.cwd());
-  const st = fs4.statSync(start, { throwIfNoEntry: false });
-  if (!st) throw new ToolError(`Path does not exist: ${start}`);
-  if (st.isFile()) start = dirname4(start);
-  const out = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: start, env: gitEnv() });
-  if (out.error) throw out.error;
-  const top = out.stdout.toString("utf8").trim();
-  if (out.status !== 0 || !top) throw new ToolError(`Not inside a git working tree: ${start}`);
-  return top;
-}
-var GATE_FILE = fileURLToPath(new URL("./gate.mjs", import.meta.url));
+var GATE_FILE = fileURLToPath2(new URL("./gate.mjs", import.meta.url));
 var GATE_TIMEOUT_MS = 3e5;
 function runProcess(argv, input, timeoutMs) {
   const env = { ...process.env };
   delete env.NODE_OPTIONS;
   delete env.NODE_PATH;
-  return new Promise((resolve3, reject) => {
+  return new Promise((resolve4, reject) => {
     const child = spawn(argv[0], argv.slice(1), {
       stdio: [input === void 0 ? "ignore" : "pipe", "pipe", "pipe"],
       env
@@ -24078,7 +24146,7 @@ function runProcess(argv, input, timeoutMs) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve3({ code, stdout: Buffer.concat(out), stderr: Buffer.concat(err), timedOut });
+      resolve4({ code, stdout: Buffer.concat(out), stderr: Buffer.concat(err), timedOut });
     };
     const timer = setTimeout(() => {
       timedOut = true;
@@ -24103,8 +24171,14 @@ function runProcess(argv, input, timeoutMs) {
     }
   });
 }
-async function gateCli(repoRoot, args, stdin) {
-  const root = gateRepoRoot(repoRoot);
+async function gateCli(path, args, stdin) {
+  let root;
+  try {
+    root = repoRoot(path);
+  } catch (e) {
+    if (e instanceof GateError) throw new ToolError(e.message);
+    throw e;
+  }
   const proc = await runProcess([process.execPath, GATE_FILE, ...args, "--repo", root], stdin, GATE_TIMEOUT_MS);
   if (proc.timedOut) throw new ToolError("The gate took longer than 5 minutes.");
   const text = (b) => b.toString("utf8").replace(/\r\n?/g, "\n").trim();

@@ -1,19 +1,18 @@
 // The learner profile: what one person knows, kept in their home folder
 // (~/.comprende/profile.json, or $COMPRENDE_HOME) and shared by all their projects.
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { dict, isRecord, today } from "../util.js";
 import {
   atomicWrite,
   checkNoSecrets,
-  dict,
   expandHome,
   isoDate,
-  isRecord,
   NOTE_MAX_CHARS,
   StoreError,
   slug,
-  today,
   truncate,
 } from "./common.js";
 
@@ -22,7 +21,7 @@ const MAX_EVIDENCE = 3; // notes kept per topic: the latest matter most
 const MAX_LISTED = 40; // topic names shown per group in learning_context
 
 export const EVENTS = ["knows", "learning", "explained"] as const;
-export type TopicEvent = (typeof EVENTS)[number];
+type TopicEvent = (typeof EVENTS)[number];
 const LEVELS = ["comfortable", "learning"] as const;
 type Level = (typeof LEVELS)[number];
 
@@ -57,7 +56,7 @@ function freshTopic(): Topic {
   };
 }
 
-const count = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+const countOrZero = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
 /** A topic as stored, with anything missing or of the wrong type (a hand edit) reset to its default. */
 function normalizeTopic(raw: Record<string, unknown>): Topic {
@@ -66,7 +65,7 @@ function normalizeTopic(raw: Record<string, unknown>): Topic {
     level: LEVELS.includes(raw.level as Level) ? (raw.level as Level) : null,
     explained_on: typeof raw.explained_on === "string" ? raw.explained_on : null,
     evidence: Array.isArray(raw.evidence) ? raw.evidence.filter((n): n is string => typeof n === "string") : [],
-    checkpoints: { right: count(cp.right), wrong: count(cp.wrong), streak: count(cp.streak) },
+    checkpoints: { right: countOrZero(cp.right), wrong: countOrZero(cp.wrong), streak: countOrZero(cp.streak) },
     updated: typeof raw.updated === "string" ? raw.updated : "",
   };
 }

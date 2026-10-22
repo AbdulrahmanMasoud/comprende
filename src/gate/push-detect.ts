@@ -77,7 +77,7 @@ function tokenize(command: string): string[] | null {
   return tokens;
 }
 
-function segments(command: string): string[][] {
+function commandSegments(command: string): string[][] {
   command = command.replace(/\\\n/g, " ").replace(/\n/g, ";");
   const tokens = tokenize(command) ?? command.split(/\s+/).filter(Boolean);
   const segs: string[][] = [];
@@ -101,7 +101,7 @@ const programName = (t: string) => t.split("/").pop() ?? t;
  *  `sudo git push`, `bash -c "git push"` and `(git push)` do. */
 export function isPushCommand(command: string, depth = 0): boolean {
   if (depth > 3) return false;
-  for (let tokens of segments(command)) {
+  for (let tokens of commandSegments(command)) {
     let i = 0;
     while (i < tokens.length) {
       const tok = tokens[i];

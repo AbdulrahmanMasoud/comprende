@@ -45,29 +45,12 @@ export const SELF = (() => {
   }
 })();
 
-export const isObj = (x: unknown): x is Record<string, unknown> =>
-  typeof x === "object" && x !== null && !Array.isArray(x);
-
-/** File paths are map keys, and a repo can contain a file named "__proto__"
- *  or "constructor". Never use `in` or bare indexing on such maps: own keys only. */
-export const own = (o: object, k: string): boolean => Object.hasOwn(o, k);
-
-export const get = <T>(o: Record<string, T>, k: string): T | undefined => (Object.hasOwn(o, k) ? o[k] : undefined);
-
-export const dict = <T>(): Record<string, T> => Object.create(null) as Record<string, T>;
-
 export const sorted = <T>(xs: Iterable<T>): T[] => [...xs].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 export const splitLines = (s: string): string[] => {
   const parts = s.split(/\r\n|\r|\n/);
   if (parts.length && parts[parts.length - 1] === "") parts.pop();
   return parts;
-};
-
-export const today = (): string => {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
 
 export const VERSION_RE = /^\/\/ ownership-gate-version: (\d+)/m;

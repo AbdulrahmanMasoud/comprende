@@ -13,20 +13,10 @@ export class StoreError extends Error {
   override name = "StoreError";
 }
 
-/** An object with no prototype: a topic named "constructor" is just a topic. */
-export const dict = <T>(): Record<string, T> => Object.create(null) as Record<string, T>;
-export const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
-
 /** The first `n` characters (code points), never half of a surrogate pair. */
 export const truncate = (s: string, n: number): string => (s.length <= n ? s : Array.from(s).slice(0, n).join(""));
 
 export const lines = (s: string): string[] => s.split(/\r\n|\r|\n/);
-
-export function today(): string {
-  const d = new Date();
-  return isoDate(d.getFullYear(), d.getMonth(), d.getDate());
-}
 
 export function isoDate(year: number, month: number, day: number): string {
   const d = new Date(year, month, day);
@@ -54,10 +44,6 @@ export function resolveUserPath(p: string): string {
     return abs;
   }
 }
-
-export const isDirectory = (p: string): boolean => fs.statSync(p, { throwIfNoEntry: false })?.isDirectory() ?? false;
-export const isFile = (p: string): boolean => fs.statSync(p, { throwIfNoEntry: false })?.isFile() ?? false;
-export const isSymlink = (p: string): boolean => fs.lstatSync(p, { throwIfNoEntry: false })?.isSymbolicLink() ?? false;
 
 // Things that look like credentials. Memory files get committed and shared, so
 // they're refused in code rather than trusting a prompt to remember. A token

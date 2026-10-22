@@ -1,34 +1,24 @@
 // The gate's three verbs: status (what needs checking), save (write the report) and
 // verify (does a commit match its report). The hooks and CI all call verify.
-import { realpathSync, unlinkSync } from "node:fs";
+
+import { existsSync, realpathSync, unlinkSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { dict, get, isFile, isRecord, isSymlink, own, today } from "../util.js";
 import {
   changedLinesText,
   collectChanges,
+  fileStates,
   needsVerification,
   SAME,
   type State,
   smallChange,
-  states,
 } from "./changes.js";
-import { isSensitive, loadConfig, noQuestions, rulesForLocal, rulesForVerify } from "./config.js";
-import { atomicWrite, exists, isFile, isSymlink, readSmall } from "./files.js";
-import { currentBranch, hasFile, repoRoot, resolveBase, showSmall } from "./git.js";
+import { isSensitive, loadConfig, needsNoQuestions, rulesFromBase, rulesFromBaseOrWorktree } from "./config.js";
+import { atomicWrite, readRepoFile } from "./files.js";
+import { currentBranch, readFileAtRev, repoRoot, resolveBase, revHasFile } from "./git.js";
 import { matches } from "./glob.js";
-import { previousReport, readReport, renderReport, reportRelpath } from "./report.js";
-import {
-  dict,
-  GATE_REL,
-  GATE_VERSION,
-  GateError,
-  get,
-  isObj,
-  own,
-  REPORT_INPUT,
-  sorted,
-  today,
-  VERSION_RE,
-} from "./shared.js";
+import { previousReport, readReport, renderReport, reportPath } from "./report.js";
+import { GATE_REL, GATE_VERSION, GateError, REPORT_INPUT, sorted, VERSION_RE } from "./shared.js";
 
 // English only: terminals draw Arabic letters in reverse order. The skill still understands "اختبرني".
 const CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
@@ -49,11 +39,11 @@ const charCount = (s: string) => [...s].length;
 export function status(repo?: string | null, base?: string | null, branch?: string | null) {
   const root = repoRoot(repo);
   const baseRef = resolveBase(root, loadConfig(root), base);
-  const cfg = rulesForLocal(root, baseRef);
+  const cfg = rulesFromBaseOrWorktree(root, baseRef);
   const br = currentBranch(root, branch);
   const [changes, untracked, mb] = collectChanges(root, baseRef, null);
   const [report, note] = previousReport(root, br, baseRef);
-  const st = states(root, changes, report, "HEAD", mb);
+  const st = fileStates(root, changes, report, "HEAD", mb);
   const oldVerified = report ? report.verified : dict<string[]>();
   const files = Object.entries(changes).map(([p, c]) => ({
     path: p,
@@ -73,7 +63,7 @@ export function status(repo?: string | null, base?: string | null, branch?: stri
   if (isFile(localGate) && !isSymlink(localGate)) {
     let head = "";
     try {
-      head = readSmall(localGate, 8 * 1024 * 1024).slice(0, 4096);
+      head = readRepoFile(localGate, 8 * 1024 * 1024).slice(0, 4096);
     } catch {
       /* unreadable: no note */
     }
@@ -84,10 +74,10 @@ export function status(repo?: string | null, base?: string | null, branch?: stri
       );
     }
   }
-  if (exists(localGate) && hasFile(root, baseRef, GATE_REL)) {
+  if (existsSync(localGate) && revHasFile(root, baseRef, GATE_REL)) {
     let head = "";
     try {
-      head = showSmall(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
+      head = readFileAtRev(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
     } catch {
       /* unreadable: no note */
     }
@@ -105,7 +95,7 @@ export function status(repo?: string | null, base?: string | null, branch?: stri
     configured: cfg._configured,
     base: baseRef,
     branch: br,
-    report: reportRelpath(br),
+    report: reportPath(br),
     report_exists: report !== null,
     files,
     must_verify: needsVerification(changes, st, report, cfg),
@@ -150,7 +140,7 @@ export function save(
 ): string {
   const root = repoRoot(repo);
   const baseRef = resolveBase(root, loadConfig(root), base);
-  const cfg = rulesForLocal(root, baseRef);
+  const cfg = rulesFromBaseOrWorktree(root, baseRef);
   const br = currentBranch(root, branch);
   const [changes, untracked, mb] = collectChanges(root, baseRef, null);
   if (!Object.keys(changes).length) throw new GateError(`No changes vs ${baseRef} — nothing to report.`);
@@ -168,7 +158,7 @@ export function save(
     );
   }
   const rawVerified = payload.verified ?? {};
-  if (!isObj(rawVerified)) throw new GateError('"verified" must map file paths to lists of concepts.');
+  if (!isRecord(rawVerified)) throw new GateError('"verified" must map file paths to lists of concepts.');
   const verified: Record<string, string[]> = dict();
   for (const [path, concepts0] of Object.entries(rawVerified)) {
     const concepts = typeof concepts0 === "string" ? [concepts0] : Array.isArray(concepts0) ? concepts0 : [];
@@ -182,7 +172,7 @@ export function save(
     );
 
   const [old] = previousReport(root, br, baseRef);
-  const st = states(root, changes, old, "HEAD", mb);
+  const st = fileStates(root, changes, old, "HEAD", mb);
   const missing = needsVerification(changes, st, old, cfg).filter((p) => !own(verified, p));
   if (missing.length)
     throw new GateError(
@@ -194,12 +184,12 @@ export function save(
       if (own(changes, p) && SAME.includes(st[p]) && !own(verified, p)) verified[p] = concepts;
     }
   }
-  const askable = Object.entries(changes).filter(([p, c]) => !noQuestions(p, c.mode, cfg));
+  const askable = Object.entries(changes).filter(([p, c]) => !needsNoQuestions(p, c.mode, cfg));
   if (askable.length && !Object.keys(verified).length)
     throw new GateError("No verified files — the check needs at least one area the developer explained.");
 
   const data = { version: GATE_VERSION, branch: br, base: baseRef, date: today(), summary, verified, files: changes };
-  const rel = reportRelpath(br);
+  const rel = reportPath(br);
   atomicWrite(join(root, rel), renderReport(data));
   const extra = sorted([...untracked].filter((p) => own(changes, p)));
   const note = extra.length
@@ -218,7 +208,7 @@ export function verify(
 ): [boolean, string[], string] {
   const root = repoRoot(repo);
   const baseRef = resolveBase(root, loadConfig(root, rev), base);
-  const cfg = rulesForVerify(root, baseRef);
+  const cfg = rulesFromBase(root, baseRef);
   if (cfg.mode === "off") return [true, [], "off"];
   if (labels.includes(cfg.skip_label)) return [true, [`Skipped by the '${cfg.skip_label}' label.`], "skipped"];
   const br = currentBranch(root, branch);
@@ -226,11 +216,11 @@ export function verify(
   if (!Object.keys(changes).length) return [true, [], cfg.mode];
   const report = readReport(root, br, rev);
   if (report === null) {
-    if (Object.entries(changes).every(([p, c]) => noQuestions(p, c.mode, cfg)))
+    if (Object.entries(changes).every(([p, c]) => needsNoQuestions(p, c.mode, cfg)))
       return [true, ["Only ignored files changed (e.g. lockfiles) — no report needed."], cfg.mode];
-    return [false, [`No ownership report for branch '${br}' (${reportRelpath(br)}). ${CHECK_ME_HINT}`], cfg.mode];
+    return [false, [`No ownership report for branch '${br}' (${reportPath(br)}). ${CHECK_ME_HINT}`], cfg.mode];
   }
-  const st = states(root, changes, report, rev, mb);
+  const st = fileStates(root, changes, report, rev, mb);
   const by = (s: State) => Object.keys(changes).filter((p) => st[p] === s);
   const problems: string[] = [];
   const unverifiedSensitive = Object.entries(changes)
@@ -254,7 +244,7 @@ export function verify(
 
 /** After a successful save: delete the input file if, and only if, it is this
  *  repo's REPORT_INPUT. Any other file passed to --input is left alone. */
-export function removeReportInput(input: string, repo: string | null): string {
+export function deleteReportInputFile(input: string, repo: string | null): string {
   try {
     const abs = resolve(input);
     const root = realpathSync(repoRoot(repo));

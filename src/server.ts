@@ -3,15 +3,15 @@
 // This file is deliberately thin: it describes the tools to the model and
 // forwards calls to src/store/ (memory) or to the bundled gate.mjs (ownership
 // check). The real logic lives there, which keeps it testable without a server.
-import { spawn, spawnSync } from "node:child_process";
-import * as fs from "node:fs";
-import { dirname } from "node:path";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
-import { resolveUserPath, StoreError } from "./store/common.js";
+import { repoRoot } from "./gate/git.js";
+import { GateError } from "./gate/shared.js";
+import { StoreError } from "./store/common.js";
 import { EVENTS, progressReport, recordCheckpoint, recordTopic, setPreference } from "./store/profile.js";
 import { addDecision, learningContext, searchDecisions, updateMap } from "./store/project.js";
 
@@ -43,33 +43,6 @@ async function call(fn: () => string): Promise<string> {
 }
 
 // ---------------------------------------------------------------- the ownership gate
-
-/** The environment for git: fixed locale and pathspecs, and core.fsmonitor
- *  forced off. fsmonitor can name a command in the repo's own .git/config, and
- *  GIT_CONFIG_* outranks every config file. */
-function gitEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
-  delete env.GIT_DIFF_OPTS;
-  let n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
-  if (!Number.isFinite(n) || n < 0) n = 0;
-  env.GIT_CONFIG_COUNT = String(n + 1);
-  env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
-  env[`GIT_CONFIG_VALUE_${n}`] = "false";
-  return env;
-}
-
-/** The top of the git working tree that contains `path` (a file or folder). */
-function gateRepoRoot(path: string): string {
-  let start = resolveUserPath(path || process.cwd());
-  const st = fs.statSync(start, { throwIfNoEntry: false });
-  if (!st) throw new ToolError(`Path does not exist: ${start}`);
-  if (st.isFile()) start = dirname(start);
-  const out = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: start, env: gitEnv() });
-  if (out.error) throw out.error;
-  const top = out.stdout.toString("utf8").trim();
-  if (out.status !== 0 || !top) throw new ToolError(`Not inside a git working tree: ${start}`);
-  return top; // git prints an absolute, normalized path
-}
 
 // The gate bundled next to this file — never a repo's own copy.
 const GATE_FILE = fileURLToPath(new URL("./gate.mjs", import.meta.url));
@@ -132,8 +105,14 @@ function runProcess(argv: string[], input: string | undefined, timeoutMs: number
  * repo would be arbitrary code execution. Version differences with the
  * repo/CI copy are reported by `status` as a note.
  */
-async function gateCli(repoRoot: string, args: string[], stdin?: string): Promise<string> {
-  const root = gateRepoRoot(repoRoot);
+async function gateCli(path: string, args: string[], stdin?: string): Promise<string> {
+  let root: string;
+  try {
+    root = repoRoot(path);
+  } catch (e) {
+    if (e instanceof GateError) throw new ToolError(e.message);
+    throw e;
+  }
   const proc = await runProcess([process.execPath, GATE_FILE, ...args, "--repo", root], stdin, GATE_TIMEOUT_MS);
   if (proc.timedOut) throw new ToolError("The gate took longer than 5 minutes.");
   const text = (b: Buffer) => b.toString("utf8").replace(/\r\n?/g, "\n").trim();

@@ -1,10 +1,12 @@
 // .learning/config.json: defaults, strict validation, and where the rules come from
 // (the base branch, so a PR can't loosen its own check).
+
 import { join } from "node:path";
-import { lstat, MAX_CONFIG_BYTES, readSmall } from "./files.js";
-import { hasFile, showSmall } from "./git.js";
+import { isRecord, lstat } from "../util.js";
+import { MAX_CONFIG_BYTES, readRepoFile } from "./files.js";
+import { readFileAtRev, revHasFile } from "./git.js";
 import { globMatch, matches } from "./glob.js";
-import { CONFIG_PATH, GateError, isObj } from "./shared.js";
+import { CONFIG_PATH, GateError } from "./shared.js";
 
 type Mode = "required" | "suggested" | "off";
 
@@ -39,7 +41,7 @@ export const DEFAULT_CONFIG: Omit<Config, "_configured"> = {
 /** The source text of the value at `path` in `raw` (valid JSON), or null if
  *  absent. A later duplicate key replaces an earlier one, as in JSON.parse.
  *  Lets the config tell `80.0` from `80`, which JSON.parse can't. */
-function valueSource(raw: string, path: string[]): string | null {
+function jsonValueText(raw: string, path: string[]): string | null {
   let i = 0;
   let found: string | null = null;
   const ws = () => {
@@ -104,14 +106,14 @@ function parseConfig(raw: string, where: string): Config {
   } catch (e) {
     throw new GateError(`${where}: not valid JSON (${(e as Error).message}).`);
   }
-  const section = isObj(data)
-    ? isObj(data.ownership_check)
+  const section = isRecord(data)
+    ? isRecord(data.ownership_check)
       ? data.ownership_check
       : "ownership_check" in data
         ? data.ownership_check
         : data
     : null;
-  if (!isObj(section)) throw new GateError(`${where}: expected an object like {"ownership_check": {...}}.`);
+  if (!isRecord(section)) throw new GateError(`${where}: expected an object like {"ownership_check": {...}}.`);
   const cfg = { ...DEFAULT_CONFIG, ...section } as Record<string, unknown>;
   // Strict types: a string where a list belongs would be read character by
   // character, and "*" alone matches every path — silently disabling the gate.
@@ -134,7 +136,7 @@ function parseConfig(raw: string, where: string): Config {
   }
   for (const key of ["min_summary_chars", "small_change_lines", "small_summary_chars"]) {
     const m = cfg[key];
-    const literal = valueSource(raw, section === data ? [key] : ["ownership_check", key]);
+    const literal = jsonValueText(raw, section === data ? [key] : ["ownership_check", key]);
     const floatLiteral = literal !== null && /[.eE]/.test(literal);
     if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || floatLiteral)
       throw new GateError(`${where}: "${key}" must be a non-negative integer.`);
@@ -148,28 +150,28 @@ const suggestedDefaults = (): Config => ({ ...DEFAULT_CONFIG, mode: "suggested",
  *  'suggested' (nobody opted this repo in). */
 export function loadConfig(root: string, rev?: string | null): Config {
   if (rev) {
-    if (!hasFile(root, rev, CONFIG_PATH)) return suggestedDefaults();
-    return parseConfig(showSmall(root, rev, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} at ${rev}`);
+    if (!revHasFile(root, rev, CONFIG_PATH)) return suggestedDefaults();
+    return parseConfig(readFileAtRev(root, rev, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} at ${rev}`);
   }
   const path = join(root, CONFIG_PATH);
   if (!lstat(path)) return suggestedDefaults();
-  return parseConfig(readSmall(path, MAX_CONFIG_BYTES), CONFIG_PATH);
+  return parseConfig(readRepoFile(path, MAX_CONFIG_BYTES), CONFIG_PATH);
 }
 
 /** CI and hooks judge a change by the rules on the *base* branch. If the base
  *  has no config, the strict defaults apply — never the PR's own config,
  *  which the PR could have written to switch itself off. */
-export function rulesForVerify(root: string, baseRef: string): Config {
-  if (hasFile(root, baseRef, CONFIG_PATH))
-    return parseConfig(showSmall(root, baseRef, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} on ${baseRef}`);
+export function rulesFromBase(root: string, baseRef: string): Config {
+  if (revHasFile(root, baseRef, CONFIG_PATH))
+    return parseConfig(readFileAtRev(root, baseRef, CONFIG_PATH, MAX_CONFIG_BYTES), `${CONFIG_PATH} on ${baseRef}`);
   return { ...DEFAULT_CONFIG, _configured: false };
 }
 
 /** status/save use the rules CI will apply (the base's), so what passes
  *  locally passes in CI. Before the base has a config, fall back to the
  *  working tree's config, or 'suggested'. */
-export function rulesForLocal(root: string, baseRef: string): Config {
-  if (hasFile(root, baseRef, CONFIG_PATH)) return rulesForVerify(root, baseRef);
+export function rulesFromBaseOrWorktree(root: string, baseRef: string): Config {
+  if (revHasFile(root, baseRef, CONFIG_PATH)) return rulesFromBase(root, baseRef);
   return loadConfig(root);
 }
 
@@ -182,5 +184,5 @@ export function isSensitive(path: string, mode: string, cfg: Pick<Config, "sensi
 }
 
 /** Ignored files don't need questions — unless they're also sensitive. */
-export const noQuestions = (path: string, mode: string, cfg: Config) =>
+export const needsNoQuestions = (path: string, mode: string, cfg: Config) =>
   matches(path, cfg.ignore) && !isSensitive(path, mode, cfg);
