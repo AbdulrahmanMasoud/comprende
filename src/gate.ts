@@ -881,6 +881,8 @@ function changedLines(root: string, mb: string, rev: string | null, paths: Set<s
   return total;
 }
 
+const changedLinesText = (n: number) => `${n} changed line${n === 1 ? "" : "s"}`;
+
 interface Small {
   small: boolean;
   lines: number | null; // null: not counted (nothing to count, or something sensitive / binary)
@@ -901,7 +903,7 @@ function smallChange(root: string, baseRef: string, mb: string, rev: string | nu
   const lines = changedLines(root, mb, rev, counted);
   if (lines === null || lines > cfg.small_change_lines) return no(lines);
   if (!baseGateHas(root, baseRef, "small-change")) {
-    return no(lines, `This would count as a small change (${lines} changed lines), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`);
+    return no(lines, `This would count as a small change (${changedLinesText(lines)}), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`);
   }
   return { small: true, lines, note: null };
 }
@@ -974,7 +976,7 @@ function formatStatus(s: Status): string {
   }
   if (s.must_verify.length) lines.push("Must be verified before saving: " + s.must_verify.join(", "));
   if (s.small_change) {
-    lines.push(`Small change (${s.changed_lines} changed lines): one question is enough, and the summary needs at least ${s.min_summary_chars} characters.`);
+    lines.push(`Small change (${changedLinesText(s.changed_lines ?? 0)}): one question is enough, and the summary needs at least ${s.min_summary_chars} characters.`);
   }
   lines.push(...s.notes);
   return lines.join("\n");
@@ -1024,7 +1026,8 @@ export function save(payload: Record<string, unknown>, repo?: string | null, bas
   atomicWrite(join(root, rel), renderReport(data));
   const extra = sorted([...untracked].filter((p) => own(changes, p)));
   const note = extra.length ? ` Untracked files included: ${extra.join(", ")} — commit them too, or they'll show as changed.` : "";
-  return `Saved ${rel}: ${Object.keys(changes).length} files fingerprinted, ${Object.keys(verified).length} verified. Commit it together with the code.${note}`;
+  const n = Object.keys(changes).length;
+  return `Saved ${rel}: ${n} file${n === 1 ? "" : "s"} fingerprinted, ${Object.keys(verified).length} verified. Commit it together with the code.${note}`;
 }
 
 export function verify(repo?: string | null, base?: string | null, branch?: string | null, rev = "HEAD", labels: string[] = []): [boolean, string[], string] {

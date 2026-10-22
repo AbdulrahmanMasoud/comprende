@@ -29,7 +29,9 @@ Claude هيفتح PR بيضيف البوابة. راجع `.learning/config.json`
 
 **لو إنت عضو في التيم.** سطّب الـ plugin بالأمرين اللي فوق، وبس كده. أول session ليك في الـ repo بتظبط الـ local hook، و Claude بيعمل معاك الـ check قبل الـ push.
 
-عايز تشوفه في الـ terminal؟ [`docs/demo.tape`](docs/demo.tape) بيوريك push بيتمنع، وبعدين report بيتحفظ، وبعدين الـ push بيعدّي. وعشان تطلّعه GIF، سطّب [VHS](https://github.com/charmbracelet/vhs) وشغّل `vhs docs/demo.tape`.
+![في الـ terminal: الـ ownership gate بيمنع push، وبعدين report بيتحفظ، وبعدين الـ push بيعدّي](docs/demo.gif)
+
+الـ demo ده متسجّل بـ [VHS](https://github.com/charmbracelet/vhs) من [`docs/demo.tape`](docs/demo.tape). ولو عايز تعمله render تاني، شغّل `vhs docs/demo.tape`.
 
 ## التسطيب
 

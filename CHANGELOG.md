@@ -5,7 +5,7 @@
 **Upgrading:** once a repo upgrades its gate (`gate.mjs install --upgrade`, merged into the base branch), the fast path for small changes is on by default, even if `.learning/config.json` doesn't list the new keys yet. To keep the old behaviour, set `"small_change_lines": 0`.
 
 - **README opens with a Quick start:** three short paths, for a solo developer, a team lead and a team member. The same section is in README.ar.md.
-- **Terminal demo:** `docs/demo.tape`, a [VHS](https://github.com/charmbracelet/vhs) script that shows a push being blocked, a report being saved and the push going through. Render it with `vhs docs/demo.tape`. A test runs the same commands, so the demo stays true.
+- **Terminal demo:** `docs/demo.gif`, embedded in both READMEs, shows a push being blocked, a report being saved and the push going through. It's rendered with [VHS](https://github.com/charmbracelet/vhs) from `docs/demo.tape` (`vhs docs/demo.tape`). A test runs the same commands, so the demo stays true.
 - **A fast path for small changes:**
   - **New config keys:** `small_change_lines` (default 10, `0` turns it off) and `small_summary_chars` (default 30).
   - **What counts as small:** the change adds and removes at most `small_change_lines` lines across its non-ignored files, counted with `git diff --numstat` from the fork point. It also has no sensitive file, no submodule and no binary file.
@@ -25,6 +25,7 @@
   - The plugin's PreToolUse hook exits 0 when `node` is missing. So does the project-level hook that `install` writes into `.claude/settings.json`; repos installed earlier keep their old command until it's edited. Neither can block Bash by accident.
   - README: what happens on Windows with and without Git Bash.
 - **Fixes:**
+  - `status` and `save` say "1 changed line" and "1 file fingerprinted" instead of "1 changed lines" and "1 files fingerprinted".
   - When the Claude hook blocks a push and a valid report is saved but not committed, it now says so: commit it first, then push as a separate command. The hook checks the branch before a command runs, so `git commit … && git push` in one command used to fail with a confusing "No ownership report". The protocol now tells Claude to push separately.
   - The ownership-check protocol now says how to save a report without the MCP tool: write the JSON to a file inside `.git/` and run `gate.mjs save --input <file>`. It must never go through a heredoc (Claude Code's shell checks can block it) or into a working-tree file, which the gate would count as part of the change. A test pins that a file under `.git/` is never part of the change.
   - `learning_context` still returns your profile when a project's `.learning/` folder is refused, for example because it's a symlink. Before, the whole call failed.

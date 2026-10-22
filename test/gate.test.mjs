@@ -444,6 +444,13 @@ test("a small change needs only a short summary, and status says so", (t) => {
   assert.equal(push.status, 0, push.stderr);                       // through the real pre-push hook
 });
 
+test("status and save count one line and one file in the singular", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 1;\nexport const b = 2;\n");   // +1
+  assert.match(runGate(dev, ["status"]).stdout, /Small change \(1 changed line\):/);
+  assert.match(gate.save({ summary: SHORT, verified: { "src/app.js": ["x"] } }, dev), /: 1 file fingerprinted, 1 verified\./);
+});
+
 test("over small_change_lines, the full summary is required", (t) => {
   const { dev } = setup(t);
   write(dev, "src/new.js", Array.from({ length: 11 }, (_, i) => `export const n${i} = ${i};\n`).join(""));

@@ -691,6 +691,7 @@ function changedLines(root, mb, rev, paths) {
   }
   return total;
 }
+var changedLinesText = (n) => `${n} changed line${n === 1 ? "" : "s"}`;
 function smallChange(root, baseRef, mb, rev, changes, cfg) {
   const no = (lines2 = null, note = null) => ({ small: false, lines: lines2, note });
   const entries = Object.entries(changes);
@@ -700,7 +701,7 @@ function smallChange(root, baseRef, mb, rev, changes, cfg) {
   const lines = changedLines(root, mb, rev, counted);
   if (lines === null || lines > cfg.small_change_lines) return no(lines);
   if (!baseGateHas(root, baseRef, "small-change")) {
-    return no(lines, `This would count as a small change (${lines} changed lines), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`);
+    return no(lines, `This would count as a small change (${changedLinesText(lines)}), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`);
   }
   return { small: true, lines, note: null };
 }
@@ -776,7 +777,7 @@ function formatStatus(s) {
   }
   if (s.must_verify.length) lines.push("Must be verified before saving: " + s.must_verify.join(", "));
   if (s.small_change) {
-    lines.push(`Small change (${s.changed_lines} changed lines): one question is enough, and the summary needs at least ${s.min_summary_chars} characters.`);
+    lines.push(`Small change (${changedLinesText(s.changed_lines ?? 0)}): one question is enough, and the summary needs at least ${s.min_summary_chars} characters.`);
   }
   lines.push(...s.notes);
   return lines.join("\n");
@@ -820,7 +821,8 @@ function save(payload, repo, base2, branch) {
   atomicWrite(join(root, rel), renderReport(data));
   const extra = sorted([...untracked].filter((p) => own(changes, p)));
   const note = extra.length ? ` Untracked files included: ${extra.join(", ")} \u2014 commit them too, or they'll show as changed.` : "";
-  return `Saved ${rel}: ${Object.keys(changes).length} files fingerprinted, ${Object.keys(verified).length} verified. Commit it together with the code.${note}`;
+  const n = Object.keys(changes).length;
+  return `Saved ${rel}: ${n} file${n === 1 ? "" : "s"} fingerprinted, ${Object.keys(verified).length} verified. Commit it together with the code.${note}`;
 }
 function verify(repo, base2, branch, rev = "HEAD", labels = []) {
   const root = repoRoot(repo);

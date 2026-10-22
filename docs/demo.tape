@@ -38,6 +38,7 @@ Type "# 2. Change some code and push it: blocked, nobody has checked it yet"
 Enter
 Type `git checkout -q -b feature/sum && printf 'export const sum = (xs) => xs.reduce(add, 0);\n' >> math.js && git commit -qam "add sum"`
 Enter
+Sleep 1s
 Type `git push -u origin feature/sum`
 Enter
 Sleep 4s

@@ -53,10 +53,12 @@ test("both READMEs open with a Quick start for the three kinds of user", () => {
   for (const who of ["Solo developer", "Team lead", "Team member"]) assert.ok(section.includes(who), who);
   assert.ok(section.includes("Enable the ownership gate in this repo") && section.includes("protect"));
   assert.ok(section.includes("docs/demo.tape"));
+  assert.ok(section.includes("](docs/demo.gif)") && existsSync(join(REPO, "docs/demo.gif")), "the demo GIF is embedded");
   const ar = read("README.ar.md").toString("utf8");
   const arQuick = ar.indexOf("## البداية السريعة");
   assert.ok(arQuick > 0 && arQuick < ar.indexOf("## التسطيب"), "Arabic Quick start comes before التسطيب");
   assert.ok(ar.includes("/plugin install comprende@comprende"));
+  assert.ok(ar.includes("](docs/demo.gif)"), "the Arabic README embeds the demo GIF too");
 });
 
 /** The commands the tape types, in order (each `Type` line up to its `Enter`). */

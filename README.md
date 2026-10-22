@@ -31,7 +31,9 @@ Claude opens a PR that adds the gate. Review `.learning/config.json` in it, main
 
 **Team member.** Install the plugin with the two commands above. That's it: your first session in the repo sets up the local hook, and Claude runs the check with you before you push.
 
-To see it in a terminal, [`docs/demo.tape`](docs/demo.tape) shows a push being blocked, a report being saved and the push going through. To render it as a GIF, install [VHS](https://github.com/charmbracelet/vhs) and run `vhs docs/demo.tape`.
+![In a terminal: the ownership gate blocks a push, a report is saved, then the push goes through](docs/demo.gif)
+
+The demo is recorded with [VHS](https://github.com/charmbracelet/vhs) from [`docs/demo.tape`](docs/demo.tape). Run `vhs docs/demo.tape` to render it again.
 
 ---
 
