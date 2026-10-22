@@ -171,9 +171,11 @@ skills/comprende/
   scripts/            gate.mjs and learning.mjs (copies of the built files, for the skill on its own)
 hooks/hooks.json      SessionStart (auto-setup) and PreToolUse (block unverified pushes)
 .mcp.json             the memory server
-src/                  TypeScript source: gate.ts, store.ts, server.ts, learning.ts
+src/gate/             the ownership gate, one module per concern (bundled into dist/gate.mjs)
+src/store/            the memory store: learner profile and project notes
+src/server.ts         the MCP server; src/learning.ts, the skill's file-only helper
 dist/                 the built, dependency-free files the plugin runs (committed)
-test/                 node:test suite against real git repos
+test/                 node:test suites against real git repos, one file per topic
 docs/demo.tape        VHS script for the terminal demo (vhs docs/demo.tape writes docs/demo.gif)
 CLAUDE.md             notes for Claude Code when working on this repo (incl. an end-to-end test plan)
 ```
@@ -182,7 +184,8 @@ CLAUDE.md             notes for Claude Code when working on this repo (incl. an 
 
 ```bash
 npm ci
-npm run check      # type-check, build dist/, run every test against real git repos
+npm run check      # type-check, lint, build dist/, run every test against real git repos
+npm run format     # apply Biome's formatting and safe lint fixes
 claude plugin validate ./.claude-plugin/plugin.json
 ```
 

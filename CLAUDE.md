@@ -3,15 +3,17 @@
 Comprende is a Claude Code plugin (with its own marketplace in the same repo). It has two parts:
 
 1. **The skill** (`skills/comprende/`): Claude explains the code it writes, only where it matters, in the user's language.
-2. **The ownership gate** (`src/gate.ts` → `dist/gate.mjs`): before a PR, the developer answers questions about their change. A report tied to the exact git blobs is saved, and a git hook, a Claude hook and CI refuse unverified changes.
+2. **The ownership gate** (`src/gate/` → `dist/gate.mjs`): before a PR, the developer answers questions about their change. A report tied to the exact git blobs is saved, and a git hook, a Claude hook and CI refuse unverified changes.
 
-A small MCP server (`src/server.ts`) stores the learner profile in `~/.comprende/` (override with `COMPRENDE_HOME`).
+A small MCP server (`src/server.ts`, memory in `src/store/`) stores the learner profile in `~/.comprende/` (override with `COMPRENDE_HOME`).
 
 ## Commands
 
 ```bash
 npm ci
-npm run check                     # typecheck + build + all tests (about a minute)
+npm run check                     # typecheck + lint + build + all tests (about a minute)
+npm run lint                      # Biome: formatting and lint (warnings fail too)
+npm run format                    # apply Biome's formatting and safe fixes
 npm run build                     # rebuild dist/ and skills/comprende/scripts/
 npm test                          # tests only
 claude plugin validate ./.claude-plugin/plugin.json
@@ -24,9 +26,17 @@ claude plugin validate ./.claude-plugin/marketplace.json
 - `hooks/hooks.json`: SessionStart (`gate.mjs session-start`), PreToolUse on Bash (`gate.mjs claude-hook --from-plugin`)
 - `.mcp.json`: the `comprende` MCP server (`dist/server.mjs`)
 - `skills/comprende/SKILL.md` plus `references/` (signals, formats, examples, memory, ownership-check)
-- `src/`: `gate.ts`, `learning.ts`, `store.ts`, `server.ts`
+- `src/gate/`: the ownership gate, bundled into `dist/gate.mjs` from `cli.ts`. One module per concern, each with a header saying what it owns:
+  - `shared.ts` (names, paths, version and features), `files.ts` (safe reads and writes), `glob.ts` (Comprende's glob rules)
+  - `git.ts` (safe git runner, temp index, inert repo config), `config.ts` (config, validation, rules from the base)
+  - `changes.ts` (fingerprints, plumbing, 3-way replay, states, small changes), `report.ts` (the report file)
+  - `commands.ts` (status, save, verify), `push-detect.ts`, `hooks.ts`, `setup.ts` (install, protect), `ci-summary.ts`, `cli.ts`
+- `src/store/`: the memory store. `profile.ts` (the learner profile), `project.ts` (`.learning/` map and decisions), `common.ts`
+- `src/server.ts`: the MCP server (thin: tools in, store or gate out). `src/learning.ts`: the skill's file-only helper
+- `src/util.ts`: helpers the gate and the store share, including the prototype-free `dict`/`own`/`get`
 - `dist/`: built output, **committed on purpose**, because that's what the plugin runs
-- `test/`: `node:test` suites against real git repos. `helpers.mjs` has the fixtures.
+- `test/`: `node:test` suites against real git repos, one file per topic (install, config, fingerprints, checks, report, small-changes, push-detection, hooks, security, ci, store, mcp, consistency). `helpers.mjs` has the fixtures.
+- `biome.json`: formatting and lint (Markdown is left alone). `build.mjs`: the bundler.
 
 ## Rules that must not break
 
@@ -34,10 +44,10 @@ claude plugin validate ./.claude-plugin/marketplace.json
 - **`gate.mjs` and `learning.mjs` import only `node:` built-ins.** `build.mjs` enforces it. The pinned git hook runs `gate.mjs` as an in-memory module, so it can't load anything else.
 - **The plugin never executes code from the repo it's looking at.** Hooks and the MCP server run only the plugin's own `dist/gate.mjs`. A repo's config is read as data, with no symlinks and a size limit. The git hook is auto-installed only when the repo's `gate.mjs` is byte-identical to the plugin's copy.
 - **A hook blocks only on a deliberate exit code 2.** Any crash or missing file must exit with something else. Claude Code treats exit 2 as "block", so an accidental 2 would block every Bash command for the user.
-- **File paths are map keys.** Use the prototype-free helpers (`dict`, `own`, `get`) and never plain `{}` lookups. A file named `__proto__` must behave like any other file.
+- **File paths are map keys.** Use the prototype-free helpers in `src/util.ts` (`dict`, `own`, `get`) and never plain `{}` lookups. A file named `__proto__` must behave like any other file.
 - **The lead never sees mistakes.** Reports and CI summaries contain only what was verified: the summary and concepts per file. They never include scores, wrong answers or attempt counts.
 - **Rules come from the base branch.** CI runs the base branch's `gate.mjs` and config, so a PR can't switch off its own check.
-- **Every bug fix gets a regression test.** It must fail before the fix. Put it in the matching `test/*.test.mjs` file.
+- **Every bug fix gets a regression test.** It must fail before the fix. Put it in the test file for that topic, and name the test after the behavior.
 - **Keep docs in sync.** A user-visible change updates:
   - `README.md` and `README.ar.md` (Egyptian Arabic, technical terms in English)
   - `SECURITY.md`, if it touches the threat model
@@ -99,7 +109,7 @@ Then open Claude in `app/` with the plugin loaded and try these:
 | Start the session | Claude mentions the gate is on for this repo |
 | Ask Claude to add a `sum(xs)` function, commit, and push | Claude refuses to push: no ownership report |
 | `git push` yourself in a terminal | The pre-push hook blocks it |
-| Say "check me" | 3 to 6 questions about your change. You write the PR summary yourself |
+| Say "check me" | One question (a small change; 3 to 6 for bigger ones). You write the PR summary yourself |
 | Answer one wrong on purpose | A short explanation, then a *different* question |
 | After it saves the report, commit and push | The push goes through |
 | Read `.learning/checks/feature%2Fsum.md` | Only the summary and verified concepts. No scores or wrong answers |
