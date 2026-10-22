@@ -19,7 +19,7 @@ function globToRegExp(pat: string): RegExp {
   const n = chars.length;
   const res: string[] = [];
   const escapeOutside = (c: string) => c.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-  const escapeInSet = (c: string) => c.replace(/[\\\]\[^-]/g, "\\$&");
+  const escapeInSet = (c: string) => c.replace(/[\\\][^-]/g, "\\$&");
   let i = 0;
   while (i < n) {
     const c = chars[i++];
@@ -66,7 +66,10 @@ const globCache = new Map<string, RegExp>();
 
 export const globMatch = (path: string, pat: string): boolean => {
   let re = globCache.get(pat);
-  if (!re) globCache.set(pat, (re = globToRegExp(pat)));
+  if (!re) {
+    re = globToRegExp(pat);
+    globCache.set(pat, re);
+  }
   return re.test(path);
 };
 

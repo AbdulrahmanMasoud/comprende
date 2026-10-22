@@ -1,9 +1,10 @@
 // Which files a change touches, and when a verified file still counts as verified.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, symlinkSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { devNull } from "node:os";
 import { join } from "node:path";
+import { test } from "node:test";
 import {
   commitAll,
   ENV,
@@ -14,11 +15,11 @@ import {
   payload,
   read,
   runGate,
+  SUMMARY,
   saveAndCommit,
   setBaseConfig,
   setup,
   sh,
-  SUMMARY,
   throwsGate,
   tmp,
   write,

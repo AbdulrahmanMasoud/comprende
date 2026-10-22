@@ -1,9 +1,10 @@
 // The memory store: the learner profile and the project's .learning/ notes, driven through
 // `node dist/server.mjs call <tool>` as a black box.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { test } from "node:test";
 import { callTool, ENV, setup, throwsGate, tmp, write } from "./helpers.mjs";
 
 // The store's tools, bound to one test's COMPRENDE_HOME.

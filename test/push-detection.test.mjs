@@ -1,6 +1,7 @@
 // Does a shell command push? What the Claude hook treats as a push.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import { gate } from "./helpers.mjs";
 
 const PUSH_CASES = [

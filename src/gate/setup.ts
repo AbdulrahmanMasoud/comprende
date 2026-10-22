@@ -4,10 +4,10 @@ import { chmodSync, copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { withIgnoreLine } from "./changes.js";
 import { DEFAULT_CONFIG } from "./config.js";
-import { MAX_CONFIG_BYTES, atomicWrite, exists, lstat, readSmall } from "./files.js";
-import { RunResult, repoRoot, resolveBase, run } from "./git.js";
+import { atomicWrite, exists, lstat, MAX_CONFIG_BYTES, readSmall } from "./files.js";
+import { type RunResult, repoRoot, resolveBase, run } from "./git.js";
 import { installHooks } from "./hooks.js";
-import { CONFIG_PATH, GATE_FILES, GATE_REL, GateError, REPORT_INPUT, SELF, isObj, splitLines } from "./shared.js";
+import { CONFIG_PATH, GATE_FILES, GATE_REL, GateError, isObj, REPORT_INPUT, SELF, splitLines } from "./shared.js";
 
 export const WORKFLOW = `name: Ownership check
 
@@ -187,10 +187,12 @@ export function mergeClaudeSettings(path: string): string {
   // Never replace a value we don't understand: that would drop the user's settings.
   if (settings.hooks !== undefined && !isObj(settings.hooks))
     return `SKIPPED Claude hook: "hooks" in ${path} is not an object; add the hook by hand.`;
-  const hooks = (settings.hooks ??= {}) as Record<string, unknown>;
+  settings.hooks ??= {};
+  const hooks = settings.hooks as Record<string, unknown>;
   if (hooks.PreToolUse !== undefined && !Array.isArray(hooks.PreToolUse))
     return `SKIPPED Claude hook: "hooks.PreToolUse" in ${path} is not a list; add the hook by hand.`;
-  const groups = (hooks.PreToolUse ??= []) as { hooks?: { command?: string }[] }[];
+  hooks.PreToolUse ??= [];
+  const groups = hooks.PreToolUse as { hooks?: { command?: string }[] }[];
   for (const g of groups) {
     for (const h of g?.hooks ?? []) {
       if ((h?.command ?? "").includes("gate.mjs") && (h?.command ?? "").includes("claude-hook"))
@@ -198,7 +200,7 @@ export function mergeClaudeSettings(path: string): string {
     }
   }
   groups.push({ matcher: "Bash", hooks: [{ type: "command", command: CLAUDE_HOOK_COMMAND, timeout: 60 }] } as never);
-  atomicWrite(path, JSON.stringify(settings, null, 2) + "\n");
+  atomicWrite(path, `${JSON.stringify(settings, null, 2)}\n`);
   return `merged a Claude Code PreToolUse hook into ${path} (other settings kept)`;
 }
 
@@ -246,7 +248,7 @@ function codeowners(root: string, owner?: string | null): string {
     const prefix = !existing || existing.endsWith("\n") ? "" : "\n";
     atomicWrite(
       path,
-      existing + prefix + "# Ownership gate: changes to the gate need lead review\n" + fresh.join("\n") + "\n",
+      `${existing + prefix}# Ownership gate: changes to the gate need lead review\n${fresh.join("\n")}\n`,
     );
   }
   return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on 'Require review from Code Owners' in branch protection.`;
@@ -260,7 +262,7 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
   if (exists(target) && resolve(target) === resolve(SELF)) done.push(`${GATE_REL} is this file`);
   else if (exists(target) && !upgrade) {
     const same = readFileSync(target).equals(readFileSync(SELF));
-    done.push(`${GATE_REL} ` + (same ? "up to date" : "exists (pass --upgrade to replace)"));
+    done.push(`${GATE_REL} ${same ? "up to date" : "exists (pass --upgrade to replace)"}`);
   } else {
     mkdirSync(dirname(target), { recursive: true });
     copyFileSync(SELF, target);
@@ -278,7 +280,7 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
     } catch {
       cfg.base = "main";
     }
-    atomicWrite(cfgPath, JSON.stringify({ ownership_check: cfg }, null, 2) + "\n");
+    atomicWrite(cfgPath, `${JSON.stringify({ ownership_check: cfg }, null, 2)}\n`);
     done.push(`wrote ${CONFIG_PATH} (base: ${cfg.base}, mode: required)`);
   }
 

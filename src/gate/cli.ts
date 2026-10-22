@@ -14,12 +14,12 @@ import { appendFileSync, readFileSync, readSync } from "node:fs";
 import { collectChanges, isPlumbing } from "./changes.js";
 import { ci, jobSummary, mdSafe } from "./ci-summary.js";
 import { formatStatus, removeReportInput, save, status, verify } from "./commands.js";
-import { Config, isSensitive } from "./config.js";
+import { type Config, isSensitive } from "./config.js";
 import { currentBranch, repoRoot } from "./git.js";
 import { ALWAYS_ON, claudeHook, installHooks, prePush, sessionStart } from "./hooks.js";
 import { isPushCommand } from "./push-detect.js";
 import { parseReport, readReport, renderReport, reportRelpath } from "./report.js";
-import { CHECK_NAME, WORKFLOW, install, mergeClaudeSettings, protect } from "./setup.js";
+import { CHECK_NAME, install, mergeClaudeSettings, protect, WORKFLOW } from "./setup.js";
 import { GATE_FILES, GATE_REL, GATE_VERSION, GateError, isObj, sorted } from "./shared.js";
 
 const HELP = `Ownership gate (comprende)
@@ -146,7 +146,7 @@ export function main(argv: string[]): number {
   }
   const { cmd, opts, rest } = args;
   const o = (k: string) => (typeof opts[k] === "string" ? (opts[k] as string) : null);
-  const out = (s: string) => process.stdout.write(s + "\n");
+  const out = (s: string) => process.stdout.write(`${s}\n`);
   try {
     switch (cmd) {
       case "":
@@ -179,7 +179,7 @@ export function main(argv: string[]): number {
       case "verify": {
         let labels: string[] = [];
         const lj = o("labels-json");
-        if (lj && lj.trim()) {
+        if (lj?.trim()) {
           try {
             const parsed = JSON.parse(lj);
             if (!Array.isArray(parsed)) throw new Error("not a list");
@@ -213,7 +213,7 @@ export function main(argv: string[]): number {
           return 0;
         }
         ci(mode === "required" ? "error" : "warning", messages);
-        process.stderr.write("Ownership check failed:\n- " + messages.join("\n- ") + "\n");
+        process.stderr.write(`Ownership check failed:\n- ${messages.join("\n- ")}\n`);
         return mode === "required" ? 1 : 0;
       }
       case "pre-push":

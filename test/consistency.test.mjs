@@ -1,9 +1,10 @@
 // The plugin's files agree with each other: manifests, built copies, docs and the demo.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ENV, NODE, out, plugin, REPO, sh, SUMMARY, tmp } from "./helpers.mjs";
+import { test } from "node:test";
+import { ENV, NODE, REPO, SUMMARY, sh, tmp } from "./helpers.mjs";
 
 const read = (rel) => readFileSync(join(REPO, rel));
 

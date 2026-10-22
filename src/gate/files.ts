@@ -34,14 +34,6 @@ export const isFile = (p: string) => {
   }
 };
 
-const isDir = (p: string) => {
-  try {
-    return statSync(p).isDirectory();
-  } catch {
-    return false;
-  }
-};
-
 export const exists = (p: string) => existsSync(p);
 
 export const MAX_CONFIG_BYTES = 256 * 1024;

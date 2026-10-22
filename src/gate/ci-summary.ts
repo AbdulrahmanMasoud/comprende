@@ -1,15 +1,15 @@
 // What CI shows reviewers: the job summary and annotations. Only what was verified,
 // never scores, wrong answers or attempts, and PR-author text is escaped.
-import { Config, DEFAULT_CONFIG, isSensitive, loadConfig, rulesForVerify } from "./config.js";
+import { type Config, DEFAULT_CONFIG, isSensitive, loadConfig, rulesForVerify } from "./config.js";
 import { resolveBase } from "./git.js";
-import { Report, readReport, reportRelpath } from "./report.js";
+import { type Report, readReport, reportRelpath } from "./report.js";
 import { GATE_VERSION, get, isObj, own, sorted, splitLines } from "./shared.js";
 
 /** Report text comes from the PR author: no HTML, images, links, table breaks
  *  or code spans in the reviewer's summary. */
 export function mdSafe(text: string): string {
   let t = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  for (const ch of ["\\", "[", "]", "|", "`", "*", "_"]) t = t.split(ch).join("\\" + ch);
+  for (const ch of ["\\", "[", "]", "|", "`", "*", "_"]) t = t.split(ch).join(`\\${ch}`);
   return t;
 }
 
@@ -77,7 +77,7 @@ export function jobSummary(
       `<sub>🔒 sensitive · report: \`${reportRelpath(branch)}\` · gate v${GATE_VERSION}. The report shows what was verified, never scores or mistakes.</sub>`,
     );
   }
-  return (out.join("\n") + "\n").slice(0, 60_000);
+  return `${out.join("\n")}\n`.slice(0, 60_000);
 }
 
 export function ci(kind: string, messages: string[]): void {

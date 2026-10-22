@@ -4,14 +4,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
-  NOTE_MAX_CHARS,
-  StoreError,
   atomicWrite,
   checkNoSecrets,
   dict,
   expandHome,
-  isRecord,
   isoDate,
+  isRecord,
+  NOTE_MAX_CHARS,
+  StoreError,
   slug,
   today,
   truncate,
@@ -145,7 +145,7 @@ export function recordTopic(topic: string, event: TopicEvent, note = "", project
   }
   addEvidence(entry, note, project);
   saveProfile(profile);
-  return `Recorded \`${key}\`: level=${entry.level}` + (entry.explained_on ? `, explained ${entry.explained_on}` : "");
+  return `Recorded \`${key}\`: level=${entry.level}${entry.explained_on ? `, explained ${entry.explained_on}` : ""}`;
 }
 
 /**

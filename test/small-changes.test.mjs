@@ -1,9 +1,10 @@
 // The fast path for small changes: one question and a shorter summary.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { commitAll, gate, git, read, REPO_GATE, runGate, setup, sh, throwsGate, write } from "./helpers.mjs";
+import { test } from "node:test";
+import { commitAll, gate, git, REPO_GATE, read, runGate, setup, sh, throwsGate, write } from "./helpers.mjs";
 
 const SHORT = "Fixed the off-by-one in the greeting.";
 

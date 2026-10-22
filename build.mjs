@@ -2,8 +2,9 @@
 // Node: no node_modules at runtime, no install step for plugin users.
 // The gate and learning scripts are also copied into the skill folder so the
 // skill works on its own.
+
+import { chmodSync, copyFileSync, existsSync, readFileSync } from "node:fs";
 import { build } from "esbuild";
-import { copyFileSync, existsSync, readFileSync, chmodSync } from "node:fs";
 
 const gateSrc = readFileSync("src/gate/shared.ts", "utf8");
 const version = gateSrc.match(/export const GATE_VERSION = (\d+)/)?.[1];

@@ -6,11 +6,11 @@ import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { verify } from "./commands.js";
 import { loadConfig } from "./config.js";
-import { MAX_CONFIG_BYTES, exists, isFile, isSymlink, lstat, readSmall } from "./files.js";
+import { exists, isFile, isSymlink, lstat, MAX_CONFIG_BYTES, readSmall } from "./files.js";
 import { git, repoRoot, resolveBase } from "./git.js";
 import { isPushCommand } from "./push-detect.js";
 import { uncommittedReport } from "./report.js";
-import { CONFIG_PATH, GATE_REL, GateError, SELF, ZERO_SHA, splitLines } from "./shared.js";
+import { CONFIG_PATH, GATE_REL, GateError, SELF, splitLines, ZERO_SHA } from "./shared.js";
 
 function projectHasGateHook(root: string): boolean {
   try {
@@ -61,7 +61,7 @@ export function claudeHook(stdinText: string, fromPlugin = false): number {
     );
     return 2;
   }
-  process.stderr.write("Blocked by the ownership gate:\n- " + problems.join("\n- ") + "\n");
+  process.stderr.write(`Blocked by the ownership gate:\n- ${problems.join("\n- ")}\n`);
   return 2;
 }
 
@@ -117,7 +117,7 @@ function gateContext(stdinText: string): string[] {
           lines.push(
             "The local pre-push git hook was just installed in this clone; mention it to the user in one line (set OWNERSHIP_GATE_NO_AUTO_HOOK=1 to opt out).",
           );
-        } else if (result.startsWith("SKIPPED")) lines.push("The gate's pre-push hook wasn't added: " + result);
+        } else if (result.startsWith("SKIPPED")) lines.push(`The gate's pre-push hook wasn't added: ${result}`);
       }
     }
     return lines;
@@ -157,7 +157,7 @@ export function prePush(stdinText: string, repo?: string | null): number {
     }
     if (passed) continue;
     const label = mode === "required" ? "blocked" : "warning";
-    process.stderr.write(`\nOwnership gate ${label} for '${branch}':\n- ` + problems.join("\n- ") + "\n");
+    process.stderr.write(`\nOwnership gate ${label} for '${branch}':\n- ${problems.join("\n- ")}\n`);
     failed ||= mode === "required";
   }
   if (failed) process.stderr.write("\n(Bypassing with --no-verify only delays this: CI runs the same check.)\n\n");
@@ -218,7 +218,7 @@ export function installHooks(repo?: string | null, auto = false): string[] {
       ];
     }
     const rel = relative(realpathSync(root), custom);
-    if (rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel)) {
+    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
       return [
         `SKIPPED pre-push hook: core.hooksPath (${configured}) is outside this repo and may be shared by other repos. Add this line to its pre-push hook yourself: ${manualLine}`,
       ];

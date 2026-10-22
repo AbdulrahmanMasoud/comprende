@@ -5,7 +5,6 @@
 import * as fs from "node:fs";
 import { basename, dirname, join, sep } from "node:path";
 import {
-  StoreError,
   atomicWrite,
   checkNoSecrets,
   isDirectory,
@@ -13,6 +12,7 @@ import {
   isSymlink,
   lines,
   resolveUserPath,
+  StoreError,
   slug,
   today,
 } from "./common.js";

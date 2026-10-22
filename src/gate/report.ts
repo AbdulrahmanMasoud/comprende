@@ -1,7 +1,7 @@
 // The ownership report: a markdown file for reviewers with a JSON data block for the gate,
 // at .learning/checks/<branch>.md.
 import { join } from "node:path";
-import { MAX_REPORT_BYTES, lstat, readSmall } from "./files.js";
+import { lstat, MAX_REPORT_BYTES, readSmall } from "./files.js";
 import { currentBranch, git, hasFile, showSmall } from "./git.js";
 import { CHECKS_DIR, GATE_VERSION, GateError, get, isObj, own, sorted } from "./shared.js";
 
@@ -32,7 +32,7 @@ function stableJson(value: unknown, indent?: number): string {
 /** Percent-encode everything but letters, digits and `-_.~`. Used for the
  *  report's file name, so it's reversible: feature/x and feature-x never collide. */
 function quoteAll(s: string): string {
-  return encodeURIComponent(s).replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+  return encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 export const reportRelpath = (branch: string) => `${CHECKS_DIR}/${quoteAll(branch)}.md`;
@@ -48,12 +48,12 @@ export function renderReport(data: Report & { branch: string; date: string; base
     "## Verified understanding",
   ];
   for (const path of sorted(Object.keys(data.verified)))
-    lines.push(`- \`${path}\` — ` + (get(data.verified, path) ?? []).join("; "));
+    lines.push(`- \`${path}\` — ${(get(data.verified, path) ?? []).join("; ")}`);
   const unverified = sorted(Object.keys(data.files).filter((p) => !own(data.verified, p)));
   if (unverified.length)
     lines.push(
       "",
-      "Also in this change (reviewed, no specific questions): " + unverified.map((p) => `\`${p}\``).join(", "),
+      `Also in this change (reviewed, no specific questions): ${unverified.map((p) => `\`${p}\``).join(", ")}`,
     );
   lines.push("", DATA_MARKER, "```json", stableJson(data, 1), "```", "");
   return lines.join("\n");

@@ -23761,7 +23761,7 @@ function recordTopic(topic, event, note = "", project = "") {
   }
   addEvidence(entry, note, project);
   saveProfile(profile);
-  return `Recorded \`${key}\`: level=${entry.level}` + (entry.explained_on ? `, explained ${entry.explained_on}` : "");
+  return `Recorded \`${key}\`: level=${entry.level}${entry.explained_on ? `, explained ${entry.explained_on}` : ""}`;
 }
 function recordCheckpoint(topic, question, correct, project = "") {
   checkNoSecrets(question);

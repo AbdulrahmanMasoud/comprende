@@ -9,9 +9,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Config, isSensitive, noQuestions } from "./config.js";
+import { type Config, isSensitive, noQuestions } from "./config.js";
 import {
-  WORKTREE_SAFE,
   decodePath,
   git,
   gitBytes,
@@ -22,24 +21,25 @@ import {
   run,
   showSmall,
   splitNul,
+  WORKTREE_SAFE,
   withWorktreeIndex,
 } from "./git.js";
 import { matches } from "./glob.js";
-import { Report } from "./report.js";
+import type { Report } from "./report.js";
 import {
+  dict,
   FEATURES_RE,
   GATE_FILES,
   GATE_REL,
   GateError,
-  REGULAR_MODES,
-  REPORT_INPUT,
-  ZERO_SHA,
-  dict,
   get,
   isObj,
   own,
+  REGULAR_MODES,
+  REPORT_INPUT,
   sorted,
   splitLines,
+  ZERO_SHA,
 } from "./shared.js";
 
 // Exact shapes only (no subfolders, markdown only), so nothing executable can hide here.
@@ -175,7 +175,7 @@ function matchKind(root: string, verified: unknown, current: Change): "exact" | 
   const [vBlob, vBase, cBase, cBlob] = blobs as Buffer[];
   if (blobs.some((b) => (b as Buffer).subarray(0, 8000).includes(0))) return null; // binary: must be re-verified
   const merged = merge3(vBlob, vBase, cBase);
-  return merged !== null && merged.equals(cBlob) ? "merged" : null;
+  return merged?.equals(cBlob) ? "merged" : null;
 }
 
 /** Blob ids introduced on the branch (reachable from target, not from the fork

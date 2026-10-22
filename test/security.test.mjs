@@ -1,9 +1,10 @@
 // The plugin in repos you don't trust: no repo code runs, nothing is followed out of the repo,
 // and nothing from the environment changes what the gate does.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { test } from "node:test";
 import {
   callTool,
   commitAll,
@@ -11,7 +12,6 @@ import {
   gate,
   gateCli,
   git,
-  out,
   plugin,
   pushEvent,
   REPO_GATE,

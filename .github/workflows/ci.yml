@@ -24,6 +24,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
       - name: dist/ matches the source
         run: |
           npm run build

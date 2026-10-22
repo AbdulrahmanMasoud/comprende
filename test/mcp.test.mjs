@@ -1,11 +1,12 @@
 // The MCP server end to end: a real stdio session, and the gate tools it exposes.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { callTool, ENV, git, NODE, out, REPO_GATE, SERVER, setup, tmp, write } from "./helpers.mjs";
+import { callTool, ENV, git, NODE, REPO_GATE, SERVER, setup, tmp, write } from "./helpers.mjs";
 
 /** Node version of impl.code_version_stub / code_write_marker. */
 const codeVersionStub = (version, marker) =>

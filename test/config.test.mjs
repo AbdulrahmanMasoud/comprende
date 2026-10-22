@@ -1,8 +1,9 @@
 // Config: strict validation, Comprende's glob rules, and rules taken from the base branch.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { test } from "node:test";
 import {
   commitAll,
   ENV,

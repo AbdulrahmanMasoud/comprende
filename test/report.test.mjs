@@ -1,8 +1,9 @@
 // The report file: where it lives, what it holds, and when it can't be trusted.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { test } from "node:test";
 import { commitAll, gate, git, INPUT, payload, runGate, setup, sh, throwsGate, write } from "./helpers.mjs";
 
 test("report file names never collide, and the report is readable like any repo file", (t) => {

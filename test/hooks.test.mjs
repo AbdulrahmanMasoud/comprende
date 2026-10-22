@@ -1,5 +1,5 @@
 // The hooks: Claude Code's PreToolUse and SessionStart, and git's pre-push.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -13,6 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import {
   commitAll,

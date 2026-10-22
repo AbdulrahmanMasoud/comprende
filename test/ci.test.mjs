@@ -1,25 +1,11 @@
 // What runs in CI: the workflow, verify on a fresh clone, and the job summary reviewers see.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import YAML from "yaml";
-import { parse as parseYaml } from "yaml";
-import {
-  commitAll,
-  ENV,
-  gate,
-  git,
-  payload,
-  read,
-  REPO_GATE,
-  runGate,
-  setup,
-  sh,
-  SUMMARY,
-  tmp,
-  write,
-} from "./helpers.mjs";
+import { test } from "node:test";
+import YAML, { parse as parseYaml } from "yaml";
+import { commitAll, ENV, gate, git, payload, REPO_GATE, read, runGate, SUMMARY, setup, sh, write } from "./helpers.mjs";
 
 /** JS equivalent of impl.code_print_exit (node flavour). */
 function codePrintExit(message, code, toStderr = false) {

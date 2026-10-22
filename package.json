@@ -12,7 +12,7 @@
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test --test-concurrency=4 test/*.test.mjs",
-    "check": "npm run typecheck && npm run build && npm test",
+    "check": "npm run typecheck && npm run lint && npm run build && npm test",
     "lint": "biome check --error-on-warnings .",
     "format": "biome check --write ."
   },

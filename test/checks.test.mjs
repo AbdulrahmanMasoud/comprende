@@ -1,17 +1,18 @@
 // The ownership check end to end: status, save, verify, and what makes a report stale.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { test } from "node:test";
 import {
   commitAll,
   gate,
   git,
   payload,
   read,
+  SUMMARY,
   saveAndCommit,
   setup,
-  SUMMARY,
   throwsGate,
   tmp,
   write,

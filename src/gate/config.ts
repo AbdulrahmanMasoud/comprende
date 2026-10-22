@@ -1,7 +1,7 @@
 // .learning/config.json: defaults, strict validation, and where the rules come from
 // (the base branch, so a PR can't loosen its own check).
 import { join } from "node:path";
-import { MAX_CONFIG_BYTES, lstat, readSmall } from "./files.js";
+import { lstat, MAX_CONFIG_BYTES, readSmall } from "./files.js";
 import { hasFile, showSmall } from "./git.js";
 import { globMatch, matches } from "./glob.js";
 import { CONFIG_PATH, GateError, isObj } from "./shared.js";
@@ -178,7 +178,7 @@ export function rulesForLocal(root: string, baseRef: string): Config {
  *  were the folder, so '**\/payments/**' covers it. */
 export function isSensitive(path: string, mode: string, cfg: Pick<Config, "sensitive">): boolean {
   if (mode === "160000") return true;
-  return matches(path, cfg.sensitive) || matches(path + "/_", cfg.sensitive);
+  return matches(path, cfg.sensitive) || matches(`${path}/_`, cfg.sensitive);
 }
 
 /** Ignored files don't need questions — unless they're also sensitive. */

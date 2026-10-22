@@ -309,7 +309,7 @@ function globToRegExp(pat) {
   const n = chars.length;
   const res = [];
   const escapeOutside = (c) => c.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-  const escapeInSet = (c) => c.replace(/[\\\]\[^-]/g, "\\$&");
+  const escapeInSet = (c) => c.replace(/[\\\][^-]/g, "\\$&");
   let i = 0;
   while (i < n) {
     const c = chars[i++];
@@ -349,7 +349,10 @@ function globToRegExp(pat) {
 var globCache = /* @__PURE__ */ new Map();
 var globMatch = (path, pat) => {
   let re = globCache.get(pat);
-  if (!re) globCache.set(pat, re = globToRegExp(pat));
+  if (!re) {
+    re = globToRegExp(pat);
+    globCache.set(pat, re);
+  }
   return re.test(path);
 };
 function matches(path, patterns) {
@@ -491,7 +494,7 @@ function rulesForLocal(root, baseRef) {
 }
 function isSensitive(path, mode, cfg) {
   if (mode === "160000") return true;
-  return matches(path, cfg.sensitive) || matches(path + "/_", cfg.sensitive);
+  return matches(path, cfg.sensitive) || matches(`${path}/_`, cfg.sensitive);
 }
 var noQuestions = (path, mode, cfg) => matches(path, cfg.ignore) && !isSensitive(path, mode, cfg);
 
@@ -583,7 +586,7 @@ function matchKind(root, verified, current) {
   const [vBlob, vBase, cBase, cBlob] = blobs;
   if (blobs.some((b) => b.subarray(0, 8e3).includes(0))) return null;
   const merged = merge3(vBlob, vBase, cBase);
-  return merged !== null && merged.equals(cBlob) ? "merged" : null;
+  return merged?.equals(cBlob) ? "merged" : null;
 }
 function branchBlobs(root, target, mb) {
   const out = git(root, ["rev-list", "--objects", target, "--not", mb], { check: false });
@@ -679,7 +682,7 @@ function stableJson(value, indent) {
   return JSON.stringify(sortDeep(value), null, indent);
 }
 function quoteAll(s) {
-  return encodeURIComponent(s).replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+  return encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 var reportRelpath = (branch) => `${CHECKS_DIR}/${quoteAll(branch)}.md`;
 function renderReport(data) {
@@ -693,12 +696,12 @@ function renderReport(data) {
     "## Verified understanding"
   ];
   for (const path of sorted(Object.keys(data.verified)))
-    lines.push(`- \`${path}\` \u2014 ` + (get(data.verified, path) ?? []).join("; "));
+    lines.push(`- \`${path}\` \u2014 ${(get(data.verified, path) ?? []).join("; ")}`);
   const unverified = sorted(Object.keys(data.files).filter((p) => !own(data.verified, p)));
   if (unverified.length)
     lines.push(
       "",
-      "Also in this change (reviewed, no specific questions): " + unverified.map((p) => `\`${p}\``).join(", ")
+      `Also in this change (reviewed, no specific questions): ${unverified.map((p) => `\`${p}\``).join(", ")}`
     );
   lines.push("", DATA_MARKER, "```json", stableJson(data, 1), "```", "");
   return lines.join("\n");
@@ -806,7 +809,7 @@ function uncommittedReport(root) {
 // src/gate/ci-summary.ts
 function mdSafe(text) {
   let t = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  for (const ch of ["\\", "[", "]", "|", "`", "*", "_"]) t = t.split(ch).join("\\" + ch);
+  for (const ch of ["\\", "[", "]", "|", "`", "*", "_"]) t = t.split(ch).join(`\\${ch}`);
   return t;
 }
 function jobSummary(root, branch, rev, base, passed, messages, mode) {
@@ -857,7 +860,8 @@ function jobSummary(root, branch, rev, base, passed, messages, mode) {
       `<sub>\u{1F512} sensitive \xB7 report: \`${reportRelpath(branch)}\` \xB7 gate v${GATE_VERSION}. The report shows what was verified, never scores or mistakes.</sub>`
     );
   }
-  return (out.join("\n") + "\n").slice(0, 6e4);
+  return `${out.join("\n")}
+`.slice(0, 6e4);
 }
 function ci(kind, messages) {
   if (process.env.GITHUB_ACTIONS === "true")
@@ -952,7 +956,7 @@ function formatStatus(s) {
     ];
     lines.push(`- ${f.path} [${tags.join(", ")}]`);
   }
-  if (s.must_verify.length) lines.push("Must be verified before saving: " + s.must_verify.join(", "));
+  if (s.must_verify.length) lines.push(`Must be verified before saving: ${s.must_verify.join(", ")}`);
   if (s.small_change) {
     lines.push(
       `Small change (${changedLinesText(s.changed_lines ?? 0)}): one question is enough, and the summary needs at least ${s.min_summary_chars} characters.`
@@ -994,7 +998,7 @@ function save(payload, repo, base, branch) {
   const missing = needsVerification(changes, st, old, cfg).filter((p) => !own(verified, p));
   if (missing.length)
     throw new GateError(
-      "Still needs verification (sensitive, or new/changed since the last report): " + missing.join(", ")
+      `Still needs verification (sensitive, or new/changed since the last report): ${missing.join(", ")}`
     );
   if (old) {
     for (const [p, concepts] of Object.entries(old.verified)) {
@@ -1031,15 +1035,15 @@ function verify(repo, base, branch, rev = "HEAD", labels = []) {
   const by = (s) => Object.keys(changes).filter((p) => st[p] === s);
   const problems = [];
   const unverifiedSensitive = Object.entries(changes).filter(([p, c]) => isSensitive(p, c.mode, cfg) && !get(report.verified, p)?.length).map(([p]) => p);
-  if (by("new").length) problems.push("Changed after the check (not in the report): " + by("new").join(", "));
+  if (by("new").length) problems.push(`Changed after the check (not in the report): ${by("new").join(", ")}`);
   if (by("stale").length)
-    problems.push("Changed after the check (differs from what was verified): " + by("stale").join(", "));
+    problems.push(`Changed after the check (differs from what was verified): ${by("stale").join(", ")}`);
   if (by("rebased").length)
     problems.push(
-      "Verified before a rebase \u2014 save the report again, no new questions needed: " + by("rebased").join(", ")
+      `Verified before a rebase \u2014 save the report again, no new questions needed: ${by("rebased").join(", ")}`
     );
   if (unverifiedSensitive.length)
-    problems.push("Sensitive files not explicitly verified: " + unverifiedSensitive.join(", "));
+    problems.push(`Sensitive files not explicitly verified: ${unverifiedSensitive.join(", ")}`);
   const len = charCount(trimSummary(report.summary));
   const shortOk = () => len >= cfg.small_summary_chars && smallChange(root, baseRef, mb, rev, changes, cfg).small;
   if (len < cfg.min_summary_chars && !shortOk()) problems.push("The developer's summary is missing or too short.");
@@ -1222,7 +1226,9 @@ function claudeHook(stdinText, fromPlugin = false) {
     );
     return 2;
   }
-  process.stderr.write("Blocked by the ownership gate:\n- " + problems.join("\n- ") + "\n");
+  process.stderr.write(`Blocked by the ownership gate:
+- ${problems.join("\n- ")}
+`);
   return 2;
 }
 var MIN_NODE = 20;
@@ -1259,7 +1265,7 @@ function gateContext(stdinText) {
           lines.push(
             "The local pre-push git hook was just installed in this clone; mention it to the user in one line (set OWNERSHIP_GATE_NO_AUTO_HOOK=1 to opt out)."
           );
-        } else if (result.startsWith("SKIPPED")) lines.push("The gate's pre-push hook wasn't added: " + result);
+        } else if (result.startsWith("SKIPPED")) lines.push(`The gate's pre-push hook wasn't added: ${result}`);
       }
     }
     return lines;
@@ -1299,7 +1305,8 @@ function prePush(stdinText, repo) {
     const label = mode === "required" ? "blocked" : "warning";
     process.stderr.write(`
 Ownership gate ${label} for '${branch}':
-- ` + problems.join("\n- ") + "\n");
+- ${problems.join("\n- ")}
+`);
     failed ||= mode === "required";
   }
   if (failed) process.stderr.write("\n(Bypassing with --no-verify only delays this: CI runs the same check.)\n\n");
@@ -1348,7 +1355,7 @@ function installHooks(repo, auto = false) {
       ];
     }
     const rel = relative(realpathSync2(root), custom);
-    if (rel === ".." || rel.startsWith(".." + sep) || isAbsolute2(rel)) {
+    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute2(rel)) {
       return [
         `SKIPPED pre-push hook: core.hooksPath (${configured}) is outside this repo and may be shared by other repos. Add this line to its pre-push hook yourself: ${manualLine}`
       ];
@@ -1533,10 +1540,12 @@ function mergeClaudeSettings(path) {
   }
   if (settings.hooks !== void 0 && !isObj(settings.hooks))
     return `SKIPPED Claude hook: "hooks" in ${path} is not an object; add the hook by hand.`;
-  const hooks = settings.hooks ??= {};
+  settings.hooks ??= {};
+  const hooks = settings.hooks;
   if (hooks.PreToolUse !== void 0 && !Array.isArray(hooks.PreToolUse))
     return `SKIPPED Claude hook: "hooks.PreToolUse" in ${path} is not a list; add the hook by hand.`;
-  const groups = hooks.PreToolUse ??= [];
+  hooks.PreToolUse ??= [];
+  const groups = hooks.PreToolUse;
   for (const g of groups) {
     for (const h of g?.hooks ?? []) {
       if ((h?.command ?? "").includes("gate.mjs") && (h?.command ?? "").includes("claude-hook"))
@@ -1544,7 +1553,8 @@ function mergeClaudeSettings(path) {
     }
   }
   groups.push({ matcher: "Bash", hooks: [{ type: "command", command: CLAUDE_HOOK_COMMAND, timeout: 60 }] });
-  atomicWrite(path, JSON.stringify(settings, null, 2) + "\n");
+  atomicWrite(path, `${JSON.stringify(settings, null, 2)}
+`);
   return `merged a Claude Code PreToolUse hook into ${path} (other settings kept)`;
 }
 function ignoreReportInput(root) {
@@ -1584,7 +1594,9 @@ function codeowners(root, owner) {
     const prefix = !existing || existing.endsWith("\n") ? "" : "\n";
     atomicWrite(
       path,
-      existing + prefix + "# Ownership gate: changes to the gate need lead review\n" + fresh.join("\n") + "\n"
+      `${existing + prefix}# Ownership gate: changes to the gate need lead review
+${fresh.join("\n")}
+`
     );
   }
   return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on 'Require review from Code Owners' in branch protection.`;
@@ -1597,7 +1609,7 @@ function install(repo, upgrade = false, owner) {
   if (exists(target) && resolve4(target) === resolve4(SELF)) done.push(`${GATE_REL} is this file`);
   else if (exists(target) && !upgrade) {
     const same = readFileSync2(target).equals(readFileSync2(SELF));
-    done.push(`${GATE_REL} ` + (same ? "up to date" : "exists (pass --upgrade to replace)"));
+    done.push(`${GATE_REL} ${same ? "up to date" : "exists (pass --upgrade to replace)"}`);
   } else {
     mkdirSync3(dirname4(target), { recursive: true });
     copyFileSync2(SELF, target);
@@ -1614,7 +1626,8 @@ function install(repo, upgrade = false, owner) {
     } catch {
       cfg.base = "main";
     }
-    atomicWrite(cfgPath, JSON.stringify({ ownership_check: cfg }, null, 2) + "\n");
+    atomicWrite(cfgPath, `${JSON.stringify({ ownership_check: cfg }, null, 2)}
+`);
     done.push(`wrote ${CONFIG_PATH} (base: ${cfg.base}, mode: required)`);
   }
   const wf = join8(root, ".github", "workflows", "ownership-check.yml");
@@ -1748,7 +1761,8 @@ ${HELP}`);
   }
   const { cmd, opts, rest } = args;
   const o = (k) => typeof opts[k] === "string" ? opts[k] : null;
-  const out = (s) => process.stdout.write(s + "\n");
+  const out = (s) => process.stdout.write(`${s}
+`);
   try {
     switch (cmd) {
       case "":
@@ -1781,7 +1795,7 @@ ${HELP}`);
       case "verify": {
         let labels = [];
         const lj = o("labels-json");
-        if (lj && lj.trim()) {
+        if (lj?.trim()) {
           try {
             const parsed = JSON.parse(lj);
             if (!Array.isArray(parsed)) throw new Error("not a list");
@@ -1814,7 +1828,9 @@ ${HELP}`);
           return 0;
         }
         ci(mode === "required" ? "error" : "warning", messages);
-        process.stderr.write("Ownership check failed:\n- " + messages.join("\n- ") + "\n");
+        process.stderr.write(`Ownership check failed:
+- ${messages.join("\n- ")}
+`);
         return mode === "required" ? 1 : 0;
       }
       case "pre-push":

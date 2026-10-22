@@ -1,5 +1,5 @@
 // Turning the gate on: install (and what it writes), and protect (the GitHub ruleset).
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import {
   accessSync,
@@ -13,6 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { delimiter, join } from "node:path";
+import { test } from "node:test";
 import {
   commitAll,
   ENV,
@@ -20,9 +21,8 @@ import {
   git,
   gitTry,
   INPUT,
-  out,
-  read,
   REPO_GATE,
+  read,
   setup,
   sh,
   throwsGate,

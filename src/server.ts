@@ -11,7 +11,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
-import { StoreError, resolveUserPath } from "./store/common.js";
+import { resolveUserPath, StoreError } from "./store/common.js";
 import { EVENTS, progressReport, recordCheckpoint, recordTopic, setPreference } from "./store/profile.js";
 import { addDecision, learningContext, searchDecisions, updateMap } from "./store/project.js";
 

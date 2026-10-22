@@ -2,24 +2,32 @@
 // verify (does a commit match its report). The hooks and CI all call verify.
 import { realpathSync, unlinkSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { SAME, State, changedLinesText, collectChanges, needsVerification, smallChange, states } from "./changes.js";
+import {
+  changedLinesText,
+  collectChanges,
+  needsVerification,
+  SAME,
+  type State,
+  smallChange,
+  states,
+} from "./changes.js";
 import { isSensitive, loadConfig, noQuestions, rulesForLocal, rulesForVerify } from "./config.js";
 import { atomicWrite, exists, isFile, isSymlink, readSmall } from "./files.js";
 import { currentBranch, hasFile, repoRoot, resolveBase, showSmall } from "./git.js";
 import { matches } from "./glob.js";
 import { previousReport, readReport, renderReport, reportRelpath } from "./report.js";
 import {
+  dict,
   GATE_REL,
   GATE_VERSION,
   GateError,
-  REPORT_INPUT,
-  VERSION_RE,
-  dict,
   get,
   isObj,
   own,
+  REPORT_INPUT,
   sorted,
   today,
+  VERSION_RE,
 } from "./shared.js";
 
 // English only: terminals draw Arabic letters in reverse order. The skill still understands "اختبرني".
@@ -124,7 +132,7 @@ export function formatStatus(s: Status): string {
     ];
     lines.push(`- ${f.path} [${tags.join(", ")}]`);
   }
-  if (s.must_verify.length) lines.push("Must be verified before saving: " + s.must_verify.join(", "));
+  if (s.must_verify.length) lines.push(`Must be verified before saving: ${s.must_verify.join(", ")}`);
   if (s.small_change) {
     lines.push(
       `Small change (${changedLinesText(s.changed_lines ?? 0)}): one question is enough, and the summary needs at least ${s.min_summary_chars} characters.`,
@@ -178,7 +186,7 @@ export function save(
   const missing = needsVerification(changes, st, old, cfg).filter((p) => !own(verified, p));
   if (missing.length)
     throw new GateError(
-      "Still needs verification (sensitive, or new/changed since the last report): " + missing.join(", "),
+      `Still needs verification (sensitive, or new/changed since the last report): ${missing.join(", ")}`,
     );
   if (old) {
     // keep earlier verification for files whose verified change is intact
@@ -228,15 +236,15 @@ export function verify(
   const unverifiedSensitive = Object.entries(changes)
     .filter(([p, c]) => isSensitive(p, c.mode, cfg) && !get(report.verified, p)?.length)
     .map(([p]) => p);
-  if (by("new").length) problems.push("Changed after the check (not in the report): " + by("new").join(", "));
+  if (by("new").length) problems.push(`Changed after the check (not in the report): ${by("new").join(", ")}`);
   if (by("stale").length)
-    problems.push("Changed after the check (differs from what was verified): " + by("stale").join(", "));
+    problems.push(`Changed after the check (differs from what was verified): ${by("stale").join(", ")}`);
   if (by("rebased").length)
     problems.push(
-      "Verified before a rebase — save the report again, no new questions needed: " + by("rebased").join(", "),
+      `Verified before a rebase — save the report again, no new questions needed: ${by("rebased").join(", ")}`,
     );
   if (unverifiedSensitive.length)
-    problems.push("Sensitive files not explicitly verified: " + unverifiedSensitive.join(", "));
+    problems.push(`Sensitive files not explicitly verified: ${unverifiedSensitive.join(", ")}`);
   const len = charCount(trimSummary(report.summary));
   const shortOk = () => len >= cfg.small_summary_chars && smallChange(root, baseRef, mb, rev, changes, cfg).small;
   if (len < cfg.min_summary_chars && !shortOk()) problems.push("The developer's summary is missing or too short.");
