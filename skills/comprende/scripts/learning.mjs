@@ -6,10 +6,10 @@
 import * as fs2 from "node:fs";
 import { join as join2 } from "node:path";
 
-// src/store.ts
+// src/store/common.ts
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { basename, dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 var SLUG_MAX_CHARS = 60;
 var truncate = (s, n) => s.length <= n ? s : Array.from(s).slice(0, n).join("");
 function today() {
@@ -49,8 +49,6 @@ var SECRET_PATTERNS = [
   new RegExp(`${START}[a-z]+://[^/\\s:]+:[^@\\s]+@`, "iu")
   // user:pass@host URLs
 ];
-var UTF8 = new TextDecoder("utf-8", { fatal: true });
-var LENIENT_UTF8 = new TextDecoder("utf-8");
 
 // src/learning.ts
 var USAGE = `Manage a project's .learning/ folder for the comprende skill.

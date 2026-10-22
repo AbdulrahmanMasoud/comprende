@@ -1,7 +1,7 @@
 // MCP server for Comprende.
 //
 // This file is deliberately thin: it describes the tools to the model and
-// forwards calls to store.ts (memory) or to the bundled gate.mjs (ownership
+// forwards calls to src/store/ (memory) or to the bundled gate.mjs (ownership
 // check). The real logic lives there, which keeps it testable without a server.
 import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -11,7 +11,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
-import * as store from "./store.js";
+import { StoreError, resolveUserPath } from "./store/common.js";
+import { EVENTS, progressReport, recordCheckpoint, recordTopic, setPreference } from "./store/profile.js";
+import { addDecision, learningContext, searchDecisions, updateMap } from "./store/project.js";
 
 const INSTRUCTIONS = `\
 Memory for explaining code while building it. It remembers what the user
@@ -35,7 +37,7 @@ async function call(fn: () => string): Promise<string> {
   try {
     return fn();
   } catch (e) {
-    if (e instanceof store.StoreError) throw new ToolError(e.message);
+    if (e instanceof StoreError) throw new ToolError(e.message);
     throw e;
   }
 }
@@ -58,7 +60,7 @@ function gitEnv(): NodeJS.ProcessEnv {
 
 /** The top of the git working tree that contains `path` (a file or folder). */
 function gateRepoRoot(path: string): string {
-  let start = store.resolveUserPath(path || process.cwd());
+  let start = resolveUserPath(path || process.cwd());
   const st = fs.statSync(start, { throwIfNoEntry: false });
   if (!st) throw new ToolError(`Path does not exist: ${start}`);
   if (st.isFile()) start = dirname(start);
@@ -195,7 +197,7 @@ const TOOLS: Record<string, Tool> = {
       "map and decision index. Call once at the start of a session.",
     annotations: READ_ONLY,
     shape: { repo_root: str("repo_root", "Absolute project path; empty for the profile only.").default("") },
-    run: (a) => call(() => store.learningContext(a.repo_root)),
+    run: (a) => call(() => learningContext(a.repo_root)),
   }),
 
   record_topic: tool({
@@ -204,7 +206,7 @@ const TOOLS: Record<string, Tool> = {
     shape: {
       topic: Topic,
       event: z
-        .enum(store.EVENTS)
+        .enum(EVENTS)
         .describe(
           "knows = showed they understand it; learning = showed they're new to it; " +
             "explained = you just explained it (so don't repeat it later).",
@@ -215,7 +217,7 @@ const TOOLS: Record<string, Tool> = {
     },
     run: (a) => {
       const project = a.repo_root.replace(/\/+$/, "").split("/").pop() ?? "";
-      return call(() => store.recordTopic(a.topic, a.event, a.note, project));
+      return call(() => recordTopic(a.topic, a.event, a.note, project));
     },
   }),
 
@@ -229,7 +231,7 @@ const TOOLS: Record<string, Tool> = {
       question: str("question", "The quick check you asked, in one line."),
       correct: z.boolean().describe("Whether their answer showed understanding.").meta({ title: "Correct" }),
     },
-    run: (a) => call(() => store.recordCheckpoint(a.topic, a.question, a.correct)),
+    run: (a) => call(() => recordCheckpoint(a.topic, a.question, a.correct)),
   }),
 
   set_preference: tool({
@@ -240,7 +242,7 @@ const TOOLS: Record<string, Tool> = {
       key: str("key", "e.g. 'language', 'verbosity', 'analogies'."),
       value: str("value", "e.g. 'Egyptian Arabic', 'short'. Empty clears it."),
     },
-    run: (a) => call(() => store.setPreference(a.key, a.value)),
+    run: (a) => call(() => setPreference(a.key, a.value)),
   }),
 
   progress_report: tool({
@@ -250,7 +252,7 @@ const TOOLS: Record<string, Tool> = {
       "the user asks what they've learned.",
     annotations: READ_ONLY,
     shape: {},
-    run: () => call(() => store.progressReport()),
+    run: () => call(() => progressReport()),
   }),
 
   search_decisions: tool({
@@ -266,7 +268,7 @@ const TOOLS: Record<string, Tool> = {
       ),
       limit: z.number().int().min(1).max(10).default(3).meta({ title: "Limit" }),
     },
-    run: (a) => call(() => store.searchDecisions(a.repo_root, a.query, a.limit)),
+    run: (a) => call(() => searchDecisions(a.repo_root, a.query, a.limit)),
   }),
 
   add_decision: tool({
@@ -286,7 +288,7 @@ const TOOLS: Record<string, Tool> = {
       consequences: str("consequences", "What the team now has to live with."),
     },
     run: (a) =>
-      call(() => store.addDecision(a.repo_root, a.title, a.context, a.decision, a.alternatives, a.consequences)),
+      call(() => addDecision(a.repo_root, a.title, a.context, a.decision, a.alternatives, a.consequences)),
   }),
 
   update_map: tool({
@@ -298,7 +300,7 @@ const TOOLS: Record<string, Tool> = {
       repo_root: RepoRoot,
       content: str("content", "The full map: entry points, core modules, data flow, gotchas. Max 40 lines."),
     },
-    run: (a) => call(() => store.updateMap(a.repo_root, a.content)),
+    run: (a) => call(() => updateMap(a.repo_root, a.content)),
   }),
 
   gate_status: tool({

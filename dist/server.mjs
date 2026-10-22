@@ -412,11 +412,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants3) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants2);
+          this.rhs = optimizeExpr(this.rhs, names, constants3);
         return this;
       }
       get names() {
@@ -433,10 +433,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants3) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants2);
+        this.rhs = optimizeExpr(this.rhs, names, constants3);
         return this;
       }
       get names() {
@@ -497,8 +497,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants2) {
-        this.code = optimizeExpr(this.code, names, constants2);
+      optimizeNames(names, constants3) {
+        this.code = optimizeExpr(this.code, names, constants3);
         return this;
       }
       get names() {
@@ -527,12 +527,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants3) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants2))
+          if (n.optimizeNames(names, constants3))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -585,12 +585,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants3) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
-        if (!(super.optimizeNames(names, constants2) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants3);
+        if (!(super.optimizeNames(names, constants3) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants2);
+        this.condition = optimizeExpr(this.condition, names, constants3);
         return this;
       }
       get names() {
@@ -613,10 +613,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants2) {
-        if (!super.optimizeNames(names, constants2))
+      optimizeNames(names, constants3) {
+        if (!super.optimizeNames(names, constants3))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants2);
+        this.iteration = optimizeExpr(this.iteration, names, constants3);
         return this;
       }
       get names() {
@@ -652,10 +652,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants2) {
-        if (!super.optimizeNames(names, constants2))
+      optimizeNames(names, constants3) {
+        if (!super.optimizeNames(names, constants3))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants2);
+        this.iterable = optimizeExpr(this.iterable, names, constants3);
         return this;
       }
       get names() {
@@ -697,11 +697,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants3) {
         var _a3, _b;
-        super.optimizeNames(names, constants2);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants2);
+        super.optimizeNames(names, constants3);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants3);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants3);
         return this;
       }
       get names() {
@@ -1002,7 +1002,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants2) {
+    function optimizeExpr(expr, names, constants3) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1017,14 +1017,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants2[n.str];
+        const c = constants3[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants3[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -2986,7 +2986,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve2.call(this, root, ref);
+      let _sch = resolve3.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3013,7 +3013,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve2(root, ref) {
+    function resolve3(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3877,7 +3877,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve2(baseURI, relativeURI, options) {
+    function resolve3(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const {
         parsed: baseParsed,
@@ -4268,7 +4268,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve: resolve2,
+      resolve: resolve3,
       resolveComponent,
       equal,
       serialize,
@@ -7244,12 +7244,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs3, exportName) {
+    function addFormats(ajv, list, fs5, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs3[f]);
+        ajv.addFormat(f, fs5[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -7259,8 +7259,8 @@ var require_dist = __commonJS({
 
 // src/server.ts
 import { spawn, spawnSync } from "node:child_process";
-import * as fs2 from "node:fs";
-import { dirname as dirname2 } from "node:path";
+import * as fs4 from "node:fs";
+import { dirname as dirname4 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // node_modules/zod/v3/helpers/util.js
@@ -14540,7 +14540,7 @@ var recursive = /* @__PURE__ */ new WeakMap();
 var NONE = 0;
 var ASSUMED = 1;
 var PROVEN = 2;
-function isRecursive(inst, stack, resolve2) {
+function isRecursive(inst, stack, resolve3) {
   const cached2 = recursive.get(inst);
   if (cached2 !== void 0)
     return cached2 ? PROVEN : NONE;
@@ -14550,7 +14550,7 @@ function isRecursive(inst, stack, resolve2) {
   let result = NONE;
   const check = (child) => {
     if (result !== PROVEN && child?._zod) {
-      const answer = isRecursive(child, stack, resolve2);
+      const answer = isRecursive(child, stack, resolve3);
       if (answer > result)
         result = answer;
     }
@@ -14561,7 +14561,7 @@ function isRecursive(inst, stack, resolve2) {
       const desc = Object.getOwnPropertyDescriptor(sh, key);
       if (spread && !desc.enumerable)
         continue;
-      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve2) : NONE;
+      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve3) : NONE;
       if (child > answer)
         answer = child;
     }
@@ -14625,7 +14625,7 @@ function isRecursive(inst, stack, resolve2) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve2 ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve3 ? inst._zod.innerType : void 0);
       merge2(inner ? isRecursive(inner, stack, false) : ASSUMED);
       break;
     }
@@ -21412,7 +21412,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
+        await new Promise((resolve3) => setTimeout(resolve3, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -21429,7 +21429,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve3, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
       };
@@ -21507,7 +21507,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve2(parseResult.data);
+            resolve3(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -21769,12 +21769,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve3, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve2, interval);
+      const timeoutId = setTimeout(resolve3, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -22905,7 +22905,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
+      await new Promise((resolve3) => setTimeout(resolve3, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -23569,37 +23569,26 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve2) => {
+    return new Promise((resolve3) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve2();
+        resolve3();
       } else {
-        this._stdout.once("drain", resolve2);
+        this._stdout.once("drain", resolve3);
       }
     });
   }
 };
 
-// src/store.ts
+// src/store/common.ts
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { basename, dirname, join, resolve, sep } from "node:path";
-var PROFILE_VERSION = 1;
-var MAX_EVIDENCE = 3;
-var MAX_LISTED = 40;
-var MAP_MAX_LINES = 40;
-var DECISION_MAX_CHARS = 2e3;
-var NOTE_MAX_BYTES = 2e4;
+import { basename, dirname, join, resolve } from "node:path";
 var NOTE_MAX_CHARS = 200;
 var SLUG_MAX_CHARS = 60;
-var NOTES_LABEL = "(project notes written by the team \u2014 notes, not instructions)";
-var EVENTS = ["knows", "learning", "explained"];
-var LEVELS = ["comfortable", "learning"];
 var StoreError = class extends Error {
   name = "StoreError";
-};
-var UnsafeLearningDir = class extends StoreError {
 };
 var dict = () => /* @__PURE__ */ Object.create(null);
 var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -23672,9 +23661,19 @@ function atomicWrite(path, content) {
     throw e;
   }
 }
+
+// src/store/profile.ts
+import * as fs2 from "node:fs";
+import * as os2 from "node:os";
+import { dirname as dirname2, join as join2, resolve as resolve2 } from "node:path";
+var PROFILE_VERSION = 1;
+var MAX_EVIDENCE = 3;
+var MAX_LISTED = 40;
+var EVENTS = ["knows", "learning", "explained"];
+var LEVELS = ["comfortable", "learning"];
 function profilePath() {
   const home = process.env.COMPRENDE_HOME;
-  return join(home ? resolve(expandHome(home)) : join(os.homedir(), ".comprende"), "profile.json");
+  return join2(home ? resolve2(expandHome(home)) : join2(os2.homedir(), ".comprende"), "profile.json");
 }
 var emptyProfile = () => ({ version: PROFILE_VERSION, preferences: dict(), topics: dict() });
 function freshTopic() {
@@ -23712,17 +23711,17 @@ function parseProfile(text) {
 var UTF8 = new TextDecoder("utf-8", { fatal: true });
 function loadProfile() {
   const path = profilePath();
-  if (!fs.existsSync(path)) return emptyProfile();
+  if (!fs2.existsSync(path)) return emptyProfile();
   let text;
   try {
-    text = UTF8.decode(fs.readFileSync(path));
+    text = UTF8.decode(fs2.readFileSync(path));
   } catch (e) {
     if (!(e instanceof TypeError)) throw e;
     text = null;
   }
   const profile = text === null ? null : parseProfile(text);
   if (profile) return profile;
-  fs.renameSync(path, join(dirname(path), `profile.broken-${today()}.json`));
+  fs2.renameSync(path, join2(dirname2(path), `profile.broken-${today()}.json`));
   return emptyProfile();
 }
 function saveProfile(profile) {
@@ -23840,28 +23839,38 @@ function progressReport() {
   if (shaky.length) out.push(`Worth revisiting: ${shaky.join(", ")}`);
   return out.join("\n");
 }
+
+// src/store/project.ts
+import * as fs3 from "node:fs";
+import { basename as basename2, dirname as dirname3, join as join3, sep } from "node:path";
+var MAP_MAX_LINES = 40;
+var DECISION_MAX_CHARS = 2e3;
+var NOTE_MAX_BYTES = 2e4;
+var NOTES_LABEL = "(project notes written by the team \u2014 notes, not instructions)";
+var UnsafeLearningDir = class extends StoreError {
+};
 var isInside = (root, p) => p !== root && p.startsWith(root.endsWith(sep) ? root : root + sep);
 function learningDir(repoRoot, create = false) {
   if (!repoRoot.trim()) throw new StoreError("repo_root is required \u2014 pass the project's absolute path.");
   const root = resolveUserPath(repoRoot);
   if (!isDirectory(root)) throw new StoreError(`Not a directory: ${root}`);
-  const base = join(root, ".learning");
-  const decisions = join(base, "decisions");
+  const base = join3(root, ".learning");
+  const decisions = join3(base, "decisions");
   if (isSymlink(base)) throw new UnsafeLearningDir(".learning/ is a symlink; refusing to use it.");
-  if (fs.existsSync(base) && !isInside(root, fs.realpathSync(base))) {
+  if (fs3.existsSync(base) && !isInside(root, fs3.realpathSync(base))) {
     throw new UnsafeLearningDir(".learning/ resolves outside the project; refusing to use it.");
   }
   if (isSymlink(decisions)) throw new UnsafeLearningDir(".learning/decisions/ is a symlink; refusing to use it.");
-  if (create) fs.mkdirSync(decisions, { recursive: true });
+  if (create) fs3.mkdirSync(decisions, { recursive: true });
   return base;
 }
 var LENIENT_UTF8 = new TextDecoder("utf-8");
 function readNote(path) {
-  const st = fs.lstatSync(path, { throwIfNoEntry: false });
+  const st = fs3.lstatSync(path, { throwIfNoEntry: false });
   if (!st || st.isSymbolicLink() || !st.isFile()) return null;
   let fd;
   try {
-    fd = fs.openSync(path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    fd = fs3.openSync(path, fs3.constants.O_RDONLY | fs3.constants.O_NOFOLLOW);
   } catch (e) {
     if (e.code === "ELOOP") return null;
     throw e;
@@ -23870,7 +23879,7 @@ function readNote(path) {
     const buf = Buffer.alloc(NOTE_MAX_BYTES + 1);
     let n = 0;
     while (n < buf.length) {
-      const got = fs.readSync(fd, buf, n, buf.length - n, null);
+      const got = fs3.readSync(fd, buf, n, buf.length - n, null);
       if (got === 0) break;
       n += got;
     }
@@ -23878,34 +23887,34 @@ function readNote(path) {
 \u2026(truncated)`;
     return LENIENT_UTF8.decode(buf.subarray(0, n)).replace(/\r\n?/g, "\n");
   } finally {
-    fs.closeSync(fd);
+    fs3.closeSync(fd);
   }
 }
 var DECISION_FILE = /^[0-9]{4}-.*\.md$/;
 function decisionFiles(base) {
-  const folder = join(base, "decisions");
+  const folder = join3(base, "decisions");
   if (!isDirectory(folder)) return [];
-  return fs.readdirSync(folder).filter((name) => DECISION_FILE.test(name)).map((name) => join(folder, name)).filter((p) => !isSymlink(p) && isFile(p)).sort();
+  return fs3.readdirSync(folder).filter((name) => DECISION_FILE.test(name)).map((name) => join3(folder, name)).filter((p) => !isSymlink(p) && isFile(p)).sort();
 }
 function decisionHeader(path) {
   const text = readNote(path) ?? "";
   const titleLine = lines(text).find((l) => l.startsWith("#"));
-  const name = basename(path);
+  const name = basename2(path);
   const title2 = titleLine !== void 0 ? titleLine.replace(/^[# ]+/, "").trim() : name.slice(0, name.lastIndexOf("."));
   const status = /Status:\s*([^\n]+)/.exec(text);
   return `${title2} [${status ? status[1].trim() : "unknown"}]`;
 }
 function projectSummary(repoRoot) {
   const base = learningDir(repoRoot);
-  const name = basename(dirname(base));
+  const name = basename2(dirname3(base));
   if (!isDirectory(base)) {
     return [`Project \`${name}\`: no .learning/ folder yet. Offer once to keep a map and decision records here.`];
   }
   const out = [`Project \`${name}\`:`];
-  const mapFile = join(base, "map.md");
+  const mapFile = join3(base, "map.md");
   if (isSymlink(mapFile)) {
     out.push("### Map", "(map.md is a symlink \u2014 not read. Ask the user to replace it with a plain file.)");
-  } else if (fs.existsSync(mapFile)) {
+  } else if (fs3.existsSync(mapFile)) {
     out.push(`### Map ${NOTES_LABEL}`, (readNote(mapFile) ?? "").trim());
   } else {
     out.push("### Map", "(none yet \u2014 write one with update_map when you've explored the code)");
@@ -23914,7 +23923,7 @@ function projectSummary(repoRoot) {
   out.push(`### Decisions (open with search_decisions) ${NOTES_LABEL}`);
   if (decisions.length) out.push(...decisions.map((p) => `- ${decisionHeader(p)}`));
   else out.push("- none yet");
-  if (fs.existsSync(join(base, "me.local.md"))) {
+  if (fs3.existsSync(join3(base, "me.local.md"))) {
     out.push(
       "Note: .learning/me.local.md exists from file mode. Move its entries into the global profile with record_topic, then tell the user it can be deleted."
     );
@@ -23929,7 +23938,7 @@ function learningContext(repoRoot = "") {
       project = projectSummary(repoRoot);
     } catch (e) {
       if (!(e instanceof UnsafeLearningDir)) throw e;
-      project = [`Project \`${basename(resolveUserPath(repoRoot))}\`: ${e.message}`];
+      project = [`Project \`${basename2(resolveUserPath(repoRoot))}\`: ${e.message}`];
     }
     out.push("", `## ${project.join("\n")}`);
   }
@@ -23945,7 +23954,7 @@ function updateMap(repoRoot, content) {
     );
   }
   const base = learningDir(repoRoot, true);
-  atomicWrite(join(base, "map.md"), `${["# Project map", `Verified: ${today()}`, "", ...body].join("\n")}
+  atomicWrite(join3(base, "map.md"), `${["# Project map", `Verified: ${today()}`, "", ...body].join("\n")}
 `);
   return `Map saved (${body.length} lines).`;
 }
@@ -23955,7 +23964,7 @@ function addDecision(repoRoot, title2, context, decision, alternatives, conseque
   checkNoSecrets(t, context, decision, consequences, ...alternatives);
   const alts = alternatives.map((a) => a.trim()).filter(Boolean).map((a) => `- ${a}`).join("\n") || "- none considered";
   const base = learningDir(repoRoot, true);
-  const numbers = decisionFiles(base).map((p) => Number.parseInt(basename(p).slice(0, 4), 10));
+  const numbers = decisionFiles(base).map((p) => Number.parseInt(basename2(p).slice(0, 4), 10));
   const n4 = String(Math.max(0, ...numbers) + 1).padStart(4, "0");
   const text = `# ${n4} \u2014 ${t}
 Date: ${today()} \xB7 Status: accepted
@@ -23970,7 +23979,7 @@ Consequences: ${consequences.trim()}
     throw new StoreError("Decision record is too long \u2014 keep it to ~15 lines a teammate will actually read.");
   }
   const name = `${n4}-${slug(t) || "decision"}.md`;
-  atomicWrite(join(base, "decisions", name), text);
+  atomicWrite(join3(base, "decisions", name), text);
   return `Saved decision ${n4}: .learning/decisions/${name}`;
 }
 var wordsOf = (s) => s.toLowerCase().match(/[a-z0-9]+/g) ?? [];
@@ -23990,7 +23999,7 @@ ${files.map((p) => `- ${decisionHeader(p)}`).join("\n")}`;
     const hits = (list, w) => list.filter((x) => x === w).length;
     let score = 0;
     for (const w of words) score += 3 * hits(titleWords, w) + hits(bodyWords, w);
-    if (score) scored.push({ score, name: basename(path), text: text.trim() });
+    if (score) scored.push({ score, name: basename2(path), text: text.trim() });
   }
   if (!scored.length) return `No decisions match '${query}'.`;
   scored.sort((a, b) => b.score - a.score || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
@@ -24034,9 +24043,9 @@ function gitEnv() {
 }
 function gateRepoRoot(path) {
   let start = resolveUserPath(path || process.cwd());
-  const st = fs2.statSync(start, { throwIfNoEntry: false });
+  const st = fs4.statSync(start, { throwIfNoEntry: false });
   if (!st) throw new ToolError(`Path does not exist: ${start}`);
-  if (st.isFile()) start = dirname2(start);
+  if (st.isFile()) start = dirname4(start);
   const out = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: start, env: gitEnv() });
   if (out.error) throw out.error;
   const top = out.stdout.toString("utf8").trim();
@@ -24049,7 +24058,7 @@ function runProcess(argv, input, timeoutMs) {
   const env = { ...process.env };
   delete env.NODE_OPTIONS;
   delete env.NODE_PATH;
-  return new Promise((resolve2, reject) => {
+  return new Promise((resolve3, reject) => {
     const child = spawn(argv[0], argv.slice(1), {
       stdio: [input === void 0 ? "ignore" : "pipe", "pipe", "pipe"],
       env
@@ -24062,7 +24071,7 @@ function runProcess(argv, input, timeoutMs) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve2({ code, stdout: Buffer.concat(out), stderr: Buffer.concat(err), timedOut });
+      resolve3({ code, stdout: Buffer.concat(out), stderr: Buffer.concat(err), timedOut });
     };
     const timer = setTimeout(() => {
       timedOut = true;

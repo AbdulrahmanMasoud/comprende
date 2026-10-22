@@ -5,11 +5,11 @@
 import { build } from "esbuild";
 import { copyFileSync, existsSync, readFileSync, chmodSync } from "node:fs";
 
-const gateSrc = readFileSync("src/gate.ts", "utf8");
+const gateSrc = readFileSync("src/gate/shared.ts", "utf8");
 const version = gateSrc.match(/export const GATE_VERSION = (\d+)/)?.[1];
-if (!version) throw new Error("GATE_VERSION not found in src/gate.ts");
+if (!version) throw new Error("GATE_VERSION not found in src/gate/shared.ts");
 const features = gateSrc.match(/export const GATE_FEATURES = "([^"]*)"/)?.[1];
-if (features === undefined) throw new Error("GATE_FEATURES not found in src/gate.ts");
+if (features === undefined) throw new Error("GATE_FEATURES not found in src/gate/shared.ts");
 
 const common = {
   bundle: true,
@@ -19,26 +19,27 @@ const common = {
   legalComments: "none",
   logLevel: "warning",
 };
-const header = (name) =>
-  `#!/usr/bin/env node\n// Generated from src/${name}.ts by build.mjs. Edit the source, then run \`npm run build\`.\n`;
+const header = (src) =>
+  `#!/usr/bin/env node\n// Generated from ${src} by build.mjs. Edit the source, then run \`npm run build\`.\n`;
 
 const entries = [
   // The gate must import only node: built-ins (checked below), so a repo can
   // never shadow a module it loads.
   // The version and features lines are read by other gates (status notes, and
   // whether the base branch's copy supports a feature such as the fast path).
-  { name: "gate", banner: `${header("gate")}// ownership-gate-version: ${version}\n// ownership-gate-features: ${features}` },
-  { name: "learning", banner: header("learning") },
+  { name: "gate", src: "src/gate/cli.ts", banner: `${header("src/gate/")}// ownership-gate-version: ${version}\n// ownership-gate-features: ${features}` },
+  { name: "learning", src: "src/learning.ts", banner: header("src/learning.ts") },
   // The MCP server bundles its SDK; esbuild needs a `require` shim for the
   // CommonJS bits of its dependencies.
   {
     name: "server",
-    banner: `${header("server")}import { createRequire as __cr } from "node:module"; const require = __cr(import.meta.url);`,
+    src: "src/server.ts",
+    banner: `${header("src/server.ts")}import { createRequire as __cr } from "node:module"; const require = __cr(import.meta.url);`,
   },
 ];
 
 for (const e of entries) {
-  const src = `src/${e.name}.ts`;
+  const src = e.src;
   if (!existsSync(src)) continue;
   const out = `dist/${e.name}.mjs`;
   await build({ ...common, entryPoints: [src], outfile: out, banner: { js: e.banner } });
