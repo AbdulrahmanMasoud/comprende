@@ -471,3 +471,25 @@ test("no fast path while the base branch's gate predates it, so CI agrees", (t) 
   assert.ok(!passed && problems.some((m) => m.includes("summary is missing or too short")), problems.join("\n"));
   throwsGate(() => gate.save({ summary: SHORT, verified: { "src/app.js": ["x"] } }, dev), /at least 80 characters/);
 });
+
+// ---------------------------------------------------------------- saving without the MCP tool
+
+test("the documented fallback: report JSON under .git/ is never part of the change", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  const paths = () => gate.status(dev).files.map((f) => f.path);
+  // In the working tree it would be: untracked files are part of the change.
+  write(dev, "report.json", JSON.stringify(payload()));
+  assert.ok(paths().includes("report.json"));
+  unlinkSync(join(dev, "report.json"));
+  // Under .git/ it never is, and save --input reads it from there.
+  const input = join(".git", "comprende-report.json");
+  write(dev, input, JSON.stringify(payload()));
+  assert.deepEqual(paths(), ["src/app.js"]);
+  const r = runGate(dev, ["save", "--input", input]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(Object.keys(gate.readReport(dev, "feature/rate-limit").files), ["src/app.js"]);
+  commitAll(dev, "change + report");
+  assert.deepEqual(gate.verify(dev), [true, [], "required"]);
+  assert.equal(sh(dev, "git", ["status", "--porcelain"]).stdout, "");
+});

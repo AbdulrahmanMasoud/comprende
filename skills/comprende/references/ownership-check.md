@@ -67,7 +67,16 @@ Avoid trivia ("what does `map` return?"), yes/no questions, and anything answere
 
 ## The report
 
-Save it with the `save_check_report` MCP tool, or with `node .learning/gate.mjs save` given JSON on stdin:
+**Save it with the `save_check_report` MCP tool.** It takes `summary` and `verified` as arguments, so there is no shell quoting. If your tools are loaded on demand, load it first. It's there whenever the `comprende` MCP server is connected.
+
+Only if the MCP tool isn't available:
+
+1. Write the JSON below to a file **inside `.git/`**, for example `.git/comprende-report.json`. Git never tracks anything under `.git/`, so the file can't become part of the change.
+2. Run `node .learning/gate.mjs save --input .git/comprende-report.json`.
+
+**Never use a heredoc** (or `echo`/`printf`) to pass the JSON. Claude Code's shell checks can block quoted braces, and a quoting slip changes the developer's summary. **Never write the JSON to a file in the working tree.** The gate counts untracked files as part of the change, so the scratch file would be fingerprinted with the code, and committed by `git add -A`.
+
+The JSON:
 
 ```json
 {

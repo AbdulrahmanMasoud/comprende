@@ -1384,7 +1384,8 @@ var HELP = `Ownership gate (comprende)
 
 Commands (run from inside the repo, or pass --repo):
   status         Which changed files are new / stale / ok vs. the report   [--json]
-  save           Write the report; JSON {"summary", "verified": {path: [concepts]}} on stdin
+  save           Write the report from JSON {"summary", "verified": {path: [concepts]}} on stdin,
+                 or --input FILE (keep that file inside .git/, never in the working tree)
   verify         Check a commit (default HEAD) against its report \u2014 used by CI   [--json]
   pre-push       Git pre-push hook entry point (reads refs from stdin)
   claude-hook    Claude Code PreToolUse hook entry point (reads JSON from stdin)
