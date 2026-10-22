@@ -31,7 +31,7 @@ export interface RunResult {
 export function run(
   cmd: string,
   args: string[],
-  opts: { cwd?: string; env?: NodeJS.ProcessEnv; input?: string | Buffer; timeout?: number } = {},
+  opts: { cwd?: string; env?: NodeJS.ProcessEnv; input?: string | Buffer | undefined; timeout?: number } = {},
 ): RunResult {
   const r = spawnSync(cmd, args, {
     cwd: opts.cwd,
