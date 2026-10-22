@@ -78,9 +78,10 @@ var splitLines = (s) => {
   if (parts.length && parts[parts.length - 1] === "") parts.pop();
   return parts;
 };
-var PY_WS = "[\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
-var pyStrip = (s) => s.replace(new RegExp(`^${PY_WS}+|${PY_WS}+$`, "gu"), "");
-var pyLen = (s) => [...s].length;
+var BLANK = "[\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
+var BLANK_ENDS = new RegExp(`^${BLANK}+|${BLANK}+$`, "gu");
+var trimSummary = (s) => s.replace(BLANK_ENDS, "");
+var charCount = (s) => [...s].length;
 var today = () => {
   const d = /* @__PURE__ */ new Date();
   const p = (n) => String(n).padStart(2, "0");
@@ -152,15 +153,15 @@ function globToRegExp(pat) {
   return new RegExp(`^(?:${res.join("")})$`, "u");
 }
 var globCache = /* @__PURE__ */ new Map();
-var fnmatch = (path, pat) => {
+var globMatch = (path, pat) => {
   let re = globCache.get(pat);
   if (!re) globCache.set(pat, re = globToRegExp(pat));
   return re.test(path);
 };
 function matches(path, patterns) {
   for (const pat of patterns) {
-    if (fnmatch(path, pat)) return true;
-    if (pat.startsWith("**/") && fnmatch(path, pat.slice(3))) return true;
+    if (globMatch(path, pat)) return true;
+    if (pat.startsWith("**/") && globMatch(path, pat.slice(3))) return true;
   }
   return false;
 }
@@ -306,7 +307,7 @@ function parseConfig(raw, where) {
     if (!Array.isArray(v) || !v.every((x) => typeof x === "string" && x)) throw new GateError(`${where}: "${key}" must be a list of glob strings.`);
     for (const pat of v) {
       try {
-        fnmatch("", pat);
+        globMatch("", pat);
       } catch {
         throw new GateError(`${where}: "${key}" has a pattern that can't be used: ${JSON.stringify(pat)}.`);
       }
@@ -804,8 +805,8 @@ function save(payload, repo, base2, branch) {
   const br = currentBranch(root, branch);
   const [changes, untracked, mb] = collectChanges(root, baseRef, null);
   if (!Object.keys(changes).length) throw new GateError(`No changes vs ${baseRef} \u2014 nothing to report.`);
-  const summary = pyStrip(String(payload.summary ?? ""));
-  const len = pyLen(summary);
+  const summary = trimSummary(String(payload.summary ?? ""));
+  const len = charCount(summary);
   const minChars = len < cfg.min_summary_chars && smallChange(root, baseRef, mb, null, changes, cfg).small ? cfg.small_summary_chars : cfg.min_summary_chars;
   if (len < minChars) {
     throw new GateError(`The summary must be the developer's own description of what changed, why, and what could break \u2014 at least ${minChars} characters.`);
@@ -861,7 +862,7 @@ function verify(repo, base2, branch, rev = "HEAD", labels = []) {
   if (by("stale").length) problems.push("Changed after the check (differs from what was verified): " + by("stale").join(", "));
   if (by("rebased").length) problems.push("Verified before a rebase \u2014 save the report again, no new questions needed: " + by("rebased").join(", "));
   if (unverifiedSensitive.length) problems.push("Sensitive files not explicitly verified: " + unverifiedSensitive.join(", "));
-  const len = pyLen(pyStrip(report.summary));
+  const len = charCount(trimSummary(report.summary));
   const shortOk = () => len >= cfg.small_summary_chars && smallChange(root, baseRef, mb, rev, changes, cfg).small;
   if (len < cfg.min_summary_chars && !shortOk()) problems.push("The developer's summary is missing or too short.");
   if (problems.length && !(by("rebased").length && problems.length === 1)) problems.push(CHECK_ME_HINT);

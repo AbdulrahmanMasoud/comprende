@@ -1,9 +1,11 @@
 // MCP server for Comprende.
 //
-// This file is deliberately thin: it only describes the tools to the model and
-// forwards calls to store.ts. All the real logic lives there, which keeps it
-// testable without running a server.
+// This file is deliberately thin: it describes the tools to the model and
+// forwards calls to store.ts (memory) or to the bundled gate.mjs (ownership
+// check). The real logic lives there, which keeps it testable without a server.
 import { spawn, spawnSync } from "node:child_process";
+import * as fs from "node:fs";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -27,44 +29,43 @@ the reasons behind lasting decisions.
 class ToolError extends Error {
   override name = "ToolError";
 }
-/** gate.py's GateError, raised by the repo-root lookup. */
-class GateError extends Error {
-  override name = "GateError";
-}
 
-// Turn the store's refusals into tool errors the model can read and fix.
-async function call(fn: () => string | Promise<string>): Promise<string> {
+/** Run a store call, turning its refusals into tool errors the model can read and fix. */
+async function call(fn: () => string): Promise<string> {
   try {
-    return await fn();
+    return fn();
   } catch (e) {
-    if (e instanceof store.StoreError || e instanceof GateError) throw new ToolError(e.message);
+    if (e instanceof store.StoreError) throw new ToolError(e.message);
     throw e;
   }
 }
 
 // ---------------------------------------------------------------- the ownership gate
 
-/** gate.py `_git_env`: core.fsmonitor can name a command in the repo's own
- * .git/config; it's forced off (via GIT_CONFIG_*, which outranks every config file). */
+/** The environment for git: fixed locale and pathspecs, and core.fsmonitor
+ *  forced off. fsmonitor can name a command in the repo's own .git/config, and
+ *  GIT_CONFIG_* outranks every config file. */
 function gitEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
   delete env.GIT_DIFF_OPTS;
-  const n = store.pyInt(env.GIT_CONFIG_COUNT ?? "0") ?? 0;
+  let n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
+  if (!Number.isFinite(n) || n < 0) n = 0;
   env.GIT_CONFIG_COUNT = String(n + 1);
   env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
   env[`GIT_CONFIG_VALUE_${n}`] = "false";
   return env;
 }
 
-/** gate.py `repo_root` */
-function gateRepoRoot(path: unknown): string {
-  let start = store.resolvePath(store.pyTruthy(path) ? path : process.cwd());
-  if (!store.exists(start)) throw new GateError(`Path does not exist: ${start}`);
-  if (store.isFile(start)) start = store.parentPath(start);
+/** The top of the git working tree that contains `path` (a file or folder). */
+function gateRepoRoot(path: string): string {
+  let start = store.resolveUserPath(path || process.cwd());
+  const st = fs.statSync(start, { throwIfNoEntry: false });
+  if (!st) throw new ToolError(`Path does not exist: ${start}`);
+  if (st.isFile()) start = dirname(start);
   const out = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: start, env: gitEnv() });
   if (out.error) throw out.error;
-  const top = store.pyStrip(store.universalNewlines(out.stdout.toString("utf8")));
-  if (out.status !== 0 || !top) throw new GateError(`Not inside a git working tree: ${start}`);
+  const top = out.stdout.toString("utf8").trim();
+  if (out.status !== 0 || !top) throw new ToolError(`Not inside a git working tree: ${start}`);
   return top; // git prints an absolute, normalized path
 }
 
@@ -80,15 +81,13 @@ interface Proc {
 }
 
 function runProcess(argv: string[], input: string | undefined, timeoutMs: number): Promise<Proc> {
-  // Like `python -I`: the interpreter ignores environment hooks that would
-  // load extra code into it.
+  // Nothing from the environment may load extra code into the gate.
   const env = { ...process.env };
   delete env.NODE_OPTIONS;
   delete env.NODE_PATH;
-  const stdinBuf = input === undefined ? undefined : store.encodeStrict(input);
   return new Promise((resolve, reject) => {
     const child = spawn(argv[0]!, argv.slice(1), {
-      stdio: [stdinBuf === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+      stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
       env,
     });
     const out: Buffer[] = [];
@@ -118,9 +117,9 @@ function runProcess(argv: string[], input: string | undefined, timeoutMs: number
       if (timedOut) finish(code);
     });
     child.on("close", (code) => finish(code));
-    if (stdinBuf !== undefined) {
+    if (input !== undefined) {
       child.stdin!.on("error", () => {}); // the gate may exit without reading it
-      child.stdin!.end(stdinBuf);
+      child.stdin!.end(input);
     }
   });
 }
@@ -131,36 +130,30 @@ function runProcess(argv: string[], input: string | undefined, timeoutMs: number
  * repo would be arbitrary code execution. Version differences with the
  * repo/CI copy are reported by `status` as a note.
  */
-async function gateCli(repoRoot: unknown, args: string[], stdin?: string): Promise<string> {
-  let root: string;
-  try {
-    root = gateRepoRoot(repoRoot);
-  } catch (e) {
-    if (e instanceof GateError) throw new ToolError(e.message);
-    throw e;
-  }
+async function gateCli(repoRoot: string, args: string[], stdin?: string): Promise<string> {
+  const root = gateRepoRoot(repoRoot);
   const proc = await runProcess([process.execPath, GATE_FILE, ...args, "--repo", root], stdin, GATE_TIMEOUT_MS);
   if (proc.timedOut) throw new ToolError("The gate took longer than 5 minutes.");
-  const text = (b: Buffer, what: string) => store.universalNewlines(store.decodeStrict(b, what));
-  const stdout = text(proc.stdout, "gate's output");
-  const stderr = text(proc.stderr, "gate's error output");
+  const text = (b: Buffer) => b.toString("utf8").replace(/\r\n?/g, "\n").trim();
   if (proc.code !== 0) {
-    const msg = store.pyStrip(stderr);
+    const msg = text(proc.stderr);
     throw new ToolError((msg.startsWith("ownership gate: ") ? msg.slice("ownership gate: ".length) : msg) || "The gate failed.");
   }
-  return store.pyStrip(stdout);
+  return text(proc.stdout);
 }
 
-function opt(name: string, value: unknown): string[] {
-  return store.pyStrip(value) ? [`--${name}`, value as string] : [];
-}
+const option = (name: string, value: string): string[] => (value.trim() ? [`--${name}`, value] : []);
 
 // ---------------------------------------------------------------- tools
 
 const READ_ONLY: ToolAnnotations = { readOnlyHint: true, openWorldHint: false };
 const WRITES: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 
-const title = (name: string) => name.split("_").map((w) => w[0]!.toUpperCase() + w.slice(1)).join(" ");
+const title = (name: string) =>
+  name
+    .split("_")
+    .map((w) => w[0]!.toUpperCase() + w.slice(1))
+    .join(" ");
 const str = (field: string, description: string) => z.string().describe(description).meta({ title: title(field) });
 
 const RepoRoot = str("repo_root", "Absolute path to the project's root folder.");
@@ -175,36 +168,43 @@ const Branch = (field: string) =>
 const Base = (field: string) =>
   str(field, "Base ref the PR targets, e.g. 'origin/develop' or 'upstream/main' for a fork. Empty = from config / auto-detect.");
 
-/** A parameter as Python declares it: name, plus its default when it has one. */
-type Param = [name: string] | [name: string, defaultValue: unknown];
-
 interface Tool {
   description: string;
   annotations: ToolAnnotations;
   shape: z.ZodRawShape;
-  params: Param[];
-  fn: (...args: any[]) => Promise<string>;
+  /** Validates `args` against `shape` (filling defaults), then runs the tool. */
+  run: (args: unknown) => Promise<string>;
+}
+
+/** A tool whose `run` gets its arguments typed from `shape`. */
+function tool<S extends z.ZodRawShape>(def: {
+  description: string;
+  annotations: ToolAnnotations;
+  shape: S;
+  run: (args: z.output<z.ZodObject<S>>) => Promise<string>;
+}): Tool {
+  const schema = z.object(def.shape);
+  return { ...def, run: (args) => def.run(schema.parse(args)) };
 }
 
 const TOOLS: Record<string, Tool> = {
-  learning_context: {
+  learning_context: tool({
     description:
       "Everything needed to calibrate explanations, in one call: the learner's\n" +
       "known/learning/already-explained topics and preferences, plus this project's\n" +
       "map and decision index. Call once at the start of a session.",
     annotations: READ_ONLY,
     shape: { repo_root: str("repo_root", "Absolute project path; empty for the profile only.").default("") },
-    params: [["repo_root", ""]],
-    fn: (repoRoot) => call(() => store.learningContext(repoRoot)),
-  },
+    run: (a) => call(() => store.learningContext(a.repo_root)),
+  }),
 
-  record_topic: {
+  record_topic: tool({
     description: "Update what the learner knows about one topic. Applies across all their projects.",
     annotations: WRITES,
     shape: {
       topic: Topic,
       event: z
-        .enum(["knows", "learning", "explained"])
+        .enum(store.EVENTS)
         .describe(
           "knows = showed they understand it; learning = showed they're new to it; " +
             "explained = you just explained it (so don't repeat it later).",
@@ -213,14 +213,13 @@ const TOOLS: Record<string, Tool> = {
       note: Note.default(""),
       repo_root: str("repo_root", "Optional project path, kept as context for the note.").default(""),
     },
-    params: [["topic"], ["event"], ["note", ""], ["repo_root", ""]],
-    fn: (topic, event, note, repoRoot) => {
-      const project = store.pyTruthy(repoRoot) ? store.pyStripChars(repoRoot, "/", "right").split("/").pop()! : "";
-      return call(() => store.recordTopic(topic, event, note, project));
+    run: (a) => {
+      const project = a.repo_root.replace(/\/+$/, "").split("/").pop() ?? "";
+      return call(() => store.recordTopic(a.topic, a.event, a.note, project));
     },
-  },
+  }),
 
-  record_checkpoint: {
+  record_checkpoint: tool({
     description:
       "Log the result of a checkpoint question. Two correct in a row marks the\n" +
       "topic comfortable; a wrong answer marks it learning.",
@@ -230,11 +229,10 @@ const TOOLS: Record<string, Tool> = {
       question: str("question", "The quick check you asked, in one line."),
       correct: z.boolean().describe("Whether their answer showed understanding.").meta({ title: "Correct" }),
     },
-    params: [["topic"], ["question"], ["correct"]],
-    fn: (topic, question, correct) => call(() => store.recordCheckpoint(topic, question, correct)),
-  },
+    run: (a) => call(() => store.recordCheckpoint(a.topic, a.question, a.correct)),
+  }),
 
-  set_preference: {
+  set_preference: tool({
     description:
       "Save something the user explicitly asked for about how to explain. Only\n" + "what they said, never inferred.",
     annotations: WRITES,
@@ -242,22 +240,20 @@ const TOOLS: Record<string, Tool> = {
       key: str("key", "e.g. 'language', 'verbosity', 'analogies'."),
       value: str("value", "e.g. 'Egyptian Arabic', 'short'. Empty clears it."),
     },
-    params: [["key"], ["value"]],
-    fn: (key, value) => call(() => store.setPreference(key, value)),
-  },
+    run: (a) => call(() => store.setPreference(a.key, a.value)),
+  }),
 
-  progress_report: {
+  progress_report: tool({
     description:
       "Summary of the learner's progress: comfortable vs. still-learning topics,\n" +
       "recent activity, checkpoint accuracy, and what's worth revisiting. Use when\n" +
       "the user asks what they've learned.",
     annotations: READ_ONLY,
     shape: {},
-    params: [],
-    fn: () => call(() => store.progressReport()),
-  },
+    run: () => call(() => store.progressReport()),
+  }),
 
-  search_decisions: {
+  search_decisions: tool({
     description:
       "Find the project's recorded decisions relevant to what you're about to\n" +
       "change, so you explain within past reasoning instead of contradicting it.",
@@ -270,11 +266,10 @@ const TOOLS: Record<string, Tool> = {
       ),
       limit: z.number().int().min(1).max(10).default(3).meta({ title: "Limit" }),
     },
-    params: [["repo_root"], ["query"], ["limit", 3]],
-    fn: (repoRoot, query, limit) => call(() => store.searchDecisions(repoRoot, query, limit)),
-  },
+    run: (a) => call(() => store.searchDecisions(a.repo_root, a.query, a.limit)),
+  }),
 
-  add_decision: {
+  add_decision: tool({
     description:
       "Record a decision with lasting weight as a numbered file in\n" +
       ".learning/decisions/. Tell the user in one line when you do.",
@@ -290,12 +285,11 @@ const TOOLS: Record<string, Tool> = {
         .meta({ title: "Alternatives" }),
       consequences: str("consequences", "What the team now has to live with."),
     },
-    params: [["repo_root"], ["title"], ["context"], ["decision"], ["alternatives"], ["consequences"]],
-    fn: (repoRoot, t, context, decision, alternatives, consequences) =>
-      call(() => store.addDecision(repoRoot, t, context, decision, alternatives, consequences)),
-  },
+    run: (a) =>
+      call(() => store.addDecision(a.repo_root, a.title, a.context, a.decision, a.alternatives, a.consequences)),
+  }),
 
-  update_map: {
+  update_map: tool({
     description:
       "Replace the project map in .learning/map.md and stamp today's date.\n" +
       "Update it when structure changes or you find a new gotcha.",
@@ -304,11 +298,10 @@ const TOOLS: Record<string, Tool> = {
       repo_root: RepoRoot,
       content: str("content", "The full map: entry points, core modules, data flow, gotchas. Max 40 lines."),
     },
-    params: [["repo_root"], ["content"]],
-    fn: (repoRoot, content) => call(() => store.updateMap(repoRoot, content)),
-  },
+    run: (a) => call(() => store.updateMap(a.repo_root, a.content)),
+  }),
 
-  gate_status: {
+  gate_status: tool({
     description:
       "Ownership check status of the current change: each changed file is new,\n" +
       "stale (changed since it was verified), or ok, with sensitive, ignored and\n" +
@@ -317,14 +310,10 @@ const TOOLS: Record<string, Tool> = {
       "summary minimum is lower). Use before the final check to know what to ask about.",
     annotations: READ_ONLY,
     shape: { repo_root: RepoRoot, base: Base("base").default(""), branch: Branch("branch").default("") },
-    params: [["repo_root"], ["base", ""], ["branch", ""]],
-    fn: (repoRoot, base, branch) => {
-      const args = ["status", ...opt("base", base), ...opt("branch", branch)];
-      return gateCli(repoRoot, args);
-    },
-  },
+    run: (a) => gateCli(a.repo_root, ["status", ...option("base", a.base), ...option("branch", a.branch)]),
+  }),
 
-  save_check_report: {
+  save_check_report: tool({
     description:
       "Save the ownership report after the final check passes. It fingerprints\n" +
       "every changed file so CI can tell if code changed afterwards. Refuses if a\n" +
@@ -349,53 +338,31 @@ const TOOLS: Record<string, Tool> = {
       base: Base("base").default(""),
       branch: Branch("branch").default(""),
     },
-    params: [["repo_root"], ["summary"], ["verified"], ["base", ""], ["branch", ""]],
-    fn: (repoRoot, summary, verified, base, branch) => {
-      const payload = store.pyDumps({ summary, verified });
-      const args = ["save", ...opt("base", base), ...opt("branch", branch)];
-      return gateCli(repoRoot, args, payload);
+    run: (a) => {
+      const payload = JSON.stringify({ summary: a.summary, verified: a.verified });
+      return gateCli(a.repo_root, ["save", ...option("base", a.base), ...option("branch", a.branch)], payload);
     },
-  },
+  }),
 };
-
-/** Bind keyword arguments the way a Python call `fn(**kwargs)` would. */
-function bind(name: string, params: Param[], kwargs: Record<string, unknown>): unknown[] {
-  const names = params.map((p) => p[0]);
-  for (const k of Object.keys(kwargs)) {
-    if (!names.includes(k)) throw new TypeError(`${name}() got an unexpected keyword argument '${k}'`);
-  }
-  const missing = params.filter((p) => p.length === 1 && !Object.hasOwn(kwargs, p[0])).map((p) => `'${p[0]}'`);
-  if (missing.length) {
-    const list =
-      missing.length === 1
-        ? missing[0]
-        : missing.length === 2
-          ? missing.join(" and ")
-          : `${missing.slice(0, -1).join(", ")}, and ${missing.at(-1)}`;
-    const noun = missing.length === 1 ? "argument" : "arguments";
-    throw new TypeError(`${name}() missing ${missing.length} required positional ${noun}: ${list}`);
-  }
-  return params.map((p) => (Object.hasOwn(kwargs, p[0]) ? kwargs[p[0]] : p[1]));
-}
 
 function buildServer(): McpServer {
   const server = new McpServer({ name: "comprende", version: "0.2.0" }, { instructions: INSTRUCTIONS });
-  for (const [name, tool] of Object.entries(TOOLS)) {
+  for (const [name, t] of Object.entries(TOOLS)) {
     server.registerTool(
       name,
       {
-        description: tool.description,
-        inputSchema: z.object(tool.shape).meta({ title: `${name}Arguments` }),
+        description: t.description,
+        inputSchema: z.object(t.shape).meta({ title: `${name}Arguments` }),
         outputSchema: z.object({ result: z.string().meta({ title: "Result" }) }).meta({ title: `${name}Output` }),
-        annotations: tool.annotations,
+        annotations: t.annotations,
       },
       async (args: Record<string, unknown>): Promise<CallToolResult> => {
         try {
-          const text = await tool.fn(...bind(name, tool.params, args));
+          const text = await t.run(args);
           return { content: [{ type: "text", text }], structuredContent: { result: text } };
         } catch (e) {
           if (e instanceof ToolError) return { content: [{ type: "text", text: e.message }], isError: true };
-          // A crash: like the Python SDK, the details stay in the server's log.
+          // A crash: the details stay in the server's log, not in the model's context.
           console.error(e);
           return { content: [{ type: "text", text: `Error executing tool ${name}` }], isError: true };
         }
@@ -407,24 +374,21 @@ function buildServer(): McpServer {
 
 async function main(argv: string[]): Promise<void> {
   // `call <tool> '<json args>'` runs one tool and prints its result — handy for
-  // debugging, and how the test suite drives any implementation as a black box.
+  // debugging, and how the test suite drives the server as a black box.
   if (argv.length >= 2 && argv[0] === "call") {
     const name = argv[1]!;
-    const tool = Object.hasOwn(TOOLS, name) ? TOOLS[name] : undefined;
-    if (tool === undefined) {
+    const t = Object.hasOwn(TOOLS, name) ? TOOLS[name] : undefined;
+    if (t === undefined) {
       process.stderr.write(`unknown tool ${name}\n`);
       process.exitCode = 1;
       return;
     }
     let result: string;
     try {
-      const raw = store.pyLoads(argv.length > 2 ? argv[2]! : "{}");
-      if (!(raw instanceof Map))
-        throw new TypeError(`${name}() argument after ** must be a mapping, not ${store.pyTypeName(raw)}`);
-      const kwargs = store.toPlain(raw) as Record<string, unknown>;
-      result = await tool.fn(...bind(name, tool.params, kwargs));
+      result = await t.run(JSON.parse(argv[2] ?? "{}"));
     } catch (e) {
       if (e instanceof ToolError) process.stderr.write(`${e.message}\n`);
+      else if (e instanceof z.ZodError) process.stderr.write(`Invalid arguments for ${name}:\n${z.prettifyError(e)}\n`);
       else process.stderr.write(`${e instanceof Error ? (e.stack ?? `${e.name}: ${e.message}`) : String(e)}\n`);
       process.exitCode = 1;
       return;

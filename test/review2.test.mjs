@@ -1,4 +1,3 @@
-// Port of mcp/tests/test_gate_review2.py.
 // Regression tests for the second independent review.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -41,7 +40,7 @@ test("moving an edit between identical blocks is stale", (t) => {
   commitAll(dev, "users");
   git(dev, "push", "-q", "origin", "main");
   git(dev, "checkout", "-q", "-B", "feature/rate-limit");
-  // Python: str.replace(..., 1) — first occurrence only, like JS String.replace with a string.
+  // Replaces the first occurrence only: the bot's block.
   write(dev, "config/users.yml", base.replace("bot:\n  role: user\n  mfa: true", "bot:\n  role: user\n  mfa: false"));
   saveAndCommit(dev, { "config/users.yml": ["MFA off for the test bot"] });
   assert.ok(gate.verify(dev)[0]);

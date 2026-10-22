@@ -1,4 +1,3 @@
-// Port of mcp/tests/test_gate_review3.py.
 // Regression tests for the third (focused) review.
 import { test } from "node:test";
 import assert from "node:assert/strict";

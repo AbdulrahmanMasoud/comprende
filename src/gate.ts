@@ -117,10 +117,15 @@ const splitLines = (s: string): string[] => {
   if (parts.length && parts[parts.length - 1] === "") parts.pop();
   return parts;
 };
-/** Python's str.strip() whitespace set, and len() in code points. */
-const PY_WS = "[\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
-const pyStrip = (s: string) => s.replace(new RegExp(`^${PY_WS}+|${PY_WS}+$`, "gu"), "");
-const pyLen = (s: string) => [...s].length;
+/** A summary is measured after trimming blank characters from both ends:
+ *  Unicode spaces and line breaks, plus the ASCII separator controls
+ *  (U+001C–U+001F) and NEL (U+0085), so invisible padding can't stretch a
+ *  summary to the minimum. Its length is counted in characters (code points):
+ *  an emoji is one character, not two. */
+const BLANK = "[\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
+const BLANK_ENDS = new RegExp(`^${BLANK}+|${BLANK}+$`, "gu");
+const trimSummary = (s: string) => s.replace(BLANK_ENDS, "");
+const charCount = (s: string) => [...s].length;
 const today = (): string => {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
@@ -157,14 +162,26 @@ function stableJson(value: unknown, indent?: number): string {
   return JSON.stringify(sortDeep(value), null, indent);
 }
 
-/** Python's urllib.parse.quote(s, safe=""): reversible, so feature/x and feature-x never collide. */
+/** Percent-encode everything but letters, digits and `-_.~`. Used for the
+ *  report's file name, so it's reversible: feature/x and feature-x never collide. */
 function quoteAll(s: string): string {
   return encodeURIComponent(s).replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
 }
 
-/** A port of Python's fnmatch.translate (3.12): `*` matches anything
- *  (including "/"), `?` one character, `[...]` sets with `!` negation and
- *  ranges; empty ranges are dropped, as Python does, instead of crashing. */
+/**
+ * Comprende's glob rules, for the `sensitive` and `ignore` lists. A pattern
+ * matches the whole path:
+ * - `*` matches any run of characters, including "/" (so `**` is the same as `*`);
+ * - `?` matches exactly one character, counted in code points (one emoji);
+ * - `[abc]` and `[a-z]` match one character of the set, and `[!...]` negates it;
+ *   a `]` right after `[` or `[!` is a member, not the end;
+ * - a reversed range such as `[z-a]` is empty: it's dropped from the set, so
+ *   a set of only empty ranges matches nothing (`[!z-a]` matches any one
+ *   character). Never an error. Ranges compare code points;
+ * - a `[` without a closing `]` is a literal "[";
+ * - every other character matches itself.
+ * `matches()` also lets a leading `**` + `/` match at the repo root.
+ */
 function globToRegExp(pat: string): RegExp {
   const chars = [...pat]; // code points, so "?" matches one emoji, not half of one
   const n = chars.length;
@@ -189,7 +206,7 @@ function globToRegExp(pat: string): RegExp {
       const negate = chars[i] === "!";
       const body = chars.slice(negate ? i + 1 : i, j);
       i = j + 1;
-      // Split into single characters and lo-hi ranges, like Python's chunks.
+      // Split into single characters and lo-hi ranges.
       const items: [string, string][] = [];
       for (let k = 0; k < body.length; k++) {
         if (k + 2 < body.length && body[k + 1] === "-") {
@@ -197,8 +214,8 @@ function globToRegExp(pat: string): RegExp {
           k += 2;
         } else items.push([body[k], body[k]]);
       }
-      // Python drops empty (reversed) ranges rather than failing. Compare code
-      // points: in UTF-16 order, U+E000–U+FFFF sorts after every emoji.
+      // Drop empty (reversed) ranges. Compare code points: in UTF-16 order,
+      // U+E000–U+FFFF would sort after every emoji.
       const valid = items.filter(([lo, hi]) => lo.codePointAt(0)! <= hi.codePointAt(0)!);
       if (!valid.length) {
         res.push(negate ? "[\\s\\S]" : "(?!)");
@@ -211,7 +228,7 @@ function globToRegExp(pat: string): RegExp {
   return new RegExp(`^(?:${res.join("")})$`, "u");
 }
 const globCache = new Map<string, RegExp>();
-const fnmatch = (path: string, pat: string): boolean => {
+const globMatch = (path: string, pat: string): boolean => {
   let re = globCache.get(pat);
   if (!re) globCache.set(pat, (re = globToRegExp(pat)));
   return re.test(path);
@@ -219,9 +236,9 @@ const fnmatch = (path: string, pat: string): boolean => {
 
 export function matches(path: string, patterns: string[]): boolean {
   for (const pat of patterns) {
-    if (fnmatch(path, pat)) return true;
+    if (globMatch(path, pat)) return true;
     // Let "**/x/**" also match "x/..." at the repo root.
-    if (pat.startsWith("**/") && fnmatch(path, pat.slice(3))) return true;
+    if (pat.startsWith("**/") && globMatch(path, pat.slice(3))) return true;
   }
   return false;
 }
@@ -384,7 +401,7 @@ function parseConfig(raw: string, where: string): Config {
     if (!Array.isArray(v) || !v.every((x) => typeof x === "string" && x)) throw new GateError(`${where}: "${key}" must be a list of glob strings.`);
     for (const pat of v as string[]) {
       try {
-        fnmatch("", pat);
+        globMatch("", pat);
       } catch {
         throw new GateError(`${where}: "${key}" has a pattern that can't be used: ${JSON.stringify(pat)}.`);
       }
@@ -1015,8 +1032,8 @@ export function save(payload: Record<string, unknown>, repo?: string | null, bas
   const [changes, untracked, mb] = collectChanges(root, baseRef, null);
   if (!Object.keys(changes).length) throw new GateError(`No changes vs ${baseRef} — nothing to report.`);
 
-  const summary = pyStrip(String(payload.summary ?? ""));
-  const len = pyLen(summary);
+  const summary = trimSummary(String(payload.summary ?? ""));
+  const len = charCount(summary);
   // Only count lines when it can matter: a long enough summary passes either way.
   const minChars = len < cfg.min_summary_chars && smallChange(root, baseRef, mb, null, changes, cfg).small ? cfg.small_summary_chars : cfg.min_summary_chars;
   if (len < minChars) {
@@ -1077,7 +1094,7 @@ export function verify(repo?: string | null, base?: string | null, branch?: stri
   if (by("stale").length) problems.push("Changed after the check (differs from what was verified): " + by("stale").join(", "));
   if (by("rebased").length) problems.push("Verified before a rebase — save the report again, no new questions needed: " + by("rebased").join(", "));
   if (unverifiedSensitive.length) problems.push("Sensitive files not explicitly verified: " + unverifiedSensitive.join(", "));
-  const len = pyLen(pyStrip(report.summary));
+  const len = charCount(trimSummary(report.summary));
   const shortOk = () => len >= cfg.small_summary_chars && smallChange(root, baseRef, mb, rev, changes, cfg).small;
   if (len < cfg.min_summary_chars && !shortOk()) problems.push("The developer's summary is missing or too short.");
   if (problems.length && !(by("rebased").length && problems.length === 1)) problems.push(CHECK_ME_HINT);

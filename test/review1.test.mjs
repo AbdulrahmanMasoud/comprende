@@ -1,4 +1,3 @@
-// Port of mcp/tests/test_gate_review_findings.py.
 // One regression test per finding from the independent review. Each would
 // have failed against the first version of the gate.
 import { test } from "node:test";

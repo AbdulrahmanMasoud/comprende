@@ -1,4 +1,3 @@
-// Port of mcp/tests/test_server_e2e.py.
 // End-to-end: start the real server as a subprocess and talk MCP to it over
 // stdio, exactly like Claude Code or Claude Desktop would.
 import { test } from "node:test";

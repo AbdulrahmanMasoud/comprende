@@ -1,5 +1,4 @@
-// Regression tests for the fifth review: divergences introduced by the
-// Python → TypeScript port. Each would have failed before the fix.
+// Regression tests for the fifth review. Each would have failed before the fix.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
@@ -62,7 +61,7 @@ test("verifying a path that isn't in the change is refused, even toString", (t) 
   throwsGate(() => gate.save(payload({ "src/app.js": ["x"], toString: ["sneaky"] }), dev), /Not part of this change: toString/);
 });
 
-// 2 & 3. Globs behave like Python's fnmatch and never crash.
+// 2 & 3. Globs follow Comprende's glob rules and never crash.
 test("a reversed range in a config glob doesn't crash, and doesn't open the gate", (t) => {
   const { dev } = setup(t);
   setBaseConfig(dev, (c) => c.sensitive.push("[z-a]"));
@@ -75,7 +74,7 @@ test("a reversed range in a config glob doesn't crash, and doesn't open the gate
   assert.match(r.stderr, /Ownership gate blocked/);
 });
 
-test("glob edge cases match Python's fnmatch", () => {
+test("glob edge cases follow Comprende's glob rules", () => {
   const cases = [
     ["a", "[]a]", true], ["]", "[]a]", true], ["b", "[]a]", false],
     ["b", "[!]]", true], ["]", "[!]]", false],
@@ -107,7 +106,7 @@ test("a hooksPath symlinked out of the repo is refused", (t) => {
   assert.match(gate.installHooks(dev)[0], /^installed/);
 });
 
-// 6. The summary is measured like Python: code points, Python whitespace.
+// 6. The summary is measured in characters (code points), after trimming blank padding.
 test("summary length counts characters, not UTF-16 units or exotic whitespace", (t) => {
   const { dev } = setup(t);
   // More than small_change_lines, so the full min_summary_chars (80) applies.
@@ -140,7 +139,7 @@ test("only the gate's own min_summary_chars is checked for a float literal", (t)
 
 test("glob ranges compare code points, not UTF-16 code units", () => {
   assert.equal(gate.isSensitive("😀", "100644", { sensitive: ["[-😀]"] }), true);
-  // Reversed in code points, so empty (Python drops it) instead of a regex error.
+  // Reversed in code points, so the range is empty, not a regex error.
   assert.equal(gate.isSensitive("😀", "100644", { sensitive: ["[😀-￿]"] }), false);
 });
 

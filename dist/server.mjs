@@ -74,8 +74,8 @@ var require_code = __commonJS({
       emptyStr() {
         if (this._items.length > 1)
           return false;
-        const item2 = this._items[0];
-        return item2 === "" || item2 === '""';
+        const item = this._items[0];
+        return item === "" || item === '""';
       }
       get str() {
         var _a3;
@@ -1007,14 +1007,14 @@ var require_codegen = __commonJS({
         return replaceName(expr);
       if (!canOptimize(expr))
         return expr;
-      return new code_1._Code(expr._items.reduce((items2, c) => {
+      return new code_1._Code(expr._items.reduce((items, c) => {
         if (c instanceof code_1.Name)
           c = replaceName(c);
         if (c instanceof code_1._Code)
-          items2.push(...c._items);
+          items.push(...c._items);
         else
-          items2.push(c);
-        return items2;
+          items.push(c);
+        return items;
       }, []));
       function replaceName(n) {
         const c = constants2[n.str];
@@ -1064,8 +1064,8 @@ var require_util = __commonJS({
     var code_1 = require_code();
     function toHash(arr) {
       const hash = {};
-      for (const item2 of arr)
-        hash[item2] = true;
+      for (const item of arr)
+        hash[item] = true;
       return hash;
     }
     exports.toHash = toHash;
@@ -1172,7 +1172,7 @@ var require_util = __commonJS({
         mergeNames: (gen, from, to) => gen.if((0, codegen_1._)`${to} !== true && ${from} !== undefined`, () => gen.assign(to, (0, codegen_1._)`${from} === true ? true : ${to} > ${from} ? ${to} : ${from}`)),
         mergeToName: (gen, from, to) => gen.if((0, codegen_1._)`${to} !== true`, () => gen.assign(to, from === true ? true : (0, codegen_1._)`${to} > ${from} ? ${to} : ${from}`)),
         mergeValues: (from, to) => from === true ? true : Math.max(from, to),
-        resultToName: (gen, items2) => gen.var("items", items2)
+        resultToName: (gen, items) => gen.var("items", items)
       })
     };
     function evaluatedPropsToName(gen, ps) {
@@ -1680,13 +1680,13 @@ var require_defaults = __commonJS({
     var codegen_1 = require_codegen();
     var util_1 = require_util();
     function assignDefaults(it, ty) {
-      const { properties, items: items2 } = it.schema;
+      const { properties, items } = it.schema;
       if (ty === "object" && properties) {
         for (const key in properties) {
           assignDefault(it, key, properties[key].default);
         }
-      } else if (ty === "array" && Array.isArray(items2)) {
-        items2.forEach((sch, i) => assignDefault(it, i, sch.default));
+      } else if (ty === "array" && Array.isArray(items)) {
+        items.forEach((sch, i) => assignDefault(it, i, sch.default));
       }
     }
     exports.assignDefaults = assignDefaults;
@@ -2222,20 +2222,20 @@ var require_resolve = __commonJS({
       return false;
     }
     function countKeys(schema) {
-      let count = 0;
+      let count2 = 0;
       for (const key in schema) {
         if (key === "$ref")
           return Infinity;
-        count++;
+        count2++;
         if (SIMPLE_INLINED.has(key))
           continue;
         if (typeof schema[key] == "object") {
-          (0, util_1.eachItem)(schema[key], (sch) => count += countKeys(sch));
+          (0, util_1.eachItem)(schema[key], (sch) => count2 += countKeys(sch));
         }
-        if (count === Infinity)
+        if (count2 === Infinity)
           return Infinity;
       }
-      return count;
+      return count2;
     }
     function getFullPath(resolver, id = "", normalize) {
       if (normalize !== false)
@@ -2490,11 +2490,11 @@ var require_validate = __commonJS({
         gen.return((0, codegen_1._)`${names_1.default.errors} === 0`);
       }
     }
-    function assignEvaluated({ gen, evaluated, props, items: items2 }) {
+    function assignEvaluated({ gen, evaluated, props, items }) {
       if (props instanceof codegen_1.Name)
         gen.assign((0, codegen_1._)`${evaluated}.props`, props);
-      if (items2 instanceof codegen_1.Name)
-        gen.assign((0, codegen_1._)`${evaluated}.items`, items2);
+      if (items instanceof codegen_1.Name)
+        gen.assign((0, codegen_1._)`${evaluated}.items`, items);
     }
     function schemaKeywords(it, types, typeErrors, errsCount) {
       const { gen, schema, data, allErrors, opts, self } = it;
@@ -2899,9 +2899,9 @@ var require_compile = __commonJS({
       if (_sch)
         return _sch;
       const rootId = (0, resolve_1.getFullPath)(this.opts.uriResolver, sch.root.baseId);
-      const { es5, lines } = this.opts.code;
+      const { es5, lines: lines2 } = this.opts.code;
       const { ownProperties } = this.opts;
-      const gen = new codegen_1.CodeGen(this.scope, { es5, lines, ownProperties });
+      const gen = new codegen_1.CodeGen(this.scope, { es5, lines: lines2, ownProperties });
       let _ValidationError;
       if (sch.$async) {
         _ValidationError = gen.scopeValue("Error", {
@@ -2957,12 +2957,12 @@ var require_compile = __commonJS({
           validate2.source = { validateName, validateCode, scopeValues: gen._values };
         }
         if (this.opts.unevaluated) {
-          const { props, items: items2 } = schemaCxt;
+          const { props, items } = schemaCxt;
           validate2.evaluated = {
             props: props instanceof codegen_1.Name ? void 0 : props,
-            items: items2 instanceof codegen_1.Name ? void 0 : items2,
+            items: items instanceof codegen_1.Name ? void 0 : items,
             dynamicProps: props instanceof codegen_1.Name,
-            dynamicItems: items2 instanceof codegen_1.Name
+            dynamicItems: items instanceof codegen_1.Name
           };
           if (validate2.source)
             validate2.source.evaluated = (0, codegen_1.stringify)(validate2.evaluated);
@@ -2986,7 +2986,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve.call(this, root, ref);
+      let _sch = resolve2.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3013,7 +3013,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve(root, ref) {
+    function resolve2(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3344,10 +3344,10 @@ var require_utils = __commonJS({
         return removeDotSegments(path);
       }
       const segments = path.split("/");
-      const last2 = segments.length - 1;
+      const last = segments.length - 1;
       const output = [];
       let trailingDirectory = false;
-      for (let i = 0; i <= last2; i++) {
+      for (let i = 0; i <= last; i++) {
         const segment = segments[i];
         if (segment === "." || segment === "..") {
           if (segment === "..") {
@@ -3357,7 +3357,7 @@ var require_utils = __commonJS({
               output.push("..");
             }
           }
-          trailingDirectory = i === last2;
+          trailingDirectory = i === last;
         } else {
           output.push(segment);
         }
@@ -3877,7 +3877,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve(baseURI, relativeURI, options) {
+    function resolve2(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const {
         parsed: baseParsed,
@@ -4268,7 +4268,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve,
+      resolve: resolve2,
       resolveComponent,
       equal,
       serialize,
@@ -4408,8 +4408,8 @@ var require_core = __commonJS({
         this._loading = {};
         this._cache = /* @__PURE__ */ new Map();
         opts = this.opts = { ...opts, ...requiredOptions(opts) };
-        const { es5, lines } = this.opts.code;
-        this.scope = new codegen_2.ValueScope({ scope: {}, prefixes: EXT_SCOPE_NAMES, es5, lines });
+        const { es5, lines: lines2 } = this.opts.code;
+        this.scope = new codegen_2.ValueScope({ scope: {}, prefixes: EXT_SCOPE_NAMES, es5, lines: lines2 });
         this.logger = getLogger(opts.logger);
         const formatOpt = opts.validateFormats;
         opts.validateFormats = false;
@@ -4774,9 +4774,9 @@ var require_core = __commonJS({
     exports.default = Ajv2;
     function checkOptions(checkOpts, options, msg, log = "error") {
       for (const key in checkOpts) {
-        const opt2 = key;
-        if (opt2 in options)
-          this.logger[log](`${msg}: option ${key}. ${checkOpts[opt2]}`);
+        const opt = key;
+        if (opt in options)
+          this.logger[log](`${msg}: option ${key}. ${checkOpts[opt]}`);
       }
     }
     function getSchEnv(keyRef) {
@@ -4815,8 +4815,8 @@ var require_core = __commonJS({
     }
     function getMetaSchemaOptions() {
       const metaOpts = { ...this.opts };
-      for (const opt2 of META_IGNORE_OPTIONS)
-        delete metaOpts[opt2];
+      for (const opt of META_IGNORE_OPTIONS)
+        delete metaOpts[opt];
       return metaOpts;
     }
     var noLogs = { log() {
@@ -5028,8 +5028,8 @@ var require_ref = __commonJS({
               it.items = util_1.mergeEvaluated.items(gen, schEvaluated.items, it.items);
             }
           } else {
-            const items2 = gen.var("items", (0, codegen_1._)`${source}.evaluated.items`);
-            it.items = util_1.mergeEvaluated.items(gen, items2, it.items, codegen_1.Name);
+            const items = gen.var("items", (0, codegen_1._)`${source}.evaluated.items`);
+            it.items = util_1.mergeEvaluated.items(gen, items, it.items, codegen_1.Name);
           }
         }
       }
@@ -5404,19 +5404,19 @@ var require_uniqueItems = __commonJS({
           return itemTypes.length > 0 && !itemTypes.some((t) => t === "object" || t === "array");
         }
         function loopN(i, j) {
-          const item2 = gen.name("item");
-          const wrongType = (0, dataType_1.checkDataTypes)(itemTypes, item2, it.opts.strictNumbers, dataType_1.DataType.Wrong);
+          const item = gen.name("item");
+          const wrongType = (0, dataType_1.checkDataTypes)(itemTypes, item, it.opts.strictNumbers, dataType_1.DataType.Wrong);
           const indices = gen.const("indices", (0, codegen_1._)`{}`);
           gen.for((0, codegen_1._)`;${i}--;`, () => {
-            gen.let(item2, (0, codegen_1._)`${data}[${i}]`);
+            gen.let(item, (0, codegen_1._)`${data}[${i}]`);
             gen.if(wrongType, (0, codegen_1._)`continue`);
             if (itemTypes.length > 1)
-              gen.if((0, codegen_1._)`typeof ${item2} == "string"`, (0, codegen_1._)`${item2} += "_"`);
-            gen.if((0, codegen_1._)`typeof ${indices}[${item2}] == "number"`, () => {
-              gen.assign(j, (0, codegen_1._)`${indices}[${item2}]`);
+              gen.if((0, codegen_1._)`typeof ${item} == "string"`, (0, codegen_1._)`${item} += "_"`);
+            gen.if((0, codegen_1._)`typeof ${indices}[${item}] == "number"`, () => {
+              gen.assign(j, (0, codegen_1._)`${indices}[${item}]`);
               cxt.error();
               gen.assign(valid, false).break();
-            }).code((0, codegen_1._)`${indices}[${item2}] = ${i}`);
+            }).code((0, codegen_1._)`${indices}[${item}] = ${i}`);
           });
         }
         function loopN2(i, j) {
@@ -5569,28 +5569,28 @@ var require_additionalItems = __commonJS({
       error: error2,
       code(cxt) {
         const { parentSchema, it } = cxt;
-        const { items: items2 } = parentSchema;
-        if (!Array.isArray(items2)) {
+        const { items } = parentSchema;
+        if (!Array.isArray(items)) {
           (0, util_1.checkStrictMode)(it, '"additionalItems" is ignored when "items" is not an array of schemas');
           return;
         }
-        validateAdditionalItems(cxt, items2);
+        validateAdditionalItems(cxt, items);
       }
     };
-    function validateAdditionalItems(cxt, items2) {
+    function validateAdditionalItems(cxt, items) {
       const { gen, schema, data, keyword, it } = cxt;
       it.items = true;
       const len = gen.const("len", (0, codegen_1._)`${data}.length`);
       if (schema === false) {
-        cxt.setParams({ len: items2.length });
-        cxt.pass((0, codegen_1._)`${len} <= ${items2.length}`);
+        cxt.setParams({ len: items.length });
+        cxt.pass((0, codegen_1._)`${len} <= ${items.length}`);
       } else if (typeof schema == "object" && !(0, util_1.alwaysValidSchema)(it, schema)) {
-        const valid = gen.var("valid", (0, codegen_1._)`${len} <= ${items2.length}`);
+        const valid = gen.var("valid", (0, codegen_1._)`${len} <= ${items.length}`);
         gen.if((0, codegen_1.not)(valid), () => validateItems(valid));
         cxt.ok(valid);
       }
       function validateItems(valid) {
-        gen.forRange("i", items2.length, len, (i) => {
+        gen.forRange("i", items.length, len, (i) => {
           cxt.subschema({ keyword, dataProp: i, dataPropType: util_1.Type.Num }, valid);
           if (!it.allErrors)
             gen.if((0, codegen_1.not)(valid), () => gen.break());
@@ -5773,8 +5773,8 @@ var require_contains = __commonJS({
         cxt.result(valid, () => cxt.reset());
         function validateItemsWithCount() {
           const schValid = gen.name("_valid");
-          const count = gen.let("count", 0);
-          validateItems(schValid, () => gen.if(schValid, () => checkLimits(count)));
+          const count2 = gen.let("count", 0);
+          validateItems(schValid, () => gen.if(schValid, () => checkLimits(count2)));
         }
         function validateItems(_valid, block) {
           gen.forRange("i", 0, len, (i) => {
@@ -5787,16 +5787,16 @@ var require_contains = __commonJS({
             block();
           });
         }
-        function checkLimits(count) {
-          gen.code((0, codegen_1._)`${count}++`);
+        function checkLimits(count2) {
+          gen.code((0, codegen_1._)`${count2}++`);
           if (max === void 0) {
-            gen.if((0, codegen_1._)`${count} >= ${min}`, () => gen.assign(valid, true).break());
+            gen.if((0, codegen_1._)`${count2} >= ${min}`, () => gen.assign(valid, true).break());
           } else {
-            gen.if((0, codegen_1._)`${count} > ${max}`, () => gen.assign(valid, false).break());
+            gen.if((0, codegen_1._)`${count2} > ${max}`, () => gen.assign(valid, false).break());
             if (min === 1)
               gen.assign(valid, true);
             else
-              gen.if((0, codegen_1._)`${count} >= ${min}`, () => gen.assign(valid, true));
+              gen.if((0, codegen_1._)`${count2} >= ${min}`, () => gen.assign(valid, true));
           }
         }
       }
@@ -7244,12 +7244,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs2, exportName) {
+    function addFormats(ajv, list, fs3, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs2[f]);
+        ajv.addFormat(f, fs3[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -7259,6 +7259,8 @@ var require_dist = __commonJS({
 
 // src/server.ts
 import { spawn, spawnSync } from "node:child_process";
+import * as fs2 from "node:fs";
+import { dirname as dirname2 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // node_modules/zod/v3/helpers/util.js
@@ -7273,10 +7275,10 @@ var util;
     throw new Error();
   }
   util2.assertNever = assertNever2;
-  util2.arrayToEnum = (items2) => {
+  util2.arrayToEnum = (items) => {
     const obj = {};
-    for (const item2 of items2) {
-      obj[item2] = item2;
+    for (const item of items) {
+      obj[item] = item;
     }
     return obj;
   };
@@ -7303,9 +7305,9 @@ var util;
     return keys;
   };
   util2.find = (arr, checker) => {
-    for (const item2 of arr) {
-      if (checker(item2))
-        return item2;
+    for (const item of arr) {
+      if (checker(item))
+        return item;
     }
     return void 0;
   };
@@ -8035,8 +8037,8 @@ var ZodType = class {
   promise() {
     return ZodPromise.create(this, this._def);
   }
-  or(option) {
-    return ZodUnion.create([this, option], this._def);
+  or(option2) {
+    return ZodUnion.create([this, option2], this._def);
   }
   and(incoming) {
     return ZodIntersection.create(this, incoming, this._def);
@@ -9452,14 +9454,14 @@ var ZodArray = class _ZodArray extends ZodType {
       }
     }
     if (ctx.common.async) {
-      return Promise.all([...ctx.data].map((item2, i) => {
-        return def.type._parseAsync(new ParseInputLazyPath(ctx, item2, ctx.path, i));
+      return Promise.all([...ctx.data].map((item, i) => {
+        return def.type._parseAsync(new ParseInputLazyPath(ctx, item, ctx.path, i));
       })).then((result2) => {
         return ParseStatus.mergeArray(status, result2);
       });
     }
-    const result = [...ctx.data].map((item2, i) => {
-      return def.type._parseSync(new ParseInputLazyPath(ctx, item2, ctx.path, i));
+    const result = [...ctx.data].map((item, i) => {
+      return def.type._parseSync(new ParseInputLazyPath(ctx, item, ctx.path, i));
     });
     return ParseStatus.mergeArray(status, result);
   }
@@ -9519,7 +9521,7 @@ function deepPartialify(schema) {
   } else if (schema instanceof ZodNullable) {
     return ZodNullable.create(deepPartialify(schema.unwrap()));
   } else if (schema instanceof ZodTuple) {
-    return ZodTuple.create(schema.items.map((item2) => deepPartialify(item2)));
+    return ZodTuple.create(schema.items.map((item) => deepPartialify(item)));
   } else {
     return schema;
   }
@@ -9886,7 +9888,7 @@ var ZodUnion = class extends ZodType {
       return INVALID;
     }
     if (ctx.common.async) {
-      return Promise.all(options.map(async (option) => {
+      return Promise.all(options.map(async (option2) => {
         const childCtx = {
           ...ctx,
           common: {
@@ -9896,7 +9898,7 @@ var ZodUnion = class extends ZodType {
           parent: null
         };
         return {
-          result: await option._parseAsync({
+          result: await option2._parseAsync({
             data: ctx.data,
             path: ctx.path,
             parent: childCtx
@@ -9907,7 +9909,7 @@ var ZodUnion = class extends ZodType {
     } else {
       let dirty = void 0;
       const issues = [];
-      for (const option of options) {
+      for (const option2 of options) {
         const childCtx = {
           ...ctx,
           common: {
@@ -9916,7 +9918,7 @@ var ZodUnion = class extends ZodType {
           },
           parent: null
         };
-        const result = option._parseSync({
+        const result = option2._parseSync({
           data: ctx.data,
           path: ctx.path,
           parent: childCtx
@@ -9997,8 +9999,8 @@ var ZodDiscriminatedUnion = class _ZodDiscriminatedUnion extends ZodType {
     }
     const discriminator = this.discriminator;
     const discriminatorValue = ctx.data[discriminator];
-    const option = this.optionsMap.get(discriminatorValue);
-    if (!option) {
+    const option2 = this.optionsMap.get(discriminatorValue);
+    if (!option2) {
       addIssueToContext(ctx, {
         code: ZodIssueCode.invalid_union_discriminator,
         options: Array.from(this.optionsMap.keys()),
@@ -10007,13 +10009,13 @@ var ZodDiscriminatedUnion = class _ZodDiscriminatedUnion extends ZodType {
       return INVALID;
     }
     if (ctx.common.async) {
-      return option._parseAsync({
+      return option2._parseAsync({
         data: ctx.data,
         path: ctx.path,
         parent: ctx
       });
     } else {
-      return option._parseSync({
+      return option2._parseSync({
         data: ctx.data,
         path: ctx.path,
         parent: ctx
@@ -10187,18 +10189,18 @@ var ZodTuple = class _ZodTuple extends ZodType {
       });
       status.dirty();
     }
-    const items2 = [...ctx.data].map((item2, itemIndex) => {
+    const items = [...ctx.data].map((item, itemIndex) => {
       const schema = this._def.items[itemIndex] || this._def.rest;
       if (!schema)
         return null;
-      return schema._parse(new ParseInputLazyPath(ctx, item2, ctx.path, itemIndex));
+      return schema._parse(new ParseInputLazyPath(ctx, item, ctx.path, itemIndex));
     }).filter((x) => !!x);
     if (ctx.common.async) {
-      return Promise.all(items2).then((results) => {
+      return Promise.all(items).then((results) => {
         return ParseStatus.mergeArray(status, results);
       });
     } else {
-      return ParseStatus.mergeArray(status, items2);
+      return ParseStatus.mergeArray(status, items);
     }
   }
   get items() {
@@ -10391,7 +10393,7 @@ var ZodSet = class _ZodSet extends ZodType {
       }
       return { status: status.value, value: parsedSet };
     }
-    const elements = [...ctx.data.values()].map((item2, i) => valueType._parse(new ParseInputLazyPath(ctx, item2, ctx.path, i)));
+    const elements = [...ctx.data.values()].map((item, i) => valueType._parse(new ParseInputLazyPath(ctx, item, ctx.path, i)));
     if (ctx.common.async) {
       return Promise.all(elements).then((elements2) => finalizeSet(elements2));
     } else {
@@ -10502,10 +10504,10 @@ var ZodFunction = class _ZodFunction extends ZodType {
   returnType() {
     return this._def.returns;
   }
-  args(...items2) {
+  args(...items) {
     return new _ZodFunction({
       ...this._def,
-      args: ZodTuple.create(items2).rest(ZodUnknown.create())
+      args: ZodTuple.create(items).rest(ZodUnknown.create())
     });
   }
   returns(returnType) {
@@ -10637,7 +10639,7 @@ var ZodEnum = class _ZodEnum extends ZodType {
     });
   }
   exclude(values, newDef = this._def) {
-    return _ZodEnum.create(this.options.filter((opt2) => !values.includes(opt2)), {
+    return _ZodEnum.create(this.options.filter((opt) => !values.includes(opt)), {
       ...this._def,
       ...newDef
     });
@@ -11803,14 +11805,14 @@ function codePointLength(str2) {
   const units = str2.length;
   if (!highSurrogate.test(str2))
     return units;
-  let count = units;
+  let count2 = units;
   for (let i = 0; i < units - 1; i++) {
     if ((str2.charCodeAt(i) & 64512) === 55296 && (str2.charCodeAt(i + 1) & 64512) === 56320) {
-      count--;
+      count2--;
       i++;
     }
   }
-  return count;
+  return count2;
 }
 function getLengthableOrigin(input) {
   if (Array.isArray(input))
@@ -12243,6 +12245,34 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
   };
   processError(error2);
   return fieldErrors;
+}
+function toDotPath(_path) {
+  const segs = [];
+  const path = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path) {
+    if (typeof seg === "number")
+      segs.push(`[${seg}]`);
+    else if (typeof seg === "symbol")
+      segs.push(`[${JSON.stringify(String(seg))}]`);
+    else if (/[^\w$]/.test(seg))
+      segs.push(`[${JSON.stringify(seg)}]`);
+    else {
+      if (segs.length)
+        segs.push(".");
+      segs.push(seg);
+    }
+  }
+  return segs.join("");
+}
+function prettifyError(error2) {
+  const lines2 = [];
+  const issues = [...error2.issues].sort((a, b) => (a.path ?? []).length - (b.path ?? []).length);
+  for (const issue2 of issues) {
+    lines2.push(`\u2716 ${issue2.message}`);
+    if (issue2.path?.length)
+      lines2.push(`  \u2192 at ${toDotPath(issue2.path)}`);
+  }
+  return lines2.join("\n");
 }
 
 // node_modules/zod/v4/core/parse.js
@@ -12800,9 +12830,9 @@ var Doc = class {
       return;
     }
     const content = arg;
-    const lines = content.split("\n").filter((x) => x);
-    const minIndent = Math.min(...lines.map((x) => x.length - x.trimStart().length));
-    const dedented = lines.map((x) => x.slice(minIndent)).map((x) => " ".repeat(this.indent * 2) + x);
+    const lines2 = content.split("\n").filter((x) => x);
+    const minIndent = Math.min(...lines2.map((x) => x.length - x.trimStart().length));
+    const dedented = lines2.map((x) => x.slice(minIndent)).map((x) => " ".repeat(this.indent * 2) + x);
     for (const line of dedented) {
       this.content.push(line);
     }
@@ -13443,9 +13473,9 @@ var $ZodArray = /* @__PURE__ */ $constructor("$ZodArray", (inst, def) => {
     const proms = [];
     const abortEarly = ctx?.abortEarly;
     for (let i = 0; i < input.length; i++) {
-      const item2 = input[i];
+      const item = input[i];
       const result = def.element._zod.run({
-        value: item2,
+        value: item,
         issues: []
       }, ctx);
       if (result instanceof Promise) {
@@ -13795,7 +13825,7 @@ var $ZodUnion = /* @__PURE__ */ $constructor("$ZodUnion", (inst, def) => {
   defineLazyInternal(inst, "optout", (zod) => zod.def.options.some((o) => o._zod.optout === "optional") ? "optional" : void 0);
   defineLazyInternal(inst, "values", (zod) => {
     if (zod.def.options.every((o) => o._zod.values)) {
-      return new Set(zod.def.options.flatMap((option) => Array.from(option._zod.values)));
+      return new Set(zod.def.options.flatMap((option2) => Array.from(option2._zod.values)));
     }
     return void 0;
   });
@@ -13813,8 +13843,8 @@ var $ZodUnion = /* @__PURE__ */ $constructor("$ZodUnion", (inst, def) => {
     }
     let async = false;
     const results = [];
-    for (const option of def.options) {
-      const result = option._zod.run({
+    for (const option2 of def.options) {
+      const result = option2._zod.run({
         value: payload.value,
         issues: []
       }, ctx);
@@ -13836,17 +13866,17 @@ var $ZodUnion = /* @__PURE__ */ $constructor("$ZodUnion", (inst, def) => {
 });
 function discriminatorMap(def) {
   const map = /* @__PURE__ */ new Map();
-  for (const option of def.options) {
-    const values = option._zod.propValues?.[def.discriminator];
+  for (const option2 of def.options) {
+    const values = option2._zod.propValues?.[def.discriminator];
     if (!values || values.size === 0)
-      throw new Error(`Invalid discriminated union option at index "${def.options.indexOf(option)}"`);
+      throw new Error(`Invalid discriminated union option at index "${def.options.indexOf(option2)}"`);
     for (const value of values) {
       if (map.has(value)) {
         if (value !== void 0)
           throw new Error(`Duplicate discriminator value "${String(value)}"`);
         map.set(value, null);
       } else {
-        map.set(value, option);
+        map.set(value, option2);
       }
     }
   }
@@ -13859,10 +13889,10 @@ var $ZodDiscriminatedUnion = /* @__PURE__ */ $constructor("$ZodDiscriminatedUnio
   defineLazyInternal(inst, "propValues", (zod) => {
     const propValues = {};
     let undefinedCount = 0;
-    for (const option of zod.def.options) {
-      const pv = option._zod.propValues;
+    for (const option2 of zod.def.options) {
+      const pv = option2._zod.propValues;
       if (!pv || Object.keys(pv).length === 0)
-        throw new Error(`Invalid discriminated union option at index "${zod.def.options.indexOf(option)}"`);
+        throw new Error(`Invalid discriminated union option at index "${zod.def.options.indexOf(option2)}"`);
       if (pv[zod.def.discriminator]?.has(void 0))
         undefinedCount++;
       for (const [k, v] of Object.entries(pv)) {
@@ -13878,8 +13908,8 @@ var $ZodDiscriminatedUnion = /* @__PURE__ */ $constructor("$ZodDiscriminatedUnio
       propValues[zod.def.discriminator]?.delete(void 0);
     return propValues;
   });
-  def.options.forEach((option, i) => {
-    const propShape = rawShape(option._zod.def);
+  def.options.forEach((option2, i) => {
+    const propShape = rawShape(option2._zod.def);
     if (propShape && !Object.prototype.hasOwnProperty.call(propShape, def.discriminator)) {
       throw new Error(`Invalid discriminated union option at index "${i}"`);
     }
@@ -13897,9 +13927,9 @@ var $ZodDiscriminatedUnion = /* @__PURE__ */ $constructor("$ZodDiscriminatedUnio
       return payload;
     }
     const value = input?.[def.discriminator];
-    const opt2 = disc.value.get(value);
-    if (opt2 && (value !== void 0 || ctx.direction !== "backward")) {
-      return opt2._zod.run(payload, ctx);
+    const opt = disc.value.get(value);
+    if (opt && (value !== void 0 || ctx.direction !== "backward")) {
+      return opt._zod.run(payload, ctx);
     }
     if (def.unionFallback || ctx.direction === "backward") {
       return _super(payload, ctx);
@@ -14510,7 +14540,7 @@ var recursive = /* @__PURE__ */ new WeakMap();
 var NONE = 0;
 var ASSUMED = 1;
 var PROVEN = 2;
-function isRecursive(inst, stack, resolve) {
+function isRecursive(inst, stack, resolve2) {
   const cached2 = recursive.get(inst);
   if (cached2 !== void 0)
     return cached2 ? PROVEN : NONE;
@@ -14520,7 +14550,7 @@ function isRecursive(inst, stack, resolve) {
   let result = NONE;
   const check = (child) => {
     if (result !== PROVEN && child?._zod) {
-      const answer = isRecursive(child, stack, resolve);
+      const answer = isRecursive(child, stack, resolve2);
       if (answer > result)
         result = answer;
     }
@@ -14531,7 +14561,7 @@ function isRecursive(inst, stack, resolve) {
       const desc = Object.getOwnPropertyDescriptor(sh, key);
       if (spread && !desc.enumerable)
         continue;
-      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve) : NONE;
+      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve2) : NONE;
       if (child > answer)
         answer = child;
     }
@@ -14595,7 +14625,7 @@ function isRecursive(inst, stack, resolve) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve2 ? inst._zod.innerType : void 0);
       merge2(inner ? isRecursive(inner, stack, false) : ASSUMED);
       break;
     }
@@ -15667,14 +15697,14 @@ function compactTypeUnion(schema) {
   if (!Array.isArray(options) || options.length === 0 || schema.type !== void 0)
     return;
   const types = [];
-  for (const option of options) {
-    if (!option || typeof option !== "object")
+  for (const option2 of options) {
+    if (!option2 || typeof option2 !== "object")
       return;
-    compactTypeUnion(option);
-    const keys = Object.keys(option);
+    compactTypeUnion(option2);
+    const keys = Object.keys(option2);
     if (keys.length !== 1 || keys[0] !== "type")
       return;
-    const type = option.type;
+    const type = option2.type;
     for (const member of Array.isArray(type) ? type : [type]) {
       if (typeof member !== "string")
         return;
@@ -15964,15 +15994,15 @@ function isTransforming(_schema, _ctx) {
     return false;
   }
   if (def.type === "union") {
-    for (const option of def.options) {
-      if (isTransforming(option, ctx))
+    for (const option2 of def.options) {
+      if (isTransforming(option2, ctx))
         return true;
     }
     return false;
   }
   if (def.type === "tuple") {
-    for (const item2 of def.items) {
-      if (isTransforming(item2, ctx))
+    for (const item of def.items) {
+      if (isTransforming(item, ctx))
         return true;
     }
     if (def.rest && isTransforming(def.rest, ctx))
@@ -16415,8 +16445,8 @@ var tupleProcessor = (schema, ctx, _json, params) => {
   }) : null;
   let minItems = def.items.length;
   while (minItems > 0) {
-    const item2 = def.items[minItems - 1];
-    const optional2 = ctx.io === "input" ? inputOptin(item2) !== void 0 : item2._zod.optout === "optional";
+    const item = def.items[minItems - 1];
+    const optional2 = ctx.io === "input" ? inputOptin(item) !== void 0 : item._zod.optout === "optional";
     if (!optional2)
       break;
     minItems--;
@@ -17010,6 +17040,7 @@ var initializer2 = (inst, issues) => {
     }
   });
 };
+var ZodError2 = /* @__PURE__ */ $constructor("ZodError", initializer2);
 var ZodRealError = /* @__PURE__ */ $constructor("ZodError", initializer2, void 0, {
   Parent: Error
 });
@@ -19722,7 +19753,7 @@ function parseDateDef(def, refs, overrideDateStrategy) {
   const strategy = overrideDateStrategy ?? refs.dateStrategy;
   if (Array.isArray(strategy)) {
     return {
-      anyOf: strategy.map((item2, i) => parseDateDef(def, refs, item2))
+      anyOf: strategy.map((item, i) => parseDateDef(def, refs, item))
     };
   }
   switch (strategy) {
@@ -20560,14 +20591,14 @@ function parsePromiseDef(def, refs) {
 
 // node_modules/zod-to-json-schema/dist/esm/parsers/set.js
 function parseSetDef(def, refs) {
-  const items2 = parseDef(def.valueType._def, {
+  const items = parseDef(def.valueType._def, {
     ...refs,
     currentPath: [...refs.currentPath, "items"]
   });
   const schema = {
     type: "array",
     uniqueItems: true,
-    items: items2
+    items
   };
   if (def.minSize) {
     setResponseValueAndErrors(schema, "minItems", def.minSize.value, def.minSize.message, refs);
@@ -20729,15 +20760,15 @@ function parseDef(def, refs, forceResolution = false) {
   newItem.jsonSchema = jsonSchema;
   return jsonSchema;
 }
-var get$ref = (item2, refs) => {
+var get$ref = (item, refs) => {
   switch (refs.$refStrategy) {
     case "root":
-      return { $ref: item2.path.join("/") };
+      return { $ref: item.path.join("/") };
     case "relative":
-      return { $ref: getRelativePath(refs.currentPath, item2.path) };
+      return { $ref: getRelativePath(refs.currentPath, item.path) };
     case "none":
     case "seen": {
-      if (item2.path.length < refs.currentPath.length && item2.path.every((value, index) => refs.currentPath[index] === value)) {
+      if (item.path.length < refs.currentPath.length && item.path.every((value, index) => refs.currentPath[index] === value)) {
         console.warn(`Recursive reference detected at ${refs.currentPath.join("/")}! Defaulting to any`);
         return parseAnyDef(refs);
       }
@@ -21381,7 +21412,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -21398,7 +21429,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
       };
@@ -21476,7 +21507,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve(parseResult.data);
+            resolve2(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -21738,12 +21769,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve, interval);
+      const timeoutId = setTimeout(resolve2, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -22612,7 +22643,7 @@ var ExperimentalMcpServerTasks = class {
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
 function toolInputElementCount(value, max) {
-  let count = 0;
+  let count2 = 0;
   const stack = [value];
   while (stack.length > 0) {
     const node2 = stack.pop();
@@ -22620,8 +22651,8 @@ function toolInputElementCount(value, max) {
       continue;
     if (Array.isArray(node2)) {
       for (const child of node2) {
-        if (++count > max)
-          return count;
+        if (++count2 > max)
+          return count2;
         if (child !== null && typeof child === "object")
           stack.push(child);
       }
@@ -22629,15 +22660,15 @@ function toolInputElementCount(value, max) {
       for (const key in node2) {
         if (!Object.prototype.hasOwnProperty.call(node2, key))
           continue;
-        if (++count > max)
-          return count;
+        if (++count2 > max)
+          return count2;
         const child = node2[key];
         if (child !== null && typeof child === "object")
           stack.push(child);
       }
     }
   }
-  return count;
+  return count2;
 }
 function resolveMaxToolInputElements(value) {
   if (value === void 0 || value === Infinity)
@@ -22701,24 +22732,24 @@ var McpServer = class {
       }
     });
     this.server.setRequestHandler(ListToolsRequestSchema, () => ({
-      tools: Object.entries(this._registeredTools).filter(([, tool]) => tool.enabled).map(([name, tool]) => {
+      tools: Object.entries(this._registeredTools).filter(([, tool2]) => tool2.enabled).map(([name, tool2]) => {
         const toolDefinition = {
           name,
-          title: tool.title,
-          description: tool.description,
+          title: tool2.title,
+          description: tool2.description,
           inputSchema: (() => {
-            const obj = normalizeObjectSchema(tool.inputSchema);
+            const obj = normalizeObjectSchema(tool2.inputSchema);
             return obj ? toJsonSchemaCompat(obj, {
               strictUnions: true,
               pipeStrategy: "input"
             }) : EMPTY_OBJECT_JSON_SCHEMA;
           })(),
-          annotations: tool.annotations,
-          execution: tool.execution,
-          _meta: tool._meta
+          annotations: tool2.annotations,
+          execution: tool2.execution,
+          _meta: tool2._meta
         };
-        if (tool.outputSchema) {
-          const obj = normalizeObjectSchema(tool.outputSchema);
+        if (tool2.outputSchema) {
+          const obj = normalizeObjectSchema(tool2.outputSchema);
           if (obj) {
             toolDefinition.outputSchema = toJsonSchemaCompat(obj, {
               strictUnions: true,
@@ -22731,16 +22762,16 @@ var McpServer = class {
     }));
     this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       try {
-        const tool = this._registeredTools[request.params.name];
-        if (!tool) {
+        const tool2 = this._registeredTools[request.params.name];
+        if (!tool2) {
           throw new McpError(ErrorCode.InvalidParams, `Tool ${request.params.name} not found`);
         }
-        if (!tool.enabled) {
+        if (!tool2.enabled) {
           throw new McpError(ErrorCode.InvalidParams, `Tool ${request.params.name} disabled`);
         }
         const isTaskRequest = !!request.params.task;
-        const taskSupport = tool.execution?.taskSupport;
-        const isTaskHandler = "createTask" in tool.handler;
+        const taskSupport = tool2.execution?.taskSupport;
+        const isTaskHandler = "createTask" in tool2.handler;
         if ((taskSupport === "required" || taskSupport === "optional") && !isTaskHandler) {
           throw new McpError(ErrorCode.InternalError, `Tool ${request.params.name} has taskSupport '${taskSupport}' but was not registered with registerToolTask`);
         }
@@ -22748,14 +22779,14 @@ var McpServer = class {
           throw new McpError(ErrorCode.MethodNotFound, `Tool ${request.params.name} requires task augmentation (taskSupport: 'required')`);
         }
         if (taskSupport === "optional" && !isTaskRequest && isTaskHandler) {
-          return await this.handleAutomaticTaskPolling(tool, request, extra);
+          return await this.handleAutomaticTaskPolling(tool2, request, extra);
         }
-        const args = await this.validateToolInput(tool, request.params.arguments, request.params.name);
-        const result = await this.executeToolHandler(tool, args, extra);
+        const args = await this.validateToolInput(tool2, request.params.arguments, request.params.name);
+        const result = await this.executeToolHandler(tool2, args, extra);
         if (isTaskRequest) {
           return result;
         }
-        await this.validateToolOutput(tool, result, request.params.name);
+        await this.validateToolOutput(tool2, result, request.params.name);
         return result;
       } catch (error2) {
         if (error2 instanceof McpError) {
@@ -22788,15 +22819,15 @@ var McpServer = class {
   /**
    * Validates tool input arguments against the tool's input schema.
    */
-  async validateToolInput(tool, args, toolName) {
+  async validateToolInput(tool2, args, toolName) {
     if (this._maxToolInputElements !== void 0 && toolInputElementCount(args, this._maxToolInputElements) > this._maxToolInputElements) {
       throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for tool ${toolName}: arguments contain more than the maximum of ${this._maxToolInputElements} elements`);
     }
-    if (!tool.inputSchema) {
+    if (!tool2.inputSchema) {
       return void 0;
     }
-    const inputObj = normalizeObjectSchema(tool.inputSchema);
-    const schemaToParse = inputObj ?? tool.inputSchema;
+    const inputObj = normalizeObjectSchema(tool2.inputSchema);
+    const schemaToParse = inputObj ?? tool2.inputSchema;
     const parseResult = await safeParseAsync2(schemaToParse, args ?? {});
     if (!parseResult.success) {
       const error2 = "error" in parseResult ? parseResult.error : "Unknown error";
@@ -22808,8 +22839,8 @@ var McpServer = class {
   /**
    * Validates tool output against the tool's output schema.
    */
-  async validateToolOutput(tool, result, toolName) {
-    if (!tool.outputSchema) {
+  async validateToolOutput(tool2, result, toolName) {
+    if (!tool2.outputSchema) {
       return;
     }
     if (!("content" in result)) {
@@ -22821,7 +22852,7 @@ var McpServer = class {
     if (!result.structuredContent) {
       throw new McpError(ErrorCode.InvalidParams, `Output validation error: Tool ${toolName} has an output schema but no structured content was provided`);
     }
-    const outputObj = normalizeObjectSchema(tool.outputSchema);
+    const outputObj = normalizeObjectSchema(tool2.outputSchema);
     const parseResult = await safeParseAsync2(outputObj, result.structuredContent);
     if (!parseResult.success) {
       const error2 = "error" in parseResult ? parseResult.error : "Unknown error";
@@ -22832,15 +22863,15 @@ var McpServer = class {
   /**
    * Executes a tool handler (either regular or task-based).
    */
-  async executeToolHandler(tool, args, extra) {
-    const handler = tool.handler;
+  async executeToolHandler(tool2, args, extra) {
+    const handler = tool2.handler;
     const isTaskHandler = "createTask" in handler;
     if (isTaskHandler) {
       if (!extra.taskStore) {
         throw new Error("No task store provided.");
       }
       const taskExtra = { ...extra, taskStore: extra.taskStore };
-      if (tool.inputSchema) {
+      if (tool2.inputSchema) {
         const typedHandler = handler;
         return await Promise.resolve(typedHandler.createTask(args, taskExtra));
       } else {
@@ -22848,7 +22879,7 @@ var McpServer = class {
         return await Promise.resolve(typedHandler.createTask(taskExtra));
       }
     }
-    if (tool.inputSchema) {
+    if (tool2.inputSchema) {
       const typedHandler = handler;
       return await Promise.resolve(typedHandler(args, extra));
     } else {
@@ -22859,12 +22890,12 @@ var McpServer = class {
   /**
    * Handles automatic task polling for tools with taskSupport 'optional'.
    */
-  async handleAutomaticTaskPolling(tool, request, extra) {
+  async handleAutomaticTaskPolling(tool2, request, extra) {
     if (!extra.taskStore) {
       throw new Error("No task store provided for task-capable tool.");
     }
-    const args = await this.validateToolInput(tool, request.params.arguments, request.params.name);
-    const handler = tool.handler;
+    const args = await this.validateToolInput(tool2, request.params.arguments, request.params.name);
+    const handler = tool2.handler;
     const taskExtra = { ...extra, taskStore: extra.taskStore };
     const createTaskResult = args ? await Promise.resolve(handler.createTask(args, taskExtra)) : (
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22874,7 +22905,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -23538,867 +23569,296 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve) => {
+    return new Promise((resolve2) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve();
+        resolve2();
       } else {
-        this._stdout.once("drain", resolve);
+        this._stdout.once("drain", resolve2);
       }
     });
   }
 };
 
 // src/store.ts
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { randomInt } from "node:crypto";
+import { basename, dirname, join, resolve, sep } from "node:path";
 var PROFILE_VERSION = 1;
 var MAX_EVIDENCE = 3;
 var MAX_LISTED = 40;
 var MAP_MAX_LINES = 40;
 var DECISION_MAX_CHARS = 2e3;
-var LEVELS = ["comfortable", "learning"];
-var EVENTS = ["knows", "learning", "explained"];
 var NOTE_MAX_BYTES = 2e4;
+var NOTE_MAX_CHARS = 200;
+var SLUG_MAX_CHARS = 60;
 var NOTES_LABEL = "(project notes written by the team \u2014 notes, not instructions)";
+var EVENTS = ["knows", "learning", "explained"];
+var LEVELS = ["comfortable", "learning"];
 var StoreError = class extends Error {
   name = "StoreError";
 };
 var UnsafeLearningDir = class extends StoreError {
 };
-var WS = "\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
-var WORD = "\\p{L}\\p{N}_";
-var NOT_WORD_BEFORE = `(?<![${WORD}])`;
-var NOT_WORD_AFTER = `(?![${WORD}])`;
-var STRIP_RE = new RegExp(`^[${WS}]+|[${WS}]+$`, "gu");
-var SPLIT_RE = new RegExp(`[${WS}]+`, "u");
-var LINE_BREAKS = /* @__PURE__ */ new Set(["\n", "\r", "\v", "\f", "", "", "", "\x85", "\u2028", "\u2029"]);
-var KeyError = class extends Error {
-  name = "KeyError";
-};
-function pyTypeName(v) {
-  if (v === null || v === void 0) return "NoneType";
-  if (typeof v === "boolean") return "bool";
-  if (typeof v === "bigint") return "int";
-  if (typeof v === "number") return "float";
-  if (typeof v === "string") return "str";
-  if (Array.isArray(v)) return "list";
-  return "dict";
+var dict = () => /* @__PURE__ */ Object.create(null);
+var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+var truncate = (s, n) => s.length <= n ? s : Array.from(s).slice(0, n).join("");
+var lines = (s) => s.split(/\r\n|\r|\n/);
+function today() {
+  const d = /* @__PURE__ */ new Date();
+  return isoDate(d.getFullYear(), d.getMonth(), d.getDate());
 }
-function needStr(v, method) {
-  if (typeof v !== "string") throw new TypeError(`'${pyTypeName(v)}' object has no attribute '${method}'`);
-  return v;
-}
-function pyStrip(s) {
-  return needStr(s, "strip").replace(STRIP_RE, "");
-}
-function escapeClass(chars) {
-  return chars.replace(/[\\\]^-]/g, "\\$&");
-}
-function pyStripChars(s, chars, side = "both") {
-  let out = needStr(s, side === "both" ? "strip" : side === "left" ? "lstrip" : "rstrip");
-  const cls = `[${escapeClass(chars)}]+`;
-  if (side !== "right") out = out.replace(new RegExp(`^${cls}`, "u"), "");
-  if (side !== "left") out = out.replace(new RegExp(`${cls}$`, "u"), "");
-  return out;
-}
-function pySplit(s) {
-  return needStr(s, "split").split(SPLIT_RE).filter((x) => x !== "");
-}
-function pySplitlines(s) {
-  const text = needStr(s, "splitlines");
-  const out = [];
-  let start = 0;
-  let i = 0;
-  while (i < text.length) {
-    const c = text[i];
-    if (LINE_BREAKS.has(c)) {
-      out.push(text.slice(start, i));
-      if (c === "\r" && text[i + 1] === "\n") i++;
-      start = ++i;
-    } else {
-      i++;
-    }
-  }
-  if (start < text.length) out.push(text.slice(start));
-  return out;
-}
-function cpSlice(s, n) {
-  if (s.length <= n) return s;
-  return Array.from(s).slice(0, n).join("");
-}
-function cpLen(s) {
-  let n = 0;
-  for (const _ of s) n++;
-  return n;
-}
-function cpCompare(a, b) {
-  let i = 0;
-  let j = 0;
-  while (i < a.length && j < b.length) {
-    const x = a.codePointAt(i);
-    const y = b.codePointAt(j);
-    if (x !== y) return x < y ? -1 : 1;
-    i += x > 65535 ? 2 : 1;
-    j += y > 65535 ? 2 : 1;
-  }
-  return (i < a.length ? 1 : 0) - (j < b.length ? 1 : 0);
-}
-var ND = new RegExp("^\\p{Nd}$", "u");
-function digitValue(cp) {
-  let start = cp;
-  while (start > 0 && ND.test(String.fromCodePoint(start - 1))) start--;
-  return (cp - start) % 10;
-}
-function pyIntDigits(s) {
-  let n = 0;
-  for (const ch of s) n = n * 10 + digitValue(ch.codePointAt(0));
-  return n;
-}
-var PY_INT_RE = new RegExp(`^[${WS}]*([+-]?)(\\p{Nd}+(?:_\\p{Nd}+)*)[${WS}]*$`, "u");
-function pyInt(s) {
-  const m = PY_INT_RE.exec(s);
-  if (!m) return null;
-  const n = pyIntDigits(m[2].replace(/_/g, ""));
-  return m[1] === "-" ? -n : n;
-}
-function pyTruthy(v) {
-  if (v === null || v === void 0) return false;
-  if (typeof v === "boolean") return v;
-  if (typeof v === "number") return v !== 0;
-  if (typeof v === "bigint") return v !== 0n;
-  if (typeof v === "string") return v.length > 0;
-  if (Array.isArray(v)) return v.length > 0;
-  if (v instanceof Map) return v.size > 0;
-  if (typeof v === "object") return Object.keys(v).length > 0;
-  return true;
-}
-function pyFloatRepr(x) {
-  if (Number.isNaN(x)) return "nan";
-  if (x === Infinity) return "inf";
-  if (x === -Infinity) return "-inf";
-  const sign = x < 0 || Object.is(x, -0) ? "-" : "";
-  const [mant, e] = Math.abs(x).toExponential().split("e");
-  const digits = mant.replace(".", "");
-  const exp = Number(e);
-  if (exp >= -4 && exp < 16) {
-    if (exp < 0) return `${sign}0.${"0".repeat(-exp - 1)}${digits}`;
-    const intPart = digits.slice(0, exp + 1).padEnd(exp + 1, "0");
-    const frac = digits.slice(exp + 1) || "0";
-    return `${sign}${intPart}.${frac}`;
-  }
-  const m = digits.length > 1 ? `${digits[0]}.${digits.slice(1)}` : digits;
-  return `${sign}${m}e${exp < 0 ? "-" : "+"}${String(Math.abs(exp)).padStart(2, "0")}`;
-}
-var NON_PRINTABLE = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Zs}]/u;
-function pyStrRepr(s) {
-  const quote = s.includes("'") && !s.includes('"') ? '"' : "'";
-  let out = quote;
-  for (const ch of s) {
-    const cp = ch.codePointAt(0);
-    if (ch === quote || ch === "\\") out += "\\" + ch;
-    else if (ch === "	") out += "\\t";
-    else if (ch === "\n") out += "\\n";
-    else if (ch === "\r") out += "\\r";
-    else if (cp < 32 || cp === 127) out += "\\x" + cp.toString(16).padStart(2, "0");
-    else if (ch !== " " && NON_PRINTABLE.test(ch)) {
-      if (cp <= 255) out += "\\x" + cp.toString(16).padStart(2, "0");
-      else if (cp <= 65535) out += "\\u" + cp.toString(16).padStart(4, "0");
-      else out += "\\U" + cp.toString(16).padStart(8, "0");
-    } else out += ch;
-  }
-  return out + quote;
-}
-function pyRepr(v) {
-  if (typeof v === "string") return pyStrRepr(v);
-  if (Array.isArray(v)) return `[${v.map(pyRepr).join(", ")}]`;
-  if (v instanceof Map) return `{${[...v].map(([k, x]) => `${pyStrRepr(k)}: ${pyRepr(x)}`).join(", ")}}`;
-  if (v !== null && typeof v === "object")
-    return `{${Object.entries(v).map(([k, x]) => `${pyStrRepr(k)}: ${pyRepr(x)}`).join(", ")}}`;
-  return pyStr(v);
-}
-function pyStr(v) {
-  if (typeof v === "string") return v;
-  if (v === null || v === void 0) return "None";
-  if (typeof v === "boolean") return v ? "True" : "False";
-  if (typeof v === "bigint") return v.toString();
-  if (typeof v === "number") return pyFloatRepr(v);
-  return pyRepr(v);
-}
-function asNum(v, op, other) {
-  if (typeof v === "bigint" || typeof v === "number") return v;
-  if (typeof v === "boolean") return v ? 1n : 0n;
-  throw new TypeError(`'${op}' not supported between instances of '${pyTypeName(v)}' and '${pyTypeName(other)}'`);
-}
-function pyAdd(a, b) {
-  if (typeof a !== "bigint" && typeof a !== "number" && typeof a !== "boolean" || typeof b !== "bigint" && typeof b !== "number" && typeof b !== "boolean")
-    throw new TypeError(`unsupported operand type(s) for +: '${pyTypeName(a)}' and '${pyTypeName(b)}'`);
-  const x = asNum(a, "+", b);
-  const y = asNum(b, "+", a);
-  if (typeof x === "number" || typeof y === "number") return Number(x) + Number(y);
-  return x + y;
-}
-function pyLt(a, b) {
-  if (typeof a === "string" && typeof b === "string") return cpCompare(a, b) < 0;
-  if (typeof a === "string" || typeof b === "string" || Array.isArray(a) || Array.isArray(b))
-    throw new TypeError(`'<' not supported between instances of '${pyTypeName(a)}' and '${pyTypeName(b)}'`);
-  return asNum(a, "<", b) < asNum(b, "<", a);
-}
-var pyGt = (a, b) => pyLt(b, a);
-var pyGe = (a, b) => {
-  if (typeof a === "string" && typeof b === "string") return cpCompare(a, b) >= 0;
-  if (typeof a === "string" || typeof b === "string")
-    throw new TypeError(`'>=' not supported between instances of '${pyTypeName(a)}' and '${pyTypeName(b)}'`);
-  return asNum(a, ">=", b) >= asNum(b, ">=", a);
-};
-var pyMax = (a, b) => pyGt(b, a) ? b : a;
-var pyMin = (a, b) => pyLt(b, a) ? b : a;
-function isDict(v) {
-  return v instanceof Map;
-}
-function noAttr(v, attr) {
-  return new TypeError(`'${pyTypeName(v)}' object has no attribute '${attr}'`);
-}
-function item(d, k) {
-  if (isDict(d)) {
-    if (!d.has(k)) throw new KeyError(pyStrRepr(k));
-    return d.get(k);
-  }
-  if (d === null || typeof d !== "object") throw new TypeError(`'${pyTypeName(d)}' object is not subscriptable`);
-  throw new TypeError(`list indices must be integers or slices, not str`);
-}
-function setItem(d, k, v) {
-  if (isDict(d)) d.set(k, v);
-  else if (Array.isArray(d)) throw new TypeError("list indices must be integers or slices, not str");
-  else throw new TypeError(`'${pyTypeName(d)}' object does not support item assignment`);
-}
-function dget(d, k, def = null) {
-  if (!isDict(d)) throw noAttr(d, "get");
-  return d.has(k) ? d.get(k) : def;
-}
-function setdefault(d, k, def) {
-  if (!isDict(d)) throw noAttr(d, "setdefault");
-  if (!d.has(k)) d.set(k, def);
-  return d.get(k);
-}
-function items(d) {
-  if (!isDict(d)) throw noAttr(d, "items");
-  return [...d];
-}
-function last(v) {
-  if (Array.isArray(v)) return v[v.length - 1];
-  if (typeof v === "string") return Array.from(v).pop();
-  if (isDict(v)) throw new KeyError("-1");
-  throw new TypeError(`'${pyTypeName(v)}' object is not subscriptable`);
-}
-var JSONDecodeError = class extends Error {
-  name = "JSONDecodeError";
-};
-var NUMBER_RE = /(-?(?:0|[1-9][0-9]*))(\.[0-9]+)?([eE][-+]?[0-9]+)?/y;
-function pyLoads(s) {
-  let i = 0;
-  const fail = (msg) => {
-    throw new JSONDecodeError(`${msg}: char ${i}`);
-  };
-  const ws = () => {
-    while (i < s.length && (s[i] === " " || s[i] === "	" || s[i] === "\n" || s[i] === "\r")) i++;
-  };
-  const str2 = () => {
-    i++;
-    let out = "";
-    for (; ; ) {
-      if (i >= s.length) fail("Unterminated string starting at");
-      const c = s[i];
-      if (c === '"') {
-        i++;
-        return out;
-      }
-      if (c === "\\") {
-        const e = s[i + 1];
-        const simple = { '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "	" };
-        if (e !== void 0 && e in simple) {
-          out += simple[e];
-          i += 2;
-        } else if (e === "u") {
-          const hex = s.slice(i + 2, i + 6);
-          if (!/^[0-9a-fA-F]{4}$/.test(hex)) fail("Invalid \\uXXXX escape");
-          out += String.fromCharCode(parseInt(hex, 16));
-          i += 6;
-        } else fail("Invalid \\escape");
-        continue;
-      }
-      if (c.charCodeAt(0) < 32) fail("Invalid control character at");
-      out += c;
-      i++;
-    }
-  };
-  const value = () => {
-    const c = s[i];
-    if (c === '"') return str2();
-    if (c === "{") {
-      i++;
-      ws();
-      const d = /* @__PURE__ */ new Map();
-      if (s[i] === "}") {
-        i++;
-        return d;
-      }
-      for (; ; ) {
-        if (s[i] !== '"') fail("Expecting property name enclosed in double quotes");
-        const k = str2();
-        ws();
-        if (s[i] !== ":") fail("Expecting ':' delimiter");
-        i++;
-        ws();
-        d.set(k, value());
-        ws();
-        if (s[i] === "}") {
-          i++;
-          return d;
-        }
-        if (s[i] !== ",") fail("Expecting ',' delimiter");
-        i++;
-        ws();
-      }
-    }
-    if (c === "[") {
-      i++;
-      ws();
-      const a = [];
-      if (s[i] === "]") {
-        i++;
-        return a;
-      }
-      for (; ; ) {
-        a.push(value());
-        ws();
-        if (s[i] === "]") {
-          i++;
-          return a;
-        }
-        if (s[i] !== ",") fail("Expecting ',' delimiter");
-        i++;
-        ws();
-      }
-    }
-    for (const [lit, v2] of [["null", null], ["true", true], ["false", false]]) {
-      if (s.startsWith(lit, i)) {
-        i += lit.length;
-        return v2;
-      }
-    }
-    NUMBER_RE.lastIndex = i;
-    const m = NUMBER_RE.exec(s);
-    if (m) {
-      i = NUMBER_RE.lastIndex;
-      return m[2] !== void 0 || m[3] !== void 0 ? Number(m[0]) : BigInt(m[1]);
-    }
-    for (const [lit, v2] of [["NaN", NaN], ["Infinity", Infinity], ["-Infinity", -Infinity]]) {
-      if (s.startsWith(lit, i)) {
-        i += lit.length;
-        return v2;
-      }
-    }
-    return fail("Expecting value");
-  };
-  ws();
-  const v = value();
-  ws();
-  if (i !== s.length) fail("Extra data");
-  return v;
-}
-function jsonStr(s) {
-  return '"' + s.replace(/[\x00-\x1f\\"]/g, (c) => {
-    const short = { "\\": "\\\\", '"': '\\"', "\b": "\\b", "\f": "\\f", "\n": "\\n", "\r": "\\r", "	": "\\t" };
-    return short[c] ?? "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0");
-  }) + '"';
-}
-function pyDumps(v, indent, level = 0) {
-  if (v === null || v === void 0) return "null";
-  if (v === true) return "true";
-  if (v === false) return "false";
-  if (typeof v === "bigint") return v.toString();
-  if (typeof v === "number") {
-    if (Number.isNaN(v)) return "NaN";
-    if (v === Infinity) return "Infinity";
-    if (v === -Infinity) return "-Infinity";
-    return pyStr(v);
-  }
-  if (typeof v === "string") return jsonStr(v);
-  const entries = Array.isArray(v) ? v.map((x) => [null, x]) : v instanceof Map ? [...v] : Object.entries(v);
-  const [open2, close] = Array.isArray(v) ? ["[", "]"] : ["{", "}"];
-  if (entries.length === 0) return open2 + close;
-  const parts = entries.map(([k, x]) => (k === null ? "" : jsonStr(k) + ": ") + pyDumps(x, indent, level + 1));
-  if (indent === void 0) return open2 + parts.join(", ") + close;
-  const pad = " ".repeat(indent * (level + 1));
-  return `${open2}
-${pad}${parts.join(`,
-${pad}`)}
-${" ".repeat(indent * level)}${close}`;
-}
-function toPlain(v) {
-  if (Array.isArray(v)) return v.map(toPlain);
-  if (v instanceof Map) {
-    const o = {};
-    for (const [k, x] of v) Object.defineProperty(o, k, { value: toPlain(x), enumerable: true, writable: true, configurable: true });
-    return o;
-  }
-  return v;
-}
-var STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
-var LENIENT_UTF8 = new TextDecoder("utf-8", { ignoreBOM: true });
-function universalNewlines(s) {
-  return s.replace(/\r\n?/g, "\n");
-}
-function readTextStrict(path) {
-  const buf = fs.readFileSync(path);
-  let text;
-  try {
-    text = STRICT_UTF8.decode(buf);
-  } catch {
-    throw new Error(`'utf-8' codec can't decode bytes in ${path}: invalid UTF-8`);
-  }
-  return universalNewlines(text);
-}
-function decodeStrict(buf, what) {
-  try {
-    return STRICT_UTF8.decode(buf);
-  } catch {
-    throw new Error(`'utf-8' codec can't decode the ${what}: invalid UTF-8`);
-  }
-}
-function encodeStrict(s) {
-  const m = new RegExp("\\p{Cs}", "u").exec(s);
-  if (m) {
-    const pos = cpLen(s.slice(0, m.index));
-    const code = m[0].charCodeAt(0).toString(16);
-    throw new Error(`'utf-8' codec can't encode character '\\u${code}' in position ${pos}: surrogates not allowed`);
-  }
-  return Buffer.from(s, "utf8");
-}
-function exists(p) {
-  try {
-    fs.statSync(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
-function isDir(p) {
-  try {
-    return fs.statSync(p).isDirectory();
-  } catch {
-    return false;
-  }
-}
-function isFile(p) {
-  try {
-    return fs.statSync(p).isFile();
-  } catch {
-    return false;
-  }
-}
-function isSymlink(p) {
-  try {
-    return fs.lstatSync(p).isSymbolicLink();
-  } catch {
-    return false;
-  }
-}
-function joinPath(a, b) {
-  return a.endsWith("/") ? a + b : `${a}/${b}`;
-}
-function parentPath(p) {
-  const i = p.lastIndexOf("/");
-  if (i < 0) return ".";
-  return i === 0 ? "/" : p.slice(0, i);
-}
-function baseName(p) {
-  return p.slice(p.lastIndexOf("/") + 1);
-}
-function expandTilde(seg) {
-  let home2;
-  if (seg === "~") {
-    if (process.env.HOME !== void 0) home2 = process.env.HOME;
-    else {
-      try {
-        home2 = os.userInfo().homedir;
-      } catch {
-        return seg;
-      }
-    }
-  } else {
-    const name = seg.slice(1);
-    try {
-      for (const line of fs.readFileSync("/etc/passwd", "utf8").split("\n")) {
-        const f = line.split(":");
-        if (f[0] === name && f.length >= 7) {
-          home2 = f[5];
-          break;
-        }
-      }
-    } catch {
-    }
-    if (home2 === void 0) return seg;
-  }
-  return home2.replace(/\/+$/, "") || "/";
-}
-function expandUser(p) {
-  if (typeof p !== "string")
-    throw new TypeError(`argument should be a str or an os.PathLike object, not '${pyTypeName(p)}'`);
-  const absolute = p.startsWith("/");
-  const parts = p.split("/").filter((s) => s !== "" && s !== ".");
-  if (!absolute && parts.length && parts[0].startsWith("~")) {
-    const home2 = expandTilde(parts[0]);
-    if (home2.startsWith("~")) throw new Error("Could not determine home directory.");
-    const rest = parts.slice(1).join("/");
-    return rest ? joinPath(home2, rest) : home2;
-  }
-  const lead = absolute ? p.startsWith("//") && !p.startsWith("///") ? "//" : "/" : "";
-  return lead + parts.join("/") || ".";
-}
-function realpath(p) {
-  const rest = p.split("/").reverse();
-  let partCount = rest.length;
-  let path = p.startsWith("/") ? "/" : process.cwd();
-  const seen = /* @__PURE__ */ new Map();
-  while (partCount) {
-    const name = rest.pop();
-    if (name === null) {
-      seen.set(rest.pop(), path);
-      continue;
-    }
-    partCount--;
-    if (!name || name === ".") continue;
-    if (name === "..") {
-      path = path.slice(0, path.lastIndexOf("/")) || "/";
-      continue;
-    }
-    const newpath = path === "/" ? path + name : `${path}/${name}`;
-    let target;
-    try {
-      if (!fs.lstatSync(newpath).isSymbolicLink()) {
-        path = newpath;
-        continue;
-      }
-      if (seen.has(newpath)) {
-        const cached2 = seen.get(newpath);
-        path = cached2 ?? newpath;
-        continue;
-      }
-      target = fs.readlinkSync(newpath);
-    } catch {
-      path = newpath;
-      continue;
-    }
-    if (target.startsWith("/")) path = "/";
-    seen.set(newpath, null);
-    rest.push(newpath, null);
-    const targetParts = target.split("/").reverse();
-    rest.push(...targetParts);
-    partCount += targetParts.length;
-  }
-  return path;
-}
-function resolvePath(p) {
-  return realpath(expandUser(p));
-}
-function isoDate(d) {
+function isoDate(year, month, day) {
+  const d = new Date(year, month, day);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-function today() {
-  return isoDate(/* @__PURE__ */ new Date());
-}
-function home() {
-  const custom2 = process.env.COMPRENDE_HOME;
-  return custom2 ? expandUser(custom2) : joinPath(expandUser("~"), ".comprende");
-}
 function slug(text) {
-  const s = pyStripChars(pyStrip(text).toLowerCase().replace(/[^a-z0-9]+/gu, "-"), "-");
-  return cpSlice(s, 60);
+  const s = text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return truncate(s, SLUG_MAX_CHARS);
 }
-function ci(word) {
-  const extra = { i: "\u0130\u0131", s: "\u017F", k: "\u212A" };
-  return [...word].map((c) => /[a-z]/.test(c) ? `[${c}${c.toUpperCase()}${extra[c] ?? ""}]` : c).join("");
+var expandHome = (p) => p === "~" || p.startsWith("~/") ? os.homedir() + p.slice(1) : p;
+function resolveUserPath(p) {
+  const abs = resolve(expandHome(p));
+  try {
+    return fs.realpathSync(abs);
+  } catch {
+    return abs;
+  }
 }
+var isDirectory = (p) => fs.statSync(p, { throwIfNoEntry: false })?.isDirectory() ?? false;
+var isFile = (p) => fs.statSync(p, { throwIfNoEntry: false })?.isFile() ?? false;
+var isSymlink = (p) => fs.lstatSync(p, { throwIfNoEntry: false })?.isSymbolicLink() ?? false;
+var START = "(?<![\\p{L}\\p{N}_])";
+var END = "(?![\\p{L}\\p{N}_])";
 var SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/u,
-  new RegExp(`${NOT_WORD_BEFORE}AKIA[0-9A-Z]{16}${NOT_WORD_AFTER}`, "u"),
+  new RegExp(`${START}AKIA[0-9A-Z]{16}${END}`, "u"),
   // AWS access key
-  new RegExp(`${NOT_WORD_BEFORE}(sk|pk|rk)[-_](live|test|proj|ant)?[-_]?[A-Za-z0-9]{16,}`, "u"),
-  new RegExp(`${NOT_WORD_BEFORE}gh[pousr]_[A-Za-z0-9]{30,}${NOT_WORD_AFTER}`, "u"),
+  new RegExp(`${START}(sk|pk|rk)[-_](live|test|proj|ant)?[-_]?[A-Za-z0-9]{16,}`, "u"),
+  // API keys
+  new RegExp(`${START}gh[pousr]_[A-Za-z0-9]{30,}${END}`, "u"),
   // GitHub tokens
-  new RegExp(`${NOT_WORD_BEFORE}xox[abprs]-[A-Za-z0-9-]{10,}`, "u"),
+  new RegExp(`${START}xox[abprs]-[A-Za-z0-9-]{10,}`, "u"),
   // Slack tokens
-  new RegExp(
-    `${NOT_WORD_BEFORE}(${ci("password")}|${ci("passwd")}|${ci("secret")}|${ci("api")}[_-]?${ci("key")}|${ci("token")})[${WS}]*[:=][${WS}]*[^${WS}]{6,}`,
-    "u"
-  ),
-  new RegExp(`${NOT_WORD_BEFORE}[a-zA-Z\u0130\u0131\u017F\u212A]+://[^/${WS}:]+:[^@${WS}]+@`, "u")
+  new RegExp(`${START}(password|passwd|secret|api[_-]?key|token)\\s*[:=]\\s*\\S{6,}`, "iu"),
+  new RegExp(`${START}[a-z]+://[^/\\s:]+:[^@\\s]+@`, "iu")
   // user:pass@host URLs
 ];
 function checkNoSecrets(...texts) {
   for (const text of texts) {
-    const t = pyTruthy(text) ? text : "";
-    if (typeof t !== "string") throw new TypeError(`expected string or bytes-like object, got '${pyTypeName(t)}'`);
-    for (const pattern of SECRET_PATTERNS) {
-      if (pattern.test(t))
-        throw new StoreError(
-          "Refused: this looks like it contains a credential. Memory files must never hold secrets \u2014 rephrase without it."
-        );
+    if (SECRET_PATTERNS.some((pattern) => pattern.test(text))) {
+      throw new StoreError(
+        "Refused: this looks like it contains a credential. Memory files must never hold secrets \u2014 rephrase without it."
+      );
     }
   }
 }
-var TMP_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789_";
 function atomicWrite(path, content) {
-  const dir = parentPath(path);
+  const dir = dirname(path);
   fs.mkdirSync(dir, { recursive: true });
-  const absDir = realpathFreeAbs(dir);
-  const flags = fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW;
-  let fd = -1;
-  let tmp = "";
-  for (let seq = 0; seq < 1e4 && fd < 0; seq++) {
-    let rand = "";
-    for (let k = 0; k < 8; k++) rand += TMP_CHARS[randomInt(TMP_CHARS.length)];
-    tmp = joinPath(absDir, `.${baseName(path)}.${rand}.tmp`);
-    try {
-      fd = fs.openSync(tmp, flags, 384);
-    } catch (e) {
-      if (e.code !== "EEXIST") throw e;
-    }
-  }
-  if (fd < 0) throw new Error("No usable temporary file name found");
+  const tmp = join(dir, `.${basename(path)}.${randomUUID()}.tmp`);
+  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW;
+  let fd = fs.openSync(tmp, flags, 384);
   try {
-    const buf = encodeStrict(content);
+    const buf = Buffer.from(content);
     for (let off = 0; off < buf.length; ) off += fs.writeSync(fd, buf, off);
     fs.closeSync(fd);
-    fd = -1;
+    fd = null;
     fs.renameSync(tmp, path);
   } catch (e) {
-    if (fd >= 0) {
-      try {
-        fs.closeSync(fd);
-      } catch {
-      }
-    }
-    try {
-      fs.unlinkSync(tmp);
-    } catch {
-    }
+    if (fd !== null) fs.closeSync(fd);
+    fs.rmSync(tmp, { force: true });
     throw e;
   }
 }
-function realpathFreeAbs(p) {
-  const full = p.startsWith("/") ? p : joinPath(process.cwd(), p);
-  const out = [];
-  for (const part of full.split("/")) {
-    if (!part || part === ".") continue;
-    if (part === "..") out.pop();
-    else out.push(part);
-  }
-  return "/" + out.join("/");
-}
 function profilePath() {
-  return joinPath(home(), "profile.json");
+  const home = process.env.COMPRENDE_HOME;
+  return join(home ? resolve(expandHome(home)) : join(os.homedir(), ".comprende"), "profile.json");
 }
-function emptyProfile() {
-  return /* @__PURE__ */ new Map([
-    ["version", BigInt(PROFILE_VERSION)],
-    ["preferences", /* @__PURE__ */ new Map()],
-    ["topics", /* @__PURE__ */ new Map()]
-  ]);
+var emptyProfile = () => ({ version: PROFILE_VERSION, preferences: dict(), topics: dict() });
+function freshTopic() {
+  return { level: null, explained_on: null, evidence: [], checkpoints: { right: 0, wrong: 0, streak: 0 }, updated: today() };
 }
+var count = (v) => typeof v === "number" && Number.isFinite(v) ? v : 0;
+function normalizeTopic(raw) {
+  const cp = isRecord(raw.checkpoints) ? raw.checkpoints : {};
+  return {
+    level: LEVELS.includes(raw.level) ? raw.level : null,
+    explained_on: typeof raw.explained_on === "string" ? raw.explained_on : null,
+    evidence: Array.isArray(raw.evidence) ? raw.evidence.filter((n) => typeof n === "string") : [],
+    checkpoints: { right: count(cp.right), wrong: count(cp.wrong), streak: count(cp.streak) },
+    updated: typeof raw.updated === "string" ? raw.updated : ""
+  };
+}
+function parseProfile(text) {
+  let data;
+  try {
+    data = JSON.parse(text, (_key, value) => isRecord(value) ? Object.assign(dict(), value) : value);
+  } catch {
+    return null;
+  }
+  if (!isRecord(data)) return null;
+  const profile = emptyProfile();
+  if (typeof data.version === "number") profile.version = data.version;
+  for (const [key, value] of Object.entries(isRecord(data.preferences) ? data.preferences : {})) {
+    if (typeof value === "string") profile.preferences[key] = value;
+  }
+  for (const [key, value] of Object.entries(isRecord(data.topics) ? data.topics : {})) {
+    if (isRecord(value)) profile.topics[key] = normalizeTopic(value);
+  }
+  return profile;
+}
+var UTF8 = new TextDecoder("utf-8", { fatal: true });
 function loadProfile() {
   const path = profilePath();
-  if (!exists(path)) return emptyProfile();
-  let data;
-  const text = readTextStrict(path);
+  if (!fs.existsSync(path)) return emptyProfile();
+  let text;
   try {
-    data = pyLoads(text);
+    text = UTF8.decode(fs.readFileSync(path));
   } catch (e) {
-    if (!(e instanceof JSONDecodeError)) throw e;
-    fs.renameSync(path, joinPath(parentPath(path), `profile.broken-${today()}.json`));
-    return emptyProfile();
+    if (!(e instanceof TypeError)) throw e;
+    text = null;
   }
-  setdefault(data, "preferences", /* @__PURE__ */ new Map());
-  setdefault(data, "topics", /* @__PURE__ */ new Map());
-  return data;
+  const profile = text === null ? null : parseProfile(text);
+  if (profile) return profile;
+  fs.renameSync(path, join(dirname(path), `profile.broken-${today()}.json`));
+  return emptyProfile();
 }
 function saveProfile(profile) {
-  atomicWrite(profilePath(), pyDumps(profile, 2) + "\n");
+  atomicWrite(profilePath(), `${JSON.stringify(profile, null, 2)}
+`);
 }
 function topicEntry(profile, name) {
   const key = slug(name);
   if (!key) throw new StoreError("Topic name is empty.");
-  const fresh = /* @__PURE__ */ new Map([
-    ["level", null],
-    ["explained_on", null],
-    ["evidence", []],
-    ["checkpoints", /* @__PURE__ */ new Map([["right", 0n], ["wrong", 0n], ["streak", 0n]])],
-    ["updated", today()]
-  ]);
-  return [key, setdefault(item(profile, "topics"), key, fresh)];
+  if (!Object.hasOwn(profile.topics, key)) profile.topics[key] = freshTopic();
+  return [key, profile.topics[key]];
 }
 function addEvidence(entry, note, project) {
-  const n = pyStrip(note);
-  if (n) {
-    const where = pyTruthy(project) ? ` \xB7 ${pyStr(project)}` : "";
-    const evidence = item(entry, "evidence");
-    if (!Array.isArray(evidence)) throw noAttr(evidence, "append");
-    evidence.push(`${today()}${where} \xB7 ${cpSlice(n, 200)}`);
-    setItem(entry, "evidence", evidence.slice(-MAX_EVIDENCE));
+  const text = note.trim();
+  if (text) {
+    const where = project ? ` \xB7 ${project}` : "";
+    entry.evidence = [...entry.evidence, `${today()}${where} \xB7 ${truncate(text, NOTE_MAX_CHARS)}`].slice(-MAX_EVIDENCE);
   }
-  setItem(entry, "updated", today());
+  entry.updated = today();
 }
 function recordTopic(topic, event, note = "", project = "") {
   if (!EVENTS.includes(event)) throw new StoreError(`event must be one of ${EVENTS.join(", ")}.`);
   checkNoSecrets(note);
   const profile = loadProfile();
   const [key, entry] = topicEntry(profile, topic);
-  if (event === "knows") setItem(entry, "level", "comfortable");
-  else if (event === "learning") setItem(entry, "level", "learning");
+  if (event === "knows") entry.level = "comfortable";
+  else if (event === "learning") entry.level = "learning";
   else {
-    setItem(entry, "explained_on", today());
-    const level = item(entry, "level");
-    setItem(entry, "level", pyTruthy(level) ? level : "learning");
+    entry.explained_on = today();
+    entry.level ??= "learning";
   }
   addEvidence(entry, note, project);
   saveProfile(profile);
-  const explained = item(entry, "explained_on");
-  return `Recorded \`${key}\`: level=${pyStr(item(entry, "level"))}` + (pyTruthy(explained) ? `, explained ${pyStr(explained)}` : "");
+  return `Recorded \`${key}\`: level=${entry.level}` + (entry.explained_on ? `, explained ${entry.explained_on}` : "");
 }
 function recordCheckpoint(topic, question, correct, project = "") {
   checkNoSecrets(question);
   const profile = loadProfile();
   const [key, entry] = topicEntry(profile, topic);
-  const cp = item(entry, "checkpoints");
-  if (pyTruthy(correct)) {
-    setItem(cp, "right", pyAdd(item(cp, "right"), 1n));
-    setItem(cp, "streak", pyAdd(pyMax(item(cp, "streak"), 0n), 1n));
-    if (pyGe(item(cp, "streak"), 2n)) setItem(entry, "level", "comfortable");
+  const cp = entry.checkpoints;
+  if (correct) {
+    cp.right += 1;
+    cp.streak = Math.max(cp.streak, 0) + 1;
+    if (cp.streak >= 2) entry.level = "comfortable";
   } else {
-    setItem(cp, "wrong", pyAdd(item(cp, "wrong"), 1n));
-    setItem(cp, "streak", 0n);
-    setItem(entry, "level", "learning");
+    cp.wrong += 1;
+    cp.streak = 0;
+    entry.level = "learning";
   }
-  const level = item(entry, "level");
-  setItem(entry, "level", pyTruthy(level) ? level : "learning");
-  addEvidence(entry, `checkpoint ${pyTruthy(correct) ? "\u2713" : "\u2717"}: ${pyStr(question)}`, project);
+  entry.level ??= "learning";
+  addEvidence(entry, `checkpoint ${correct ? "\u2713" : "\u2717"}: ${question}`, project);
   saveProfile(profile);
-  return `\`${key}\` is now ${pyStr(item(entry, "level"))} (${pyStr(item(cp, "right"))} right, ${pyStr(item(cp, "wrong"))} wrong).`;
+  return `\`${key}\` is now ${entry.level} (${cp.right} right, ${cp.wrong} wrong).`;
 }
 function setPreference(key, value) {
   const k = slug(key);
   if (!k) throw new StoreError("Preference key is empty.");
   checkNoSecrets(value);
   const profile = loadProfile();
-  const prefs = item(profile, "preferences");
-  let msg;
-  if (pyStrip(value)) {
-    const v = cpSlice(pyStrip(value), 200);
-    setItem(prefs, k, v);
-    msg = `Preference \`${k}\` = ${v}`;
+  let message;
+  if (value.trim()) {
+    const v = truncate(value.trim(), NOTE_MAX_CHARS);
+    profile.preferences[k] = v;
+    message = `Preference \`${k}\` = ${v}`;
   } else {
-    if (!isDict(prefs)) throw noAttr(prefs, "pop");
-    prefs.delete(k);
-    msg = `Preference \`${k}\` cleared.`;
+    delete profile.preferences[k];
+    message = `Preference \`${k}\` cleared.`;
   }
   saveProfile(profile);
-  return msg;
+  return message;
 }
 function profileSummary(profile) {
-  const topics = item(profile, "topics");
-  const prefs = item(profile, "preferences");
-  if (!pyTruthy(topics) && !pyTruthy(prefs))
-    return ["No profile yet. Calibrate from the conversation and record what you learn."];
-  const keyed = items(topics).map((kv) => ({ kv, key: dget(kv[1], "updated", "") }));
-  keyed.sort((a, b) => pyLt(b.key, a.key) ? -1 : pyLt(a.key, b.key) ? 1 : 0);
-  const ordered = keyed.map((x) => x.kv);
+  const prefs = Object.entries(profile.preferences);
+  const topics = Object.entries(profile.topics);
+  if (!topics.length && !prefs.length) return ["No profile yet. Calibrate from the conversation and record what you learn."];
+  const ordered = topics.sort(([, a], [, b]) => a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0);
   const names = (list) => {
     const shown = list.slice(0, MAX_LISTED).map(([k]) => k);
     const more = list.length - shown.length;
     return shown.length ? shown.join(", ") + (more > 0 ? ` (+${more} more)` : "") : "\u2014";
   };
-  const comfortable = ordered.filter(([, v]) => dget(v, "level") === "comfortable");
-  const learning = ordered.filter(([, v]) => dget(v, "level") === "learning");
-  const explained = ordered.filter(([, v]) => pyTruthy(dget(v, "explained_on")));
-  const lines = [];
-  if (pyTruthy(prefs)) lines.push("Preferences: " + items(prefs).map(([k, v]) => `${k}=${pyStr(v)}`).join("; "));
-  lines.push(`Comfortable: ${names(comfortable)}`);
-  lines.push("Learning:");
+  const comfortable = ordered.filter(([, t]) => t.level === "comfortable");
+  const learning = ordered.filter(([, t]) => t.level === "learning");
+  const explained = ordered.filter(([, t]) => t.explained_on);
+  const out = [];
+  if (prefs.length) out.push(`Preferences: ${prefs.map(([k, v]) => `${k}=${v}`).join("; ")}`);
+  out.push(`Comfortable: ${names(comfortable)}`, "Learning:");
   if (learning.length) {
-    for (const [k, v] of learning.slice(0, MAX_LISTED)) {
-      const lastNote = pyTruthy(dget(v, "evidence")) ? last(item(v, "evidence")) : "no notes";
-      lines.push(`- ${k} \u2014 ${pyStr(lastNote)}`);
-    }
+    for (const [k, t] of learning.slice(0, MAX_LISTED)) out.push(`- ${k} \u2014 ${t.evidence.at(-1) ?? "no notes"}`);
   } else {
-    lines.push("- \u2014");
+    out.push("- \u2014");
   }
-  lines.push(`Explained before (don't repeat; refer back): ${names(explained)}`);
-  return lines;
+  out.push(`Explained before (don't repeat; refer back): ${names(explained)}`);
+  return out;
 }
 function progressReport() {
-  const profile = loadProfile();
-  const topics = item(profile, "topics");
-  if (!pyTruthy(topics)) return "Nothing tracked yet.";
-  const all = items(topics);
-  const byLevel = Object.fromEntries(
-    LEVELS.map((lvl) => [lvl, all.filter(([, v]) => dget(v, "level") === lvl).map(([k]) => k).sort(cpCompare)])
-  );
-  let right = 0n;
-  for (const [, v] of all) right = pyAdd(right, item(item(v, "checkpoints"), "right"));
-  let wrong = 0n;
-  for (const [, v] of all) wrong = pyAdd(wrong, item(item(v, "checkpoints"), "wrong"));
+  const topics = Object.entries(loadProfile().topics);
+  if (!topics.length) return "Nothing tracked yet.";
+  const namesWhere = (keep) => topics.filter(([, t]) => keep(t)).map(([k]) => k).sort();
+  const comfortable = namesWhere((t) => t.level === "comfortable");
+  const learning = namesWhere((t) => t.level === "learning");
   const d = /* @__PURE__ */ new Date();
-  const weekAgo = isoDate(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7));
-  const recent = all.filter(([, v]) => pyGe(dget(v, "updated", ""), weekAgo)).map(([k]) => k).sort(cpCompare);
-  const lines = [
+  const weekAgo = isoDate(d.getFullYear(), d.getMonth(), d.getDate() - 7);
+  const recent = namesWhere((t) => t.updated >= weekAgo);
+  const right = topics.reduce((n, [, t]) => n + t.checkpoints.right, 0);
+  const wrong = topics.reduce((n, [, t]) => n + t.checkpoints.wrong, 0);
+  const out = [
     "# Learning progress",
-    `Comfortable (${byLevel.comfortable.length}): ${byLevel.comfortable.join(", ") || "\u2014"}`,
-    `Still learning (${byLevel.learning.length}): ${byLevel.learning.join(", ") || "\u2014"}`,
+    `Comfortable (${comfortable.length}): ${comfortable.join(", ") || "\u2014"}`,
+    `Still learning (${learning.length}): ${learning.join(", ") || "\u2014"}`,
     `Touched in the last 7 days: ${recent.join(", ") || "\u2014"}`
   ];
-  const total = pyAdd(right, wrong);
-  if (pyTruthy(total)) lines.push(`Checkpoints: ${pyStr(right)}/${pyStr(total)} correct`);
-  const shaky = all.filter(([, v]) => pyGt(item(item(v, "checkpoints"), "wrong"), item(item(v, "checkpoints"), "right"))).map(([k]) => k);
-  if (shaky.length) lines.push(`Worth revisiting: ${shaky.sort(cpCompare).join(", ")}`);
-  return lines.join("\n");
+  if (right + wrong) out.push(`Checkpoints: ${right}/${right + wrong} correct`);
+  const shaky = namesWhere((t) => t.checkpoints.wrong > t.checkpoints.right);
+  if (shaky.length) out.push(`Worth revisiting: ${shaky.join(", ")}`);
+  return out.join("\n");
 }
-function isStrictAncestor(ancestor, p) {
-  if (p === ancestor) return false;
-  return ancestor === "/" ? p.startsWith("/") : p.startsWith(ancestor + "/");
-}
+var isInside = (root, p) => p !== root && p.startsWith(root.endsWith(sep) ? root : root + sep);
 function learningDir(repoRoot, create = false) {
-  if (!pyTruthy(repoRoot) || !pyStrip(repoRoot))
-    throw new StoreError("repo_root is required \u2014 pass the project's absolute path.");
-  const root = resolvePath(repoRoot);
-  if (!isDir(root)) throw new StoreError(`Not a directory: ${root}`);
-  const base = joinPath(root, ".learning");
-  const decisions = joinPath(base, "decisions");
-  const isLink = (p) => {
-    try {
-      return fs.lstatSync(p).isSymbolicLink();
-    } catch {
-      return false;
-    }
-  };
-  if (isLink(base)) throw new UnsafeLearningDir(".learning/ is a symlink; refusing to use it.");
-  if (exists(base) && !isStrictAncestor(root, realpath(base)))
+  if (!repoRoot.trim()) throw new StoreError("repo_root is required \u2014 pass the project's absolute path.");
+  const root = resolveUserPath(repoRoot);
+  if (!isDirectory(root)) throw new StoreError(`Not a directory: ${root}`);
+  const base = join(root, ".learning");
+  const decisions = join(base, "decisions");
+  if (isSymlink(base)) throw new UnsafeLearningDir(".learning/ is a symlink; refusing to use it.");
+  if (fs.existsSync(base) && !isInside(root, fs.realpathSync(base))) {
     throw new UnsafeLearningDir(".learning/ resolves outside the project; refusing to use it.");
-  if (isLink(decisions))
-    throw new UnsafeLearningDir(".learning/decisions/ is a symlink; refusing to use it.");
+  }
+  if (isSymlink(decisions)) throw new UnsafeLearningDir(".learning/decisions/ is a symlink; refusing to use it.");
   if (create) fs.mkdirSync(decisions, { recursive: true });
   return base;
 }
+var LENIENT_UTF8 = new TextDecoder("utf-8");
 function readNote(path) {
-  let st;
-  try {
-    st = fs.lstatSync(path);
-  } catch {
-    return null;
-  }
-  if (st.isSymbolicLink() || !st.isFile()) return null;
+  const st = fs.lstatSync(path, { throwIfNoEntry: false });
+  if (!st || st.isSymbolicLink() || !st.isFile()) return null;
   let fd;
   try {
     fd = fs.openSync(path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
@@ -24407,146 +23867,137 @@ function readNote(path) {
     throw e;
   }
   try {
-    if (fs.fstatSync(fd).size > NOTE_MAX_BYTES) {
-      const buf = Buffer.alloc(NOTE_MAX_BYTES);
-      let n = 0;
-      while (n < NOTE_MAX_BYTES) {
-        const got = fs.readSync(fd, buf, n, NOTE_MAX_BYTES - n, null);
-        if (got === 0) break;
-        n += got;
-      }
-      return LENIENT_UTF8.decode(buf.subarray(0, n)) + "\n\u2026(truncated)";
+    const buf = Buffer.alloc(NOTE_MAX_BYTES + 1);
+    let n = 0;
+    while (n < buf.length) {
+      const got = fs.readSync(fd, buf, n, buf.length - n, null);
+      if (got === 0) break;
+      n += got;
     }
-    return universalNewlines(LENIENT_UTF8.decode(fs.readFileSync(fd)));
+    if (n > NOTE_MAX_BYTES) return `${LENIENT_UTF8.decode(buf.subarray(0, NOTE_MAX_BYTES))}
+\u2026(truncated)`;
+    return LENIENT_UTF8.decode(buf.subarray(0, n)).replace(/\r\n?/g, "\n");
   } finally {
     fs.closeSync(fd);
   }
 }
-var DECISION_NAME = new RegExp("^\\p{Nd}{4}-", "u");
+var DECISION_FILE = /^[0-9]{4}-.*\.md$/;
 function decisionFiles(base) {
-  const folder = joinPath(base, "decisions");
-  if (!isDir(folder)) return [];
-  return fs.readdirSync(folder).filter((name) => name.endsWith(".md") && DECISION_NAME.test(name)).map((name) => joinPath(folder, name)).filter((p) => !isSymlink(p) && isFile(p)).sort(cpCompare);
+  const folder = join(base, "decisions");
+  if (!isDirectory(folder)) return [];
+  return fs.readdirSync(folder).filter((name) => DECISION_FILE.test(name)).map((name) => join(folder, name)).filter((p) => !isSymlink(p) && isFile(p)).sort();
 }
 function decisionHeader(path) {
   const text = readNote(path) ?? "";
-  const titleLine = pySplitlines(text).find((l) => l.startsWith("#"));
-  const name = baseName(path);
-  const title2 = titleLine !== void 0 ? pyStrip(pyStripChars(titleLine, "# ", "left")) : name.slice(0, name.lastIndexOf("."));
-  const status = new RegExp(`Status:[${WS}]*([^\\n]+)`, "u").exec(text);
-  return `${title2} [${status ? pyStrip(status[1]) : "unknown"}]`;
+  const titleLine = lines(text).find((l) => l.startsWith("#"));
+  const name = basename(path);
+  const title2 = titleLine !== void 0 ? titleLine.replace(/^[# ]+/, "").trim() : name.slice(0, name.lastIndexOf("."));
+  const status = /Status:\s*([^\n]+)/.exec(text);
+  return `${title2} [${status ? status[1].trim() : "unknown"}]`;
 }
 function projectSummary(repoRoot) {
   const base = learningDir(repoRoot);
-  const name = baseName(parentPath(base));
-  if (!isDir(base))
+  const name = basename(dirname(base));
+  if (!isDirectory(base)) {
     return [`Project \`${name}\`: no .learning/ folder yet. Offer once to keep a map and decision records here.`];
-  const lines = [`Project \`${name}\`:`];
-  const mapFile = joinPath(base, "map.md");
+  }
+  const out = [`Project \`${name}\`:`];
+  const mapFile = join(base, "map.md");
   if (isSymlink(mapFile)) {
-    lines.push("### Map", "(map.md is a symlink \u2014 not read. Ask the user to replace it with a plain file.)");
-  } else if (exists(mapFile)) {
-    lines.push(`### Map ${NOTES_LABEL}`, pyStrip(readNote(mapFile) ?? ""));
+    out.push("### Map", "(map.md is a symlink \u2014 not read. Ask the user to replace it with a plain file.)");
+  } else if (fs.existsSync(mapFile)) {
+    out.push(`### Map ${NOTES_LABEL}`, (readNote(mapFile) ?? "").trim());
   } else {
-    lines.push("### Map", "(none yet \u2014 write one with update_map when you've explored the code)");
+    out.push("### Map", "(none yet \u2014 write one with update_map when you've explored the code)");
   }
   const decisions = decisionFiles(base);
-  lines.push(`### Decisions (open with search_decisions) ${NOTES_LABEL}`);
-  if (decisions.length) lines.push(...decisions.map((p) => `- ${decisionHeader(p)}`));
-  else lines.push("- none yet");
-  if (exists(joinPath(base, "me.local.md")))
-    lines.push(
+  out.push(`### Decisions (open with search_decisions) ${NOTES_LABEL}`);
+  if (decisions.length) out.push(...decisions.map((p) => `- ${decisionHeader(p)}`));
+  else out.push("- none yet");
+  if (fs.existsSync(join(base, "me.local.md"))) {
+    out.push(
       "Note: .learning/me.local.md exists from file mode. Move its entries into the global profile with record_topic, then tell the user it can be deleted."
     );
-  return lines;
+  }
+  return out;
 }
 function learningContext(repoRoot = "") {
-  const lines = ["## Learner (global profile)", ...profileSummary(loadProfile())];
-  if (pyStrip(repoRoot)) {
+  const out = ["## Learner (global profile)", ...profileSummary(loadProfile())];
+  if (repoRoot.trim()) {
     let project;
     try {
       project = projectSummary(repoRoot);
     } catch (e) {
       if (!(e instanceof UnsafeLearningDir)) throw e;
-      project = [`Project \`${baseName(resolvePath(repoRoot))}\`: ${e.message}`];
+      project = [`Project \`${basename(resolveUserPath(repoRoot))}\`: ${e.message}`];
     }
-    lines.push("", "## " + project.join("\n"));
+    out.push("", `## ${project.join("\n")}`);
   }
-  return lines.join("\n");
+  return out.join("\n");
 }
 function updateMap(repoRoot, content) {
   checkNoSecrets(content);
-  let body = pySplitlines(pyStrip(content)).filter((l) => !l.startsWith("Verified:"));
-  if (body.length && body[0].startsWith("# ")) body = body.slice(1);
-  if (body.length > MAP_MAX_LINES)
+  let body = lines(content.trim()).filter((l) => !l.startsWith("Verified:"));
+  if (body[0]?.startsWith("# ")) body = body.slice(1);
+  if (body.length > MAP_MAX_LINES) {
     throw new StoreError(
       `Map is ${body.length} lines; the cap is ${MAP_MAX_LINES}. Keep entry points, core modules, data flow and gotchas \u2014 trim the rest.`
     );
+  }
   const base = learningDir(repoRoot, true);
-  atomicWrite(joinPath(base, "map.md"), ["# Project map", `Verified: ${today()}`, "", ...body].join("\n") + "\n");
+  atomicWrite(join(base, "map.md"), `${["# Project map", `Verified: ${today()}`, "", ...body].join("\n")}
+`);
   return `Map saved (${body.length} lines).`;
 }
-function pyIter(v) {
-  if (Array.isArray(v)) return v;
-  if (typeof v === "string") return Array.from(v);
-  if (v instanceof Map) return [...v.keys()];
-  if (v !== null && typeof v === "object") return Object.keys(v);
-  throw new TypeError(`'${pyTypeName(v)}' object is not iterable`);
-}
 function addDecision(repoRoot, title2, context, decision, alternatives, consequences) {
-  const t = pySplit(title2).join(" ");
-  if (!t || !pyStrip(decision)) throw new StoreError("A decision needs at least a title and the decision itself.");
-  const alternativeList = pyIter(alternatives);
-  checkNoSecrets(t, context, decision, consequences, ...alternativeList);
-  const alts = alternativeList.filter((a) => pyStrip(a)).map((a) => `- ${pyStrip(a)}`).join("\n") || "- none considered";
+  const t = title2.trim().split(/\s+/).join(" ");
+  if (!t || !decision.trim()) throw new StoreError("A decision needs at least a title and the decision itself.");
+  checkNoSecrets(t, context, decision, consequences, ...alternatives);
+  const alts = alternatives.map((a) => a.trim()).filter(Boolean).map((a) => `- ${a}`).join("\n") || "- none considered";
   const base = learningDir(repoRoot, true);
-  const numbers = decisionFiles(base).map((p) => pyIntDigits(Array.from(baseName(p)).slice(0, 4).join("")));
-  const num = Math.max(0, ...numbers) + 1;
-  const n4 = String(num).padStart(4, "0");
+  const numbers = decisionFiles(base).map((p) => Number.parseInt(basename(p).slice(0, 4), 10));
+  const n4 = String(Math.max(0, ...numbers) + 1).padStart(4, "0");
   const text = `# ${n4} \u2014 ${t}
 Date: ${today()} \xB7 Status: accepted
 
-Context: ${pyStrip(context)}
-Decision: ${pyStrip(decision)}
+Context: ${context.trim()}
+Decision: ${decision.trim()}
 Alternatives:
 ${alts}
-Consequences: ${pyStrip(consequences)}
+Consequences: ${consequences.trim()}
 `;
-  if (cpLen(text) > DECISION_MAX_CHARS)
+  if (Array.from(text).length > DECISION_MAX_CHARS) {
     throw new StoreError("Decision record is too long \u2014 keep it to ~15 lines a teammate will actually read.");
+  }
   const name = `${n4}-${slug(t) || "decision"}.md`;
-  atomicWrite(joinPath(joinPath(base, "decisions"), name), text);
+  atomicWrite(join(base, "decisions", name), text);
   return `Saved decision ${n4}: .learning/decisions/${name}`;
 }
-function wordsOf(s) {
-  return s.match(/[a-z0-9]+/g) ?? [];
-}
+var wordsOf = (s) => s.toLowerCase().match(/[a-z0-9]+/g) ?? [];
 function searchDecisions(repoRoot, query, limit = 3) {
   const base = learningDir(repoRoot);
   const files = decisionFiles(base);
   if (!files.length) return "No decision records in this project.";
-  const words = new Set(wordsOf(needStr(query, "lower").toLowerCase()).filter((w) => w.length > 1));
-  if (!words.size) return "Decisions:\n" + files.map((p) => `- ${decisionHeader(p)}`).join("\n");
+  const words = new Set(wordsOf(query).filter((w) => w.length > 1));
+  if (!words.size) return `Decisions:
+${files.map((p) => `- ${decisionHeader(p)}`).join("\n")}`;
   const scored = [];
   for (const path of files) {
     const text = readNote(path) ?? "";
     const nl = text.indexOf("\n");
-    const [title2, body] = nl >= 0 ? [text.slice(0, nl), text.slice(nl + 1)] : [text, ""];
-    const count = (list, w) => list.reduce((n2, x) => n2 + (x === w ? 1 : 0), 0);
-    const titleWords = wordsOf(title2.toLowerCase());
-    const bodyWords = wordsOf(body.toLowerCase());
+    const titleWords = wordsOf(nl >= 0 ? text.slice(0, nl) : text);
+    const bodyWords = wordsOf(nl >= 0 ? text.slice(nl + 1) : "");
+    const hits = (list, w) => list.filter((x) => x === w).length;
     let score = 0;
-    for (const w of words) score += 3 * count(titleWords, w) + count(bodyWords, w);
-    if (score) scored.push([score, baseName(path), pyStrip(text)]);
+    for (const w of words) score += 3 * hits(titleWords, w) + hits(bodyWords, w);
+    if (score) scored.push({ score, name: basename(path), text: text.trim() });
   }
-  if (!scored.length) return `No decisions match '${pyStr(query)}'.`;
-  scored.sort((a, b) => b[0] - a[0] || cpCompare(a[1], b[1]));
-  const n = pyMax(1n, pyMin(limit, 10n));
-  if (typeof n === "number" && !Number.isInteger(n))
-    throw new TypeError("slice indices must be integers or None or have an __index__ method");
+  if (!scored.length) return `No decisions match '${query}'.`;
+  scored.sort((a, b) => b.score - a.score || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const shown = scored.slice(0, Math.max(1, Math.min(Math.trunc(limit), 10)));
   return `Decision records ${NOTES_LABEL}:
 
-` + scored.slice(0, Number(n)).map(([, , text]) => text).join("\n\n---\n\n");
+${shown.map((s) => s.text).join("\n\n---\n\n")}`;
 }
 
 // src/server.ts
@@ -24563,34 +24014,33 @@ the reasons behind lasting decisions.
 var ToolError = class extends Error {
   name = "ToolError";
 };
-var GateError = class extends Error {
-  name = "GateError";
-};
 async function call(fn) {
   try {
-    return await fn();
+    return fn();
   } catch (e) {
-    if (e instanceof StoreError || e instanceof GateError) throw new ToolError(e.message);
+    if (e instanceof StoreError) throw new ToolError(e.message);
     throw e;
   }
 }
 function gitEnv() {
   const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
   delete env.GIT_DIFF_OPTS;
-  const n = pyInt(env.GIT_CONFIG_COUNT ?? "0") ?? 0;
+  let n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
+  if (!Number.isFinite(n) || n < 0) n = 0;
   env.GIT_CONFIG_COUNT = String(n + 1);
   env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
   env[`GIT_CONFIG_VALUE_${n}`] = "false";
   return env;
 }
 function gateRepoRoot(path) {
-  let start = resolvePath(pyTruthy(path) ? path : process.cwd());
-  if (!exists(start)) throw new GateError(`Path does not exist: ${start}`);
-  if (isFile(start)) start = parentPath(start);
+  let start = resolveUserPath(path || process.cwd());
+  const st = fs2.statSync(start, { throwIfNoEntry: false });
+  if (!st) throw new ToolError(`Path does not exist: ${start}`);
+  if (st.isFile()) start = dirname2(start);
   const out = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: start, env: gitEnv() });
   if (out.error) throw out.error;
-  const top = pyStrip(universalNewlines(out.stdout.toString("utf8")));
-  if (out.status !== 0 || !top) throw new GateError(`Not inside a git working tree: ${start}`);
+  const top = out.stdout.toString("utf8").trim();
+  if (out.status !== 0 || !top) throw new ToolError(`Not inside a git working tree: ${start}`);
   return top;
 }
 var GATE_FILE = fileURLToPath(new URL("./gate.mjs", import.meta.url));
@@ -24599,10 +24049,9 @@ function runProcess(argv, input, timeoutMs) {
   const env = { ...process.env };
   delete env.NODE_OPTIONS;
   delete env.NODE_PATH;
-  const stdinBuf = input === void 0 ? void 0 : encodeStrict(input);
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     const child = spawn(argv[0], argv.slice(1), {
-      stdio: [stdinBuf === void 0 ? "ignore" : "pipe", "pipe", "pipe"],
+      stdio: [input === void 0 ? "ignore" : "pipe", "pipe", "pipe"],
       env
     });
     const out = [];
@@ -24613,7 +24062,7 @@ function runProcess(argv, input, timeoutMs) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ code, stdout: Buffer.concat(out), stderr: Buffer.concat(err), timedOut });
+      resolve2({ code, stdout: Buffer.concat(out), stderr: Buffer.concat(err), timedOut });
     };
     const timer = setTimeout(() => {
       timedOut = true;
@@ -24631,35 +24080,25 @@ function runProcess(argv, input, timeoutMs) {
       if (timedOut) finish(code);
     });
     child.on("close", (code) => finish(code));
-    if (stdinBuf !== void 0) {
+    if (input !== void 0) {
       child.stdin.on("error", () => {
       });
-      child.stdin.end(stdinBuf);
+      child.stdin.end(input);
     }
   });
 }
 async function gateCli(repoRoot, args, stdin) {
-  let root;
-  try {
-    root = gateRepoRoot(repoRoot);
-  } catch (e) {
-    if (e instanceof GateError) throw new ToolError(e.message);
-    throw e;
-  }
+  const root = gateRepoRoot(repoRoot);
   const proc = await runProcess([process.execPath, GATE_FILE, ...args, "--repo", root], stdin, GATE_TIMEOUT_MS);
   if (proc.timedOut) throw new ToolError("The gate took longer than 5 minutes.");
-  const text = (b, what) => universalNewlines(decodeStrict(b, what));
-  const stdout = text(proc.stdout, "gate's output");
-  const stderr = text(proc.stderr, "gate's error output");
+  const text = (b) => b.toString("utf8").replace(/\r\n?/g, "\n").trim();
   if (proc.code !== 0) {
-    const msg = pyStrip(stderr);
+    const msg = text(proc.stderr);
     throw new ToolError((msg.startsWith("ownership gate: ") ? msg.slice("ownership gate: ".length) : msg) || "The gate failed.");
   }
-  return pyStrip(stdout);
+  return text(proc.stdout);
 }
-function opt(name, value) {
-  return pyStrip(value) ? [`--${name}`, value] : [];
-}
+var option = (name, value) => value.trim() ? [`--${name}`, value] : [];
 var READ_ONLY = { readOnlyHint: true, openWorldHint: false };
 var WRITES = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 var title = (name) => name.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
@@ -24672,32 +24111,34 @@ var Branch = (field) => str(
   "Branch the PR will come from, if it differs from the current local branch (e.g. pushed as another name). Empty = current branch."
 );
 var Base = (field) => str(field, "Base ref the PR targets, e.g. 'origin/develop' or 'upstream/main' for a fork. Empty = from config / auto-detect.");
+function tool(def) {
+  const schema = object2(def.shape);
+  return { ...def, run: (args) => def.run(schema.parse(args)) };
+}
 var TOOLS = {
-  learning_context: {
+  learning_context: tool({
     description: "Everything needed to calibrate explanations, in one call: the learner's\nknown/learning/already-explained topics and preferences, plus this project's\nmap and decision index. Call once at the start of a session.",
     annotations: READ_ONLY,
     shape: { repo_root: str("repo_root", "Absolute project path; empty for the profile only.").default("") },
-    params: [["repo_root", ""]],
-    fn: (repoRoot) => call(() => learningContext(repoRoot))
-  },
-  record_topic: {
+    run: (a) => call(() => learningContext(a.repo_root))
+  }),
+  record_topic: tool({
     description: "Update what the learner knows about one topic. Applies across all their projects.",
     annotations: WRITES,
     shape: {
       topic: Topic,
-      event: _enum(["knows", "learning", "explained"]).describe(
+      event: _enum(EVENTS).describe(
         "knows = showed they understand it; learning = showed they're new to it; explained = you just explained it (so don't repeat it later)."
       ).meta({ title: "Event" }),
       note: Note.default(""),
       repo_root: str("repo_root", "Optional project path, kept as context for the note.").default("")
     },
-    params: [["topic"], ["event"], ["note", ""], ["repo_root", ""]],
-    fn: (topic, event, note, repoRoot) => {
-      const project = pyTruthy(repoRoot) ? pyStripChars(repoRoot, "/", "right").split("/").pop() : "";
-      return call(() => recordTopic(topic, event, note, project));
+    run: (a) => {
+      const project = a.repo_root.replace(/\/+$/, "").split("/").pop() ?? "";
+      return call(() => recordTopic(a.topic, a.event, a.note, project));
     }
-  },
-  record_checkpoint: {
+  }),
+  record_checkpoint: tool({
     description: "Log the result of a checkpoint question. Two correct in a row marks the\ntopic comfortable; a wrong answer marks it learning.",
     annotations: WRITES,
     shape: {
@@ -24705,27 +24146,24 @@ var TOOLS = {
       question: str("question", "The quick check you asked, in one line."),
       correct: boolean2().describe("Whether their answer showed understanding.").meta({ title: "Correct" })
     },
-    params: [["topic"], ["question"], ["correct"]],
-    fn: (topic, question, correct) => call(() => recordCheckpoint(topic, question, correct))
-  },
-  set_preference: {
+    run: (a) => call(() => recordCheckpoint(a.topic, a.question, a.correct))
+  }),
+  set_preference: tool({
     description: "Save something the user explicitly asked for about how to explain. Only\nwhat they said, never inferred.",
     annotations: WRITES,
     shape: {
       key: str("key", "e.g. 'language', 'verbosity', 'analogies'."),
       value: str("value", "e.g. 'Egyptian Arabic', 'short'. Empty clears it.")
     },
-    params: [["key"], ["value"]],
-    fn: (key, value) => call(() => setPreference(key, value))
-  },
-  progress_report: {
+    run: (a) => call(() => setPreference(a.key, a.value))
+  }),
+  progress_report: tool({
     description: "Summary of the learner's progress: comfortable vs. still-learning topics,\nrecent activity, checkpoint accuracy, and what's worth revisiting. Use when\nthe user asks what they've learned.",
     annotations: READ_ONLY,
     shape: {},
-    params: [],
-    fn: () => call(() => progressReport())
-  },
-  search_decisions: {
+    run: () => call(() => progressReport())
+  }),
+  search_decisions: tool({
     description: "Find the project's recorded decisions relevant to what you're about to\nchange, so you explain within past reasoning instead of contradicting it.",
     annotations: READ_ONLY,
     shape: {
@@ -24736,10 +24174,9 @@ var TOOLS = {
       ),
       limit: number2().int().min(1).max(10).default(3).meta({ title: "Limit" })
     },
-    params: [["repo_root"], ["query"], ["limit", 3]],
-    fn: (repoRoot, query, limit) => call(() => searchDecisions(repoRoot, query, limit))
-  },
-  add_decision: {
+    run: (a) => call(() => searchDecisions(a.repo_root, a.query, a.limit))
+  }),
+  add_decision: tool({
     description: "Record a decision with lasting weight as a numbered file in\n.learning/decisions/. Tell the user in one line when you do.",
     annotations: WRITES,
     shape: {
@@ -24750,30 +24187,24 @@ var TOOLS = {
       alternatives: array(string2()).describe("Each rejected option with why, e.g. 'fixed window \u2014 2x bursts at edges'.").meta({ title: "Alternatives" }),
       consequences: str("consequences", "What the team now has to live with.")
     },
-    params: [["repo_root"], ["title"], ["context"], ["decision"], ["alternatives"], ["consequences"]],
-    fn: (repoRoot, t, context, decision, alternatives, consequences) => call(() => addDecision(repoRoot, t, context, decision, alternatives, consequences))
-  },
-  update_map: {
+    run: (a) => call(() => addDecision(a.repo_root, a.title, a.context, a.decision, a.alternatives, a.consequences))
+  }),
+  update_map: tool({
     description: "Replace the project map in .learning/map.md and stamp today's date.\nUpdate it when structure changes or you find a new gotcha.",
     annotations: WRITES,
     shape: {
       repo_root: RepoRoot,
       content: str("content", "The full map: entry points, core modules, data flow, gotchas. Max 40 lines.")
     },
-    params: [["repo_root"], ["content"]],
-    fn: (repoRoot, content) => call(() => updateMap(repoRoot, content))
-  },
-  gate_status: {
+    run: (a) => call(() => updateMap(a.repo_root, a.content))
+  }),
+  gate_status: tool({
     description: "Ownership check status of the current change: each changed file is new,\nstale (changed since it was verified), or ok, with sensitive, ignored and\nuntracked files marked, plus the exact list that must be verified before\nsaving, and whether the change counts as small (then ask one question; the\nsummary minimum is lower). Use before the final check to know what to ask about.",
     annotations: READ_ONLY,
     shape: { repo_root: RepoRoot, base: Base("base").default(""), branch: Branch("branch").default("") },
-    params: [["repo_root"], ["base", ""], ["branch", ""]],
-    fn: (repoRoot, base, branch) => {
-      const args = ["status", ...opt("base", base), ...opt("branch", branch)];
-      return gateCli(repoRoot, args);
-    }
-  },
-  save_check_report: {
+    run: (a) => gateCli(a.repo_root, ["status", ...option("base", a.base), ...option("branch", a.branch)])
+  }),
+  save_check_report: tool({
     description: "Save the ownership report after the final check passes. It fingerprints\nevery changed file so CI can tell if code changed afterwards. Refuses if a\nsensitive or changed-since-last-report file isn't verified \u2014 that refusal\nlists what is left to ask about.",
     annotations: WRITES,
     shape: {
@@ -24788,41 +24219,26 @@ var TOOLS = {
       base: Base("base").default(""),
       branch: Branch("branch").default("")
     },
-    params: [["repo_root"], ["summary"], ["verified"], ["base", ""], ["branch", ""]],
-    fn: (repoRoot, summary, verified, base, branch) => {
-      const payload = pyDumps({ summary, verified });
-      const args = ["save", ...opt("base", base), ...opt("branch", branch)];
-      return gateCli(repoRoot, args, payload);
+    run: (a) => {
+      const payload = JSON.stringify({ summary: a.summary, verified: a.verified });
+      return gateCli(a.repo_root, ["save", ...option("base", a.base), ...option("branch", a.branch)], payload);
     }
-  }
+  })
 };
-function bind(name, params, kwargs) {
-  const names = params.map((p) => p[0]);
-  for (const k of Object.keys(kwargs)) {
-    if (!names.includes(k)) throw new TypeError(`${name}() got an unexpected keyword argument '${k}'`);
-  }
-  const missing = params.filter((p) => p.length === 1 && !Object.hasOwn(kwargs, p[0])).map((p) => `'${p[0]}'`);
-  if (missing.length) {
-    const list = missing.length === 1 ? missing[0] : missing.length === 2 ? missing.join(" and ") : `${missing.slice(0, -1).join(", ")}, and ${missing.at(-1)}`;
-    const noun = missing.length === 1 ? "argument" : "arguments";
-    throw new TypeError(`${name}() missing ${missing.length} required positional ${noun}: ${list}`);
-  }
-  return params.map((p) => Object.hasOwn(kwargs, p[0]) ? kwargs[p[0]] : p[1]);
-}
 function buildServer() {
   const server = new McpServer({ name: "comprende", version: "0.2.0" }, { instructions: INSTRUCTIONS });
-  for (const [name, tool] of Object.entries(TOOLS)) {
+  for (const [name, t] of Object.entries(TOOLS)) {
     server.registerTool(
       name,
       {
-        description: tool.description,
-        inputSchema: object2(tool.shape).meta({ title: `${name}Arguments` }),
+        description: t.description,
+        inputSchema: object2(t.shape).meta({ title: `${name}Arguments` }),
         outputSchema: object2({ result: string2().meta({ title: "Result" }) }).meta({ title: `${name}Output` }),
-        annotations: tool.annotations
+        annotations: t.annotations
       },
       async (args) => {
         try {
-          const text = await tool.fn(...bind(name, tool.params, args));
+          const text = await t.run(args);
           return { content: [{ type: "text", text }], structuredContent: { result: text } };
         } catch (e) {
           if (e instanceof ToolError) return { content: [{ type: "text", text: e.message }], isError: true };
@@ -24837,8 +24253,8 @@ function buildServer() {
 async function main(argv) {
   if (argv.length >= 2 && argv[0] === "call") {
     const name = argv[1];
-    const tool = Object.hasOwn(TOOLS, name) ? TOOLS[name] : void 0;
-    if (tool === void 0) {
+    const t = Object.hasOwn(TOOLS, name) ? TOOLS[name] : void 0;
+    if (t === void 0) {
       process.stderr.write(`unknown tool ${name}
 `);
       process.exitCode = 1;
@@ -24846,13 +24262,12 @@ async function main(argv) {
     }
     let result;
     try {
-      const raw = pyLoads(argv.length > 2 ? argv[2] : "{}");
-      if (!(raw instanceof Map))
-        throw new TypeError(`${name}() argument after ** must be a mapping, not ${pyTypeName(raw)}`);
-      const kwargs = toPlain(raw);
-      result = await tool.fn(...bind(name, tool.params, kwargs));
+      result = await t.run(JSON.parse(argv[2] ?? "{}"));
     } catch (e) {
       if (e instanceof ToolError) process.stderr.write(`${e.message}
+`);
+      else if (e instanceof ZodError2) process.stderr.write(`Invalid arguments for ${name}:
+${prettifyError(e)}
 `);
       else process.stderr.write(`${e instanceof Error ? e.stack ?? `${e.name}: ${e.message}` : String(e)}
 `);

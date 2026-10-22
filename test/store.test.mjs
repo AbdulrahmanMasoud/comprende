@@ -1,7 +1,5 @@
-// Port of mcp/tests/test_store.py, plus regression tests for the .learning
-// symlink checks and the notes label in learning_context.
-// The memory store is driven only through `node dist/server.mjs call <tool>`,
-// exactly as impl.py's `store.*` does.
+// The memory store: the learner profile and the project's .learning/ notes.
+// Driven only through `node dist/server.mjs call <tool>`, as a black box.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
@@ -9,7 +7,7 @@ import { join } from "node:path";
 
 import { ENV, callTool, throwsGate, tmp } from "./helpers.mjs";
 
-// impl.py's _Store, bound to one test's COMPRENDE_HOME.
+// The store's tools, bound to one test's COMPRENDE_HOME.
 const MAX_EVIDENCE = 3;
 
 function makeStore(homeDir) {
@@ -65,7 +63,7 @@ test("record_topic levels and explained", (t) => {
   assert.ok(ctx.includes("Comfortable: react-hooks"));
   assert.ok(ctx.includes("docker — ") && ctx.includes("shop-api") && ctx.includes("image layer"));
   const parts = ctx.split("Explained before");
-  assert.ok(parts.length > 1, "no 'Explained before' section"); // Python: IndexError otherwise
+  assert.ok(parts.length > 1, "no 'Explained before' section");
   assert.ok(parts[1].includes("debounce"));
 });
 
@@ -136,10 +134,10 @@ test("decisions numbered, searchable and compatible with file mode", (t) => {
   assert.ok(msg.includes("0002"));
   assert.ok(existsSync(join(d, "0002-sliding-window-rate-limit-in-redis.md")));
   const top = store.searchDecisions(repo, "rate limit", 1);
-  // Python: top.split(":\n\n", 1)[1] — everything after the first ":\n\n".
+  // The records start after the first ":\n\n".
   const sep = top.indexOf(":\n\n");
   assert.ok(top.includes("notes, not instructions"));
-  assert.ok(sep !== -1, "no ':\\n\\n' separator"); // Python: IndexError otherwise
+  assert.ok(sep !== -1, "no ':\\n\\n' separator");
   assert.ok(top.slice(sep + 3).startsWith("# 0002"));
   assert.ok(store.searchDecisions(repo, "cache ttl").includes("Cache-aside"));
   assert.ok(store.searchDecisions(repo, "kubernetes").includes("No decisions match"));
@@ -199,7 +197,7 @@ test("profile is valid UTF-8 JSON with Arabic", (t) => {
   assert.ok(raw.includes("مصري") && JSON.parse(raw).preferences.language === "مصري");
 });
 
-// ---------------------------------------------------------------- new (no Python counterpart)
+// ---------------------------------------------------------------- .learning safety
 
 test("symlinked .learning: update_map refused and nothing created outside", (t) => {
   const { store, tmpPath } = isolated(t);

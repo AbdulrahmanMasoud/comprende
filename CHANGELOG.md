@@ -24,6 +24,9 @@
   - The same note appears when `node` exists but can't run the gate, or when it's older than 20. `session-start` checks `process.versions.node`.
   - The plugin's PreToolUse hook exits 0 when `node` is missing. So does the project-level hook that `install` writes into `.claude/settings.json`; repos installed earlier keep their old command until it's edited. Neither can block Bash by accident.
   - README: what happens on Windows with and without Git Bash.
+- **Internal: plain TypeScript, no Python imitation.** The code no longer copies the semantics of the unpublished Python prototype. User-visible rules are kept and documented on their own terms: glob matching, summary length in characters, and strict config validation.
+  - `profile.json` is plain JSON now, as written by `JSON.stringify`. A hand-edited value of the wrong type falls back to its default instead of making every tool fail, and a profile that isn't valid UTF-8 is kept as `profile.broken-<date>.json`, like invalid JSON.
+  - `repo_root` and `COMPRENDE_HOME` still expand `~`, but no longer `~otheruser`.
 - **Fixes:**
   - The gate's hint says `("check me")` without the Arabic phrase, which terminals draw with its letters reversed. In conversation the skill still understands "اختبرني".
   - `status` and `save` say "1 changed line" and "1 file fingerprinted" instead of "1 changed lines" and "1 files fingerprinted".

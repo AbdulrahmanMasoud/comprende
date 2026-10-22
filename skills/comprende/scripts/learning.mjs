@@ -4,162 +4,53 @@
 
 // src/learning.ts
 import * as fs2 from "node:fs";
+import { join as join2 } from "node:path";
 
 // src/store.ts
 import * as fs from "node:fs";
-var WS = "\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
-var WORD = "\\p{L}\\p{N}_";
-var NOT_WORD_BEFORE = `(?<![${WORD}])`;
-var NOT_WORD_AFTER = `(?![${WORD}])`;
-var STRIP_RE = new RegExp(`^[${WS}]+|[${WS}]+$`, "gu");
-var SPLIT_RE = new RegExp(`[${WS}]+`, "u");
-var LINE_BREAKS = /* @__PURE__ */ new Set(["\n", "\r", "\v", "\f", "", "", "", "\x85", "\u2028", "\u2029"]);
-function pyTypeName(v) {
-  if (v === null || v === void 0) return "NoneType";
-  if (typeof v === "boolean") return "bool";
-  if (typeof v === "bigint") return "int";
-  if (typeof v === "number") return "float";
-  if (typeof v === "string") return "str";
-  if (Array.isArray(v)) return "list";
-  return "dict";
+import * as os from "node:os";
+import { basename, dirname, join, resolve, sep } from "node:path";
+var SLUG_MAX_CHARS = 60;
+var truncate = (s, n) => s.length <= n ? s : Array.from(s).slice(0, n).join("");
+function today() {
+  const d = /* @__PURE__ */ new Date();
+  return isoDate(d.getFullYear(), d.getMonth(), d.getDate());
 }
-function needStr(v, method) {
-  if (typeof v !== "string") throw new TypeError(`'${pyTypeName(v)}' object has no attribute '${method}'`);
-  return v;
-}
-function pySplitlines(s) {
-  const text = needStr(s, "splitlines");
-  const out = [];
-  let start = 0;
-  let i = 0;
-  while (i < text.length) {
-    const c = text[i];
-    if (LINE_BREAKS.has(c)) {
-      out.push(text.slice(start, i));
-      if (c === "\r" && text[i + 1] === "\n") i++;
-      start = ++i;
-    } else {
-      i++;
-    }
-  }
-  if (start < text.length) out.push(text.slice(start));
-  return out;
-}
-var ND = new RegExp("^\\p{Nd}$", "u");
-function digitValue(cp) {
-  let start = cp;
-  while (start > 0 && ND.test(String.fromCodePoint(start - 1))) start--;
-  return (cp - start) % 10;
-}
-function pyIntDigits(s) {
-  let n = 0;
-  for (const ch of s) n = n * 10 + digitValue(ch.codePointAt(0));
-  return n;
-}
-var PY_INT_RE = new RegExp(`^[${WS}]*([+-]?)(\\p{Nd}+(?:_\\p{Nd}+)*)[${WS}]*$`, "u");
-var STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
-var LENIENT_UTF8 = new TextDecoder("utf-8", { ignoreBOM: true });
-function universalNewlines(s) {
-  return s.replace(/\r\n?/g, "\n");
-}
-function readTextStrict(path) {
-  const buf = fs.readFileSync(path);
-  let text;
-  try {
-    text = STRICT_UTF8.decode(buf);
-  } catch {
-    throw new Error(`'utf-8' codec can't decode bytes in ${path}: invalid UTF-8`);
-  }
-  return universalNewlines(text);
-}
-function exists(p) {
-  try {
-    fs.statSync(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
-function isDir(p) {
-  try {
-    return fs.statSync(p).isDirectory();
-  } catch {
-    return false;
-  }
-}
-function joinPath(a, b) {
-  return a.endsWith("/") ? a + b : `${a}/${b}`;
-}
-function realpath(p) {
-  const rest = p.split("/").reverse();
-  let partCount = rest.length;
-  let path = p.startsWith("/") ? "/" : process.cwd();
-  const seen = /* @__PURE__ */ new Map();
-  while (partCount) {
-    const name = rest.pop();
-    if (name === null) {
-      seen.set(rest.pop(), path);
-      continue;
-    }
-    partCount--;
-    if (!name || name === ".") continue;
-    if (name === "..") {
-      path = path.slice(0, path.lastIndexOf("/")) || "/";
-      continue;
-    }
-    const newpath = path === "/" ? path + name : `${path}/${name}`;
-    let target;
-    try {
-      if (!fs.lstatSync(newpath).isSymbolicLink()) {
-        path = newpath;
-        continue;
-      }
-      if (seen.has(newpath)) {
-        const cached = seen.get(newpath);
-        path = cached ?? newpath;
-        continue;
-      }
-      target = fs.readlinkSync(newpath);
-    } catch {
-      path = newpath;
-      continue;
-    }
-    if (target.startsWith("/")) path = "/";
-    seen.set(newpath, null);
-    rest.push(newpath, null);
-    const targetParts = target.split("/").reverse();
-    rest.push(...targetParts);
-    partCount += targetParts.length;
-  }
-  return path;
-}
-function isoDate(d) {
+function isoDate(year, month, day) {
+  const d = new Date(year, month, day);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-function today() {
-  return isoDate(/* @__PURE__ */ new Date());
+function slug(text) {
+  const s = text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return truncate(s, SLUG_MAX_CHARS);
 }
-function ci(word) {
-  const extra = { i: "\u0130\u0131", s: "\u017F", k: "\u212A" };
-  return [...word].map((c) => /[a-z]/.test(c) ? `[${c}${c.toUpperCase()}${extra[c] ?? ""}]` : c).join("");
+var expandHome = (p) => p === "~" || p.startsWith("~/") ? os.homedir() + p.slice(1) : p;
+function resolveUserPath(p) {
+  const abs = resolve(expandHome(p));
+  try {
+    return fs.realpathSync(abs);
+  } catch {
+    return abs;
+  }
 }
+var START = "(?<![\\p{L}\\p{N}_])";
+var END = "(?![\\p{L}\\p{N}_])";
 var SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/u,
-  new RegExp(`${NOT_WORD_BEFORE}AKIA[0-9A-Z]{16}${NOT_WORD_AFTER}`, "u"),
+  new RegExp(`${START}AKIA[0-9A-Z]{16}${END}`, "u"),
   // AWS access key
-  new RegExp(`${NOT_WORD_BEFORE}(sk|pk|rk)[-_](live|test|proj|ant)?[-_]?[A-Za-z0-9]{16,}`, "u"),
-  new RegExp(`${NOT_WORD_BEFORE}gh[pousr]_[A-Za-z0-9]{30,}${NOT_WORD_AFTER}`, "u"),
+  new RegExp(`${START}(sk|pk|rk)[-_](live|test|proj|ant)?[-_]?[A-Za-z0-9]{16,}`, "u"),
+  // API keys
+  new RegExp(`${START}gh[pousr]_[A-Za-z0-9]{30,}${END}`, "u"),
   // GitHub tokens
-  new RegExp(`${NOT_WORD_BEFORE}xox[abprs]-[A-Za-z0-9-]{10,}`, "u"),
+  new RegExp(`${START}xox[abprs]-[A-Za-z0-9-]{10,}`, "u"),
   // Slack tokens
-  new RegExp(
-    `${NOT_WORD_BEFORE}(${ci("password")}|${ci("passwd")}|${ci("secret")}|${ci("api")}[_-]?${ci("key")}|${ci("token")})[${WS}]*[:=][${WS}]*[^${WS}]{6,}`,
-    "u"
-  ),
-  new RegExp(`${NOT_WORD_BEFORE}[a-zA-Z\u0130\u0131\u017F\u212A]+://[^/${WS}:]+:[^@${WS}]+@`, "u")
+  new RegExp(`${START}(password|passwd|secret|api[_-]?key|token)\\s*[:=]\\s*\\S{6,}`, "iu"),
+  new RegExp(`${START}[a-z]+://[^/\\s:]+:[^@\\s]+@`, "iu")
   // user:pass@host URLs
 ];
-var DECISION_NAME = new RegExp("^\\p{Nd}{4}-", "u");
+var UTF8 = new TextDecoder("utf-8", { fatal: true });
+var LENIENT_UTF8 = new TextDecoder("utf-8");
 
 // src/learning.ts
 var USAGE = `Manage a project's .learning/ folder for the comprende skill.
@@ -214,26 +105,26 @@ function exit(message) {
   process.exit(1);
 }
 function writeIfMissing(path, content, created) {
-  if (!exists(path)) {
+  if (!fs2.existsSync(path)) {
     fs2.writeFileSync(path, content, "utf8");
     created.push(path);
   }
 }
 function ensureGitignored(root, created) {
-  const gitignore = joinPath(root, ".gitignore");
-  const existing = exists(gitignore) ? readTextStrict(gitignore) : "";
-  if (pySplitlines(existing).includes(GITIGNORE_LINE)) return;
+  const gitignore = join2(root, ".gitignore");
+  const existing = fs2.existsSync(gitignore) ? fs2.readFileSync(gitignore, "utf8") : "";
+  if (existing.split(/\r\n|\r|\n/).includes(GITIGNORE_LINE)) return;
   const prefix = existing === "" || existing.endsWith("\n") ? "" : "\n";
   fs2.appendFileSync(gitignore, `${prefix}${GITIGNORE_LINE}
 `, "utf8");
   created.push(`${gitignore} (added ${GITIGNORE_LINE})`);
 }
 function init(root) {
-  const base = joinPath(root, ".learning");
-  fs2.mkdirSync(joinPath(base, "decisions"), { recursive: true });
+  const base = join2(root, ".learning");
+  fs2.mkdirSync(join2(base, "decisions"), { recursive: true });
   const created = [];
-  writeIfMissing(joinPath(base, "map.md"), MAP_TEMPLATE, created);
-  writeIfMissing(joinPath(base, "me.local.md"), ME_TEMPLATE, created);
+  writeIfMissing(join2(base, "map.md"), MAP_TEMPLATE, created);
+  writeIfMissing(join2(base, "me.local.md"), ME_TEMPLATE, created);
   ensureGitignored(root, created);
   if (created.length) {
     print("Created:");
@@ -242,23 +133,19 @@ function init(root) {
     print(`${base} already set up; nothing changed.`);
   }
 }
-function slugify(title) {
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/g, "");
-  return Array.from(slug).slice(0, 60).join("") || "decision";
-}
-var NUMBERED = new RegExp("^(\\p{Nd}{4})-", "u");
+var NUMBERED = /^([0-9]{4})-/;
 function decision(root, title) {
-  const folder = joinPath(joinPath(root, ".learning"), "decisions");
-  if (!isDir(folder)) exit("No .learning/decisions/ here. Run `learning.mjs init` first.");
-  const numbers = fs2.readdirSync(folder).filter((name) => name.endsWith(".md")).map((name) => NUMBERED.exec(name)).filter((m) => m !== null).map((m) => pyIntDigits(m[1]));
+  const folder = join2(root, ".learning", "decisions");
+  if (!fs2.statSync(folder, { throwIfNoEntry: false })?.isDirectory()) exit("No .learning/decisions/ here. Run `learning.mjs init` first.");
+  const numbers = fs2.readdirSync(folder).filter((name) => name.endsWith(".md")).map((name) => NUMBERED.exec(name)).filter((m) => m !== null).map((m) => Number.parseInt(m[1], 10));
   const num = Math.max(0, ...numbers) + 1;
-  const path = joinPath(folder, `${String(num).padStart(4, "0")}-${slugify(title)}.md`);
+  const path = join2(folder, `${String(num).padStart(4, "0")}-${slug(title) || "decision"}.md`);
   fs2.writeFileSync(path, decisionTemplate(num, title, TODAY), "utf8");
   print(path);
 }
 function main(argv) {
-  if (argv.length >= 2 && argv[0] === "init") init(realpath(argv[1]));
-  else if (argv.length >= 3 && argv[0] === "decision") decision(realpath(argv[1]), argv.slice(2).join(" "));
+  if (argv.length >= 2 && argv[0] === "init") init(resolveUserPath(argv[1]));
+  else if (argv.length >= 3 && argv[0] === "decision") decision(resolveUserPath(argv[1]), argv.slice(2).join(" "));
   else exit(USAGE);
 }
 main(process.argv.slice(2));

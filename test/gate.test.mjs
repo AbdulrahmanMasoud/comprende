@@ -1,4 +1,3 @@
-// Port of mcp/tests/test_gate.py.
 // Gate tests against real git repositories: a bare "GitHub" remote, a
 // developer clone, real pushes through the installed pre-push hook, and a
 // fresh CI-style clone checked out at the PR head.

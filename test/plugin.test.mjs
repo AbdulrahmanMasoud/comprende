@@ -1,4 +1,3 @@
-// Port of mcp/tests/test_plugin_features.py.
 // Plugin-era features: SessionStart auto-setup, the plugin's hook deferring to
 // the repo's gate, the CI job summary for reviewers, and `protect`.
 import { test } from "node:test";
@@ -11,14 +10,14 @@ import { parse as parseYaml } from "yaml";
 
 import { ENV, REPO, REPO_GATE, SUMMARY, commitAll, gate, gateCli, git, runGate, setup, throwsGate, tmp as tmpDir, write } from "./helpers.mjs";
 
-/** The plugin's copy of the gate (dist/gate.mjs), like the Python `plugin()`. */
+/** The plugin's copy of the gate (dist/gate.mjs). */
 const plugin = (cwd, args, { input = "", env } = {}) => gateCli(args, { input, env: env ?? ENV, cwd });
 
 const isExecutable = (p) => {
   try { accessSync(p, constants.X_OK); return true; } catch { return false; }
 };
 
-// JS equivalent of the Python code_write_marker() for GATE_IMPL=node.
+// Gate code that would leave a marker file if it ever ran.
 const codeWriteMarker = (marker) => `import fs from 'node:fs';\nfs.writeFileSync(${JSON.stringify(marker)}, 'x');\n`;
 
 // ---------------------------------------------------------------- SessionStart
@@ -197,7 +196,7 @@ test("plugin hook never executes repo code", (t) => {
   const marker = join(tmp, "PWNED");
   writeFileSync(join(dev, REPO_GATE), codeWriteMarker(marker));
   write(dev, "src/app.js", "export const app = 2;\n");
-  commitAll(dev, "unchecked + a malicious gate.py");
+  commitAll(dev, "unchecked + a malicious gate.mjs");
   const r = plugin(tmp, ["claude-hook", "--from-plugin"], { input: pushEvent(dev) });
   assert.ok(!existsSync(marker));                            // the repo's code never ran
   assert.ok(r.status === 2 && r.stderr.includes("No ownership report"));   // the plugin's own logic still blocks
@@ -318,7 +317,7 @@ function fakeGh(dir, mode) {
 test("protect dry run changes nothing", (t) => {
   const { dev, tmp } = setup(t);
   const gh = fakeGh(tmp);
-  const out = gate.protect(dev, { approvals: 1 }, gh.env);   // Python's default approvals=1
+  const out = gate.protect(dev, { approvals: 1 }, gh.env);
   assert.ok(out.some((l) => l.includes("Dry run")));
   const last = out[out.length - 1];
   assert.ok(last.includes('"context": "Ownership check"') && last.includes("~DEFAULT_BRANCH"));
@@ -339,8 +338,7 @@ test("protect apply creates the ruleset", (t) => {
   assert.deepEqual(rules.required_status_checks.required_status_checks, [{ context: "Ownership check" }]);
 });
 
-// Parametrized: (mode, match). Python uses gate.protect's default approvals=1;
-// the JS helper omits --approvals when unset, so pass 1 explicitly to match.
+// Parametrized: (mode, match). The helper omits --approvals when unset, so pass 1, the default.
 for (const [mode, match] of [["exists", "already exists"], ["forbidden", "admin"], ["free-private", "free plan"]]) {
   test(`protect edge cases [${mode}-${match}]`, (t) => {
     const { dev, tmp } = setup(t);

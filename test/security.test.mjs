@@ -1,4 +1,3 @@
-// Port of mcp/tests/test_security_plugin.py.
 // Regression tests for the security review of the plugin layer. The threat:
 // a malicious repo the user clones and opens with the plugin installed.
 import { test } from "node:test";
@@ -8,7 +7,7 @@ import { dirname, join } from "node:path";
 
 import { ENV, GATE, NODE, REPO_GATE, callTool, commitAll, gate, git, runGate, setup, sh, throwsGate, write } from "./helpers.mjs";
 
-// Same as gateCli(), plus the timeout the Python plugin() takes (gateCli has none).
+// Same as gateCli(), plus a timeout (gateCli has none).
 const plugin = (cwd, args, { input = "", env, timeout = 60_000 } = {}) =>
   sh(cwd, NODE, [GATE, ...args], { check: false, input, env: env ?? ENV, timeout });
 
@@ -19,7 +18,7 @@ function sessionStart(dev, dir, env) {
 
 const push = (dev) => sh(dev, "git", ["push", "-u", "origin", "HEAD:refs/heads/feature/x"], { check: false });
 
-// JS equivalents of impl.py's node snippets.
+// Gate code that would leave a marker file if it ever ran.
 const codeWriteMarker = (marker) => `import fs from 'node:fs';\nfs.writeFileSync(${JSON.stringify(marker)}, 'x');\n`;
 
 function plantShadowModules(root, marker) {
@@ -34,7 +33,7 @@ function plantShadowModules(root, marker) {
   }
 }
 
-// F1: a module planted next to gate.py must never be imported by the hook.
+// F1: a module planted next to gate.mjs must never be imported by the hook.
 test("planted stdlib module never runs on push", (t) => {
   const { dev, tmp } = setup(t);
   const marker = join(tmp, "PWNED-1");
@@ -48,7 +47,7 @@ test("planted stdlib module never runs on push", (t) => {
   assert.ok(r.status !== 0 && r.stderr.includes("No ownership report"));   // the gate itself still worked
 });
 
-// F2: gate.py swapped after the hook was installed is not executed.
+// F2: gate.mjs swapped after the hook was installed is not executed.
 test("gate swapped after install is not executed", (t) => {
   const { dev, tmp } = setup(t);
   const marker = join(tmp, "PWNED-2");
