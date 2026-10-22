@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Explain-as-you-build is always on:** SessionStart adds one fixed line, under 60 words, in every session. It asks Claude to follow the comprende skill whenever it writes or changes code. Before, the skill only loaded when the request sounded like a wish to learn. `COMPRENDE_QUIET=1` drops the line; gated repos still get the gate message.
 - **Missing or old Node.js is reported, never silent:**
   - If `node` isn't on PATH, the SessionStart hook still prints valid JSON. It tells Claude to say, in one line, that Comprende needs Node.js 20+ and where to get it. The check is plain POSIX `sh`.
   - The same note appears when `node` exists but can't run the gate, or when it's older than 20. `session-start` checks `process.versions.node`.

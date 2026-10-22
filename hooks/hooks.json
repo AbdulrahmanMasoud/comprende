@@ -1,5 +1,5 @@
 {
-  "description": "Ownership gate: in repos that use it, reminds Claude to run the ownership check, installs the local pre-push hook, and stops Claude from pushing a change nobody verified. Does nothing in other repos. If Node.js is missing, SessionStart tells Claude to say so and PreToolUse steps aside.",
+  "description": "Comprende: at session start, one fixed line reminds Claude to follow the comprende skill (COMPRENDE_QUIET=1 turns it off). In repos with the ownership gate, it also reminds Claude to run the ownership check, installs the local pre-push hook, and stops Claude from pushing a change nobody verified. If Node.js is missing, SessionStart tells Claude to say so and PreToolUse steps aside.",
   "hooks": {
     "SessionStart": [
       {

@@ -1153,11 +1153,18 @@ const MIN_NODE = 20;
 // hooks/hooks.json carries the same note for a missing or unusable node.
 const NODE_NOTE = "Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.";
 
+// Every session, so explanations don't depend on the request sounding like a
+// wish to learn. Fixed text on purpose: nothing read from the repo goes into it.
+const ALWAYS_ON =
+  "Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: " +
+  "explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
+
 /** SessionStart hook (plugin). Never throws — a session must always start. */
 export function sessionStart(stdinText: string): Record<string, unknown> {
   const lines: string[] = [];
   const node = process.versions.node;
   if (Number.parseInt(node, 10) < MIN_NODE) lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
+  if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
   lines.push(...gateContext(stdinText));
   return lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {};
 }
@@ -1586,7 +1593,7 @@ Commands (run from inside the repo, or pass --repo):
   verify         Check a commit (default HEAD) against its report — used by CI   [--json]
   pre-push       Git pre-push hook entry point (reads refs from stdin)
   claude-hook    Claude Code PreToolUse hook entry point (reads JSON from stdin)
-  session-start  Claude Code SessionStart hook (plugin): auto-installs the git hook
+  session-start  Claude Code SessionStart hook (plugin): the always-on note; in gated repos, the git hook
   install        Add the gate, config, CI workflow, Claude hook and git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
   protect        Create the GitHub ruleset that makes the check required (gh; dry run by default)
@@ -1650,7 +1657,7 @@ function ci(kind: string, messages: string[]): void {
 /** Internal functions, JSON in / JSON out, for the black-box test suite. */
 function testCall(fn: string, a: unknown[]): unknown {
   const s = (i: number) => (a[i] === null || a[i] === undefined ? null : String(a[i]));
-  const consts: Record<string, unknown> = { GATE_VERSION, GATE_FILES, WORKFLOW, CHECK_NAME, REPO_GATE: GATE_REL };
+  const consts: Record<string, unknown> = { GATE_VERSION, GATE_FILES, WORKFLOW, CHECK_NAME, REPO_GATE: GATE_REL, ALWAYS_ON };
   if (fn in consts) return consts[fn];
   switch (fn) {
     case "collect_changes": {

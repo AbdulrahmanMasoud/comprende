@@ -47,6 +47,8 @@ Just build things. Claude decides what deserves an explanation. You can steer it
 
 Claude remembers what you already know across projects, so it doesn't explain the same thing twice. This memory lives in `~/.comprende/` on your machine and is never committed.
 
+It's on in every session, not only when your request sounds like you want to learn. At session start, one fixed line reminds Claude to follow the skill whenever it writes or changes code. "add a login endpoint" gets the same treatment as "teach me while you build". To turn that line off, set `COMPRENDE_QUIET=1` in your environment. The skill still loads when you ask for explanations, and the ownership gate isn't affected.
+
 ## For teams: the ownership gate
 
 ### Turn it on

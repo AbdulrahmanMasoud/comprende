@@ -101,7 +101,8 @@ for (const kind of ["devzero", "huge", "fifo"]) {
     const start = Date.now();
     const r = plugin(tmp, ["session-start"], { input: JSON.stringify({ cwd: dev }), timeout: 20_000 });
     assert.equal(r.status, 0);
-    assert.deepEqual(JSON.parse(r.stdout), {});
+    // The gate part is skipped; only the fixed always-on line remains.
+    assert.equal(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, gate.const("ALWAYS_ON"));
     assert.ok(Date.now() - start < 10_000, `took ${Date.now() - start}ms`);
     throwsGate(() => gate.status(dev));
   });

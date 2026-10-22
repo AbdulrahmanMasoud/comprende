@@ -943,10 +943,12 @@ function claudeHook(stdinText, fromPlugin = false) {
 }
 var MIN_NODE = 20;
 var NODE_NOTE = "Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.";
+var ALWAYS_ON = "Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
 function sessionStart(stdinText) {
   const lines = [];
   const node = process.versions.node;
   if (Number.parseInt(node, 10) < MIN_NODE) lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
+  if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
   lines.push(...gateContext(stdinText));
   return lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {};
 }
@@ -1327,7 +1329,7 @@ Commands (run from inside the repo, or pass --repo):
   verify         Check a commit (default HEAD) against its report \u2014 used by CI   [--json]
   pre-push       Git pre-push hook entry point (reads refs from stdin)
   claude-hook    Claude Code PreToolUse hook entry point (reads JSON from stdin)
-  session-start  Claude Code SessionStart hook (plugin): auto-installs the git hook
+  session-start  Claude Code SessionStart hook (plugin): the always-on note; in gated repos, the git hook
   install        Add the gate, config, CI workflow, Claude hook and git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
   protect        Create the GitHub ruleset that makes the check required (gh; dry run by default)
@@ -1386,7 +1388,7 @@ function ci(kind, messages) {
 }
 function testCall(fn, a) {
   const s = (i) => a[i] === null || a[i] === void 0 ? null : String(a[i]);
-  const consts = { GATE_VERSION, GATE_FILES, WORKFLOW, CHECK_NAME, REPO_GATE: GATE_REL };
+  const consts = { GATE_VERSION, GATE_FILES, WORKFLOW, CHECK_NAME, REPO_GATE: GATE_REL, ALWAYS_ON };
   if (fn in consts) return consts[fn];
   switch (fn) {
     case "collect_changes": {
