@@ -1,8 +1,4 @@
-__pycache__/
-*.pyc
-.pytest_cache/
-*.egg-info/
-build/
-dist/
-.venv/
+node_modules/
 .DS_Store
+*.log
+# dist/ is committed on purpose: it's what the plugin runs. CI checks it matches src/.

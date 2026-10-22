@@ -10,23 +10,23 @@ permissions:
 
 jobs:
   test:
-    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    name: Tests (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python: ["3.10", "3.13"]
+        node: [20, 22, 24]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: ${{ matrix.python }}
-      - name: Install
-        working-directory: mcp
-        run: python -m pip install -e ".[test]"
-      - name: Test
-        working-directory: mcp
-        env:
-          PYTHONPATH: src:tests
-        run: python -m pytest -q
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+      - run: npm run typecheck
+      - name: dist/ matches the source
+        run: |
+          npm run build
+          git diff --exit-code -- dist skills/explain-as-you-build/scripts \
+            || { echo "::error::dist/ is out of date. Run 'npm run build' and commit the result."; exit 1; }
+      - run: npm test

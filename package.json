@@ -1,0 +1,25 @@
+{
+  "name": "explain-as-you-build",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude Code plugin: explain code while building it, and an ownership gate for teams.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-concurrency=4 test/*.test.mjs",
+    "check": "npm run typecheck && npm run build && npm test"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "yaml": "2.9.1",
+    "zod": "4.6.7"
+  }
+}

@@ -8,7 +8,7 @@ When the `explain-as-you-build` MCP tools are available, the learner profile mov
 
 - Start: `learning_context(repo_root)` replaces reading `me.local.md` and `map.md`.
 - Instead of editing `me.local.md`: `record_topic(topic, "knows" | "learning" | "explained", note)`. Same rules — neutral evidence, never a verdict.
-- Instead of `learning.py decision`: `add_decision(...)`. Instead of reading every record: `search_decisions(repo_root, "keywords")`.
+- Instead of `learning.mjs decision`: `add_decision(...)`. Instead of reading every record: `search_decisions(repo_root, "keywords")`.
 - If `learning_context` reports a leftover `me.local.md`, move its entries over with `record_topic`, then tell the user the file can be deleted.
 - A tool error means the server refused something (a credential, an oversized map, a path outside the repo). Fix the input; don't route around it by writing the file directly.
 
@@ -32,7 +32,7 @@ The split matters: on a team repo, a junior and a senior share `map.md` and `dec
 - **Folder missing** → after the first useful chunk of work (so the value is visible), offer once, in one line:
   > Want me to keep a small `.learning/` folder so next time I remember what you know and why things were built this way?
   Create it only on a yes. On a no, don't ask again this session.
-- Create with: `python <skill-dir>/scripts/learning.py init <repo-root>` — it builds the templates and adds `.learning/*.local.md` to `.gitignore`. It's idempotent, so running it on an existing folder is safe.
+- Create with: `node <skill-dir>/scripts/learning.mjs init <repo-root>` — it builds the templates and adds `.learning/*.local.md` to `.gitignore`. It's idempotent, so running it on an existing folder is safe.
 - **No file access** (plain chat, read-only environment) → skip all of this and keep memory in-session only.
 
 ## At session start
@@ -89,7 +89,7 @@ Gotchas:
 
 ## `decisions/` — why things are the way they are
 
-Create with `python <skill-dir>/scripts/learning.py decision <repo-root> "<title>"`, then fill in the template it prints:
+Create with `node <skill-dir>/scripts/learning.mjs decision <repo-root> "<title>"`, then fill in the template it prints:
 
 ```markdown
 # 0003 — Sliding-window rate limit in Redis

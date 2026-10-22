@@ -25,7 +25,7 @@ In Claude Code:
 /plugin install explain-as-you-build@explain-as-you-build
 ```
 
-You need **Python 3.10+**. You also need [**uv**](https://docs.astral.sh/uv/), which runs the plugin's memory server; without it, everything except that server still works. The [**GitHub CLI**](https://cli.github.com/) is optional: it's used to set up branch rules automatically.
+The only requirement is **Node.js 20+**. Nothing else gets installed: the plugin ships as ready-to-run files that use only Node's built-ins. The [**GitHub CLI**](https://cli.github.com/) is optional: it's used to set up branch rules automatically.
 
 ## Using it
 
@@ -51,13 +51,13 @@ Open Claude in the repo and say:
 Claude asks who should own the gate's settings (usually the lead), opens a PR that adds the gate, and once it's merged, offers to create the GitHub rule that makes the check required. To do the same by hand:
 
 ```bash
-python <plugin>/skills/explain-as-you-build/scripts/gate.py install --repo . --owner @your-org/leads
+node <plugin>/dist/gate.mjs install --repo . --owner @your-org/leads
 # commit, open a PR, merge it, then:
-python .learning/gate.py protect            # dry run: shows the GitHub ruleset it would create
-python .learning/gate.py protect --apply    # needs admin; adds to existing branch protection, never replaces it
+node .learning/gate.mjs protect            # dry run: shows the GitHub ruleset it would create
+node .learning/gate.mjs protect --apply    # needs admin; adds to existing branch protection, never replaces it
 ```
 
-Teammates with the plugin don't need to do anything else: the first time they open Claude in the repo, their local hook is installed. Teammates without it run `python .learning/gate.py install-hooks` once per clone.
+Teammates with the plugin don't need to do anything else: the first time they open Claude in the repo, their local hook is installed. Teammates without it run `node .learning/gate.mjs install-hooks` once per clone.
 
 ### What the developer experiences
 
@@ -114,8 +114,8 @@ The lead **never** sees scores, wrong answers, or how many tries it took. Those 
   - a GitHub ruleset that makes CI required
 
   The first two catch forgetting. The last two are the lock.
-- **One file.** The whole gate is `gate.py`, a single standard-library Python file. It's copied into each repo, and CI runs the copy on the base branch.
-- **Safe in repos you don't trust.** The plugin only ever runs its own copy and never executes code from the repo it's looking at, whose config it reads as data. It installs the local git hook automatically only when the repo's `gate.py` is byte-identical to the plugin's.
+- **One file.** The whole gate is `gate.mjs`, one bundled file that imports only Node's built-ins (`node:fs`, `node:crypto` and so on). It's copied into each repo, and CI runs the copy on the base branch.
+- **Safe in repos you don't trust.** The plugin only ever runs its own copy and never executes code from the repo it's looking at, whose config it reads as data. It installs the local git hook automatically only when the repo's `gate.mjs` is byte-identical to the plugin's. Because it imports only `node:` built-ins, no file in a repo can stand in for a module it loads.
 
 ## Limits, honestly
 
@@ -123,7 +123,7 @@ The lead **never** sees scores, wrong answers, or how many tries it took. Those 
 - **Local hooks can be bypassed** with `--no-verify`. CI plus the ruleset can't.
 - **Code-owner review** means the lead can't approve their own PRs that change the gate. On one-person repos, use `protect --no-code-owners`.
 - **Rulesets aren't available for private repos on GitHub's free plan.** Use classic branch protection there.
-- **GitHub only for now.** It's tested on Linux and macOS. On Windows, the hooks call `python3`.
+- **GitHub only for now.** CI tests it on Linux and macOS with Node 20, 22 and 24. Windows should work with Node and Git for Windows, but it isn't tested yet.
 
 ## Repository layout
 
@@ -132,25 +132,29 @@ The lead **never** sees scores, wrong answers, or how many tries it took. Those 
 skills/explain-as-you-build/
   SKILL.md            when and how Claude explains
   references/         signals, formats, examples, memory, the ownership-check protocol
-  scripts/gate.py     the ownership gate (identical to mcp/src/explain_mcp/gate.py)
+  scripts/            gate.mjs and learning.mjs (copies of the built files, for the skill on its own)
 hooks/hooks.json      SessionStart (auto-setup) and PreToolUse (block unverified pushes)
 .mcp.json             the memory server
-mcp/                  the server's source and the test suite
+src/                  TypeScript source: gate.ts, store.ts, server.ts, learning.ts
+dist/                 the built, dependency-free files the plugin runs (committed)
+test/                 node:test suite against real git repos
 ```
 
 ## Development
 
 ```bash
-cd mcp && pip install -e ".[test]"
-PYTHONPATH=src:tests pytest -q          # about 125 tests against real git repos
+npm ci
+npm run check      # type-check, build dist/, run every test against real git repos
 claude plugin validate ./.claude-plugin/plugin.json
 ```
+
+`dist/` is committed, because that's what the plugin runs. CI fails if `dist/` doesn't match a fresh build of `src/`, so always run `npm run build` before committing.
 
 The tests cover:
 - real pushes through the hooks
 - a fresh CI-style clone at the PR head
 - the workflow's actual shell step
-- a regression test for every finding from three independent security reviews
+- a regression test for every finding from five independent reviews, including one that compared this TypeScript port line by line against the original implementation
 
 To try a local copy: `claude plugin marketplace add ./` from the repo root.
 

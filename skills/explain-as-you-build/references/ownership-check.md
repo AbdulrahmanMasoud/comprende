@@ -33,7 +33,7 @@ After a meaningful piece is done (a module, a layer, a feature step), ask **one 
 
 Run it even if every in-flight check went well, because people forget, skim, and lose focus. In-flight checks verify the parts, while the final check verifies the whole picture and the parts that stuck.
 
-1. **Get the diff state.** Use the `gate_status` MCP tool, or `python .learning/gate.py status`. It lists every changed file as `new`, `stale` (changed since it was last verified), or `ok`, and marks the sensitive ones.
+1. **Get the diff state.** Use the `gate_status` MCP tool, or `node .learning/gate.mjs status`. It lists every changed file as `new`, `stale` (changed since it was last verified), or `ok`, and marks the sensitive ones.
 2. **Ask 3–6 questions** sized to the diff's size and risk, not to the person's seniority. A senior gets fewer, sharper questions, but still gets them. Cover:
    - **The whole flow.** At least one question that crosses modules: "Walk me through a request from arrival to response. What does it pass through?"
    - **Retention.** One or two concepts already checked in-flight, asked in a *different form*. If they were asked "why the Lua script?", ask now "what breaks under load if we drop the Lua script?"
@@ -66,7 +66,7 @@ Avoid trivia ("what does `map` return?"), yes/no questions, and anything answere
 
 ## The report
 
-Save it with the `save_check_report` MCP tool, or with `python .learning/gate.py save` given JSON on stdin:
+Save it with the `save_check_report` MCP tool, or with `node .learning/gate.mjs save` given JSON on stdin:
 
 ```json
 {
@@ -97,8 +97,8 @@ Save it with the `save_check_report` MCP tool, or with `python .learning/gate.py
 When the user asks to set it up ("enable the ownership gate here", "فعّل بوابة الفهم في المشروع ده"), do it end to end, asking before each step that changes something shared:
 
 1. **Ask one question.** Who should own the gate's own files (a GitHub `@user` or `@org/team`)? That is usually the team lead. If it's a one-person repo, say that code-owner review will be off.
-2. **Install on a branch.** Create `chore/ownership-gate`, then run `python <skill-dir>/scripts/gate.py install --repo . --owner <handle>`. It adds:
-   - `.learning/gate.py` and `.learning/config.json`
+2. **Install on a branch.** Create `chore/ownership-gate`, then run `node <skill-dir>/scripts/gate.mjs install --repo . --owner <handle>`. It adds:
+   - `.learning/gate.mjs` and `.learning/config.json`
    - the CI workflow
    - a project-level Claude hook
    - a local pre-push hook
@@ -106,10 +106,10 @@ When the user asks to set it up ("enable the ownership gate here", "فعّل ب�
 
    It never replaces existing files. Show the user what it reported.
 3. **Open the PR** with `gh pr create`. This PR needs no ownership report, because the gate's own files are exempt. Suggest the lead reviews `.learning/config.json`, especially the `sensitive` globs, which should match where their auth, payments and migrations actually live.
-4. **After it's merged**, run `python .learning/gate.py protect`. It is a dry run that shows the GitHub ruleset it would create: a required PR, the required "Ownership check" status, and code-owner review. If they agree, run it again with `--apply`, which needs admin access. Rulesets add to existing branch protection and don't replace it. Add `--no-code-owners` for one-person repos. On a private repo on the free plan, rulesets aren't available, so walk them through Settings → Branches instead.
+4. **After it's merged**, run `node .learning/gate.mjs protect`. It is a dry run that shows the GitHub ruleset it would create: a required PR, the required "Ownership check" status, and code-owner review. If they agree, run it again with `--apply`, which needs admin access. Rulesets add to existing branch protection and don't replace it. Add `--no-code-owners` for one-person repos. On a private repo on the free plan, rulesets aren't available, so walk them through Settings → Branches instead.
 5. **Tell them about open PRs.** Branches created before the gate won't report the check until they merge the base branch in.
 
-Teammates who install the plugin need nothing else. When they open Claude in the repo, the plugin installs their local pre-push hook and reminds Claude that the repo is gated. Teammates without the plugin can run `python .learning/gate.py install-hooks` once per clone.
+Teammates who install the plugin need nothing else. When they open Claude in the repo, the plugin installs their local pre-push hook and reminds Claude that the repo is gated. Teammates without the plugin can run `node .learning/gate.mjs install-hooks` once per clone.
 
 Without a `.learning/config.json`, the gate counts as `suggested` locally. CI and the hooks always take their rules from the **base** branch, so a PR can't switch off its own check.
 

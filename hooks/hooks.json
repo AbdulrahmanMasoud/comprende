@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/explain-as-you-build/scripts/gate.py\" session-start",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/gate.mjs\" session-start",
             "timeout": 30
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/explain-as-you-build/scripts/gate.py\" claude-hook --from-plugin",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/gate.mjs\" claude-hook --from-plugin",
             "timeout": 60
           }
         ]

@@ -82,7 +82,7 @@ See `references/examples.md` for good vs. bad explanations side by side. Read it
 
 - If `.learning/` exists, read `me.local.md` and `map.md` at the start, and open a decision record only when the task touches its area.
 - If it doesn't exist, offer it once, in one line, after the first useful chunk of work — it's their repo, so create it only on a yes.
-- Use `scripts/learning.py` to set it up and to number decision records.
+- Use `node <skill-dir>/scripts/learning.mjs` to set it up and to number decision records.
 
 Formats, caps, and what must never go in it are in `references/memory.md` — read it before creating or updating anything there.
 

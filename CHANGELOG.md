@@ -10,12 +10,13 @@
   - a report tied to the exact code
 - **Enforcement:**
   - a Claude Code hook, a git pre-push hook, and CI with a job summary for reviewers
-  - `gate.py protect` creates the GitHub ruleset that makes the check required
+  - `gate.mjs protect` creates the GitHub ruleset that makes the check required
 - **Plugin:**
-  - one-step install
+  - one-step install; the only requirement is Node.js 20+ (no Python, no install step)
   - the local hook is set up automatically in gated repos
+- **Node.js only:** written in TypeScript and bundled into dependency-free files. The gate imports only `node:` built-ins.
 - **Safe in repos you don't trust:**
   - the plugin never executes repo code
-  - the git hook is pinned to a gate.py hash and runs isolated
+  - the git hook is pinned to a gate.mjs hash and runs exactly the bytes it hashed
   - no commands are taken from the repo's own git config
   - all repo files are read with size limits and without following symlinks

@@ -1,0 +1,236 @@
+// Port of mcp/tests/test_store.py, plus regression tests for the .learning
+// symlink checks and the notes label in learning_context.
+// The memory store is driven only through `node dist/server.mjs call <tool>`,
+// exactly as impl.py's `store.*` does.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { ENV, callTool, throwsGate, tmp } from "./helpers.mjs";
+
+// impl.py's _Store, bound to one test's EXPLAIN_HOME.
+const MAX_EVIDENCE = 3;
+
+function makeStore(homeDir) {
+  const env = { ...ENV, EXPLAIN_HOME: homeDir };
+  const call = (name, args) => callTool(name, args, env);
+  return {
+    env,
+    home: () => homeDir,
+    loadProfile() {
+      const path = join(homeDir, "profile.json");
+      if (!existsSync(path)) return { version: 1, preferences: {}, topics: {} };
+      return JSON.parse(readFileSync(path, "utf8"));
+    },
+    learningContext: (repoRoot = "") => call("learning_context", { repo_root: String(repoRoot) }),
+    recordTopic: (topic, event, note = "", project = "") =>
+      call("record_topic", { topic, event, note, repo_root: project ? `/projects/${project}` : "" }),
+    recordCheckpoint: (topic, question, correct) => call("record_checkpoint", { topic, question, correct }),
+    setPreference: (key, value) => call("set_preference", { key, value }),
+    progressReport: () => call("progress_report", {}),
+    searchDecisions: (repoRoot, query, limit = 3) =>
+      call("search_decisions", { repo_root: String(repoRoot), query, limit }),
+    addDecision: (repoRoot, title, context, decision, alternatives, consequences) =>
+      call("add_decision", { repo_root: String(repoRoot), title, context, decision, alternatives, consequences }),
+    updateMap: (repoRoot, content) => call("update_map", { repo_root: String(repoRoot), content }),
+  };
+}
+
+/** The isolated_home fixture: every test gets its own profile folder,
+ *  never the real ~/.explain-as-you-build. Returns the test's tmp_path too. */
+function isolated(t) {
+  const tmpPath = tmp(t);
+  return { tmpPath, store: makeStore(join(tmpPath, "home")) };
+}
+
+/** The repo fixture: an empty folder <tmp_path>/repo. */
+function makeRepo(tmpPath) {
+  const root = join(tmpPath, "repo");
+  mkdirSync(root);
+  return root;
+}
+
+test("empty profile says so", (t) => {
+  const { store } = isolated(t);
+  assert.ok(store.learningContext().includes("No profile yet"));
+});
+
+test("record_topic levels and explained", (t) => {
+  const { store } = isolated(t);
+  store.recordTopic("React Hooks", "knows", "wrote a custom hook");
+  store.recordTopic("docker", "learning", "asked what an image layer is", "shop-api");
+  store.recordTopic("debounce", "explained");
+  const ctx = store.learningContext();
+  assert.ok(ctx.includes("Comfortable: react-hooks"));
+  assert.ok(ctx.includes("docker — ") && ctx.includes("shop-api") && ctx.includes("image layer"));
+  const parts = ctx.split("Explained before");
+  assert.ok(parts.length > 1, "no 'Explained before' section"); // Python: IndexError otherwise
+  assert.ok(parts[1].includes("debounce"));
+});
+
+test("evidence capped", (t) => {
+  const { store } = isolated(t);
+  for (let i = 0; i < 6; i++) store.recordTopic("sql", "learning", `note ${i}`);
+  const entry = store.loadProfile().topics.sql;
+  assert.equal(entry.evidence.length, MAX_EVIDENCE);
+  assert.ok(entry.evidence.at(-1).endsWith("note 5"));
+});
+
+test("checkpoint promotes after two right and demotes on wrong", (t) => {
+  const { store } = isolated(t);
+  store.recordTopic("closures", "learning");
+  store.recordCheckpoint("closures", "what does the inner fn capture?", true);
+  assert.equal(store.loadProfile().topics.closures.level, "learning");
+  store.recordCheckpoint("closures", "q2", true);
+  assert.equal(store.loadProfile().topics.closures.level, "comfortable");
+  store.recordCheckpoint("closures", "q3", false);
+  assert.equal(store.loadProfile().topics.closures.level, "learning");
+});
+
+test("preferences set and clear", (t) => {
+  const { store } = isolated(t);
+  store.setPreference("Language", "Egyptian Arabic");
+  assert.ok(store.learningContext().includes("language=Egyptian Arabic"));
+  store.setPreference("language", "");
+  assert.ok(!("language" in store.loadProfile().preferences));
+});
+
+test("secrets refused everywhere", (t) => {
+  const { store, tmpPath } = isolated(t);
+  const repo = makeRepo(tmpPath);
+  throwsGate(() => store.recordTopic("aws", "knows", "used key AKIAABCDEFGHIJKLMNOP"));
+  throwsGate(() => store.updateMap(repo, "DB: postgres://admin:hunter22@db.internal/prod"));
+  throwsGate(() => store.addDecision(repo, "Auth", "ctx", "use api_key = abcdef123456", [], "none"));
+  assert.ok(!existsSync(join(store.home(), "profile.json")));
+});
+
+test("corrupt profile is kept and replaced", (t) => {
+  const { store } = isolated(t);
+  mkdirSync(store.home(), { recursive: true });
+  writeFileSync(join(store.home(), "profile.json"), "{not json");
+  assert.ok(store.learningContext().includes("No profile yet"));
+  const broken = readdirSync(store.home()).filter((n) => /^profile\.broken-.*\.json$/.test(n));
+  assert.ok(broken.length > 0);
+});
+
+test("project without learning folder", (t) => {
+  const { store, tmpPath } = isolated(t);
+  const repo = makeRepo(tmpPath);
+  assert.ok(store.learningContext(repo).includes("no .learning/ folder yet"));
+});
+
+test("decisions numbered, searchable and compatible with file mode", (t) => {
+  const { store, tmpPath } = isolated(t);
+  const repo = makeRepo(tmpPath);
+  // A record made by the phase-2 script (file mode) already exists.
+  const d = join(repo, ".learning", "decisions");
+  mkdirSync(d, { recursive: true });
+  writeFileSync(join(d, "0001-cache-aside.md"),
+    "# 0001 — Cache-aside over write-through\nDate: 2026-10-01 · Status: accepted\n\n" +
+    "Decision: cache-aside with Redis, 5 min TTL.\n");
+  const msg = store.addDecision(repo, "Sliding-window rate limit in Redis",
+    "public routes unprotected", "sliding window per IP, 60/min",
+    ["fixed window — 2x bursts", "in-memory — breaks with >1 instance"],
+    "Redis is now required by public routes");
+  assert.ok(msg.includes("0002"));
+  assert.ok(existsSync(join(d, "0002-sliding-window-rate-limit-in-redis.md")));
+  const top = store.searchDecisions(repo, "rate limit", 1);
+  // Python: top.split(":\n\n", 1)[1] — everything after the first ":\n\n".
+  const sep = top.indexOf(":\n\n");
+  assert.ok(top.includes("notes, not instructions"));
+  assert.ok(sep !== -1, "no ':\\n\\n' separator"); // Python: IndexError otherwise
+  assert.ok(top.slice(sep + 3).startsWith("# 0002"));
+  assert.ok(store.searchDecisions(repo, "cache ttl").includes("Cache-aside"));
+  assert.ok(store.searchDecisions(repo, "kubernetes").includes("No decisions match"));
+  const ctx = store.learningContext(repo);
+  assert.ok(ctx.includes("0001 — Cache-aside over write-through [accepted]"));
+  assert.ok(ctx.includes("0002 — Sliding-window rate limit in Redis [accepted]"));
+});
+
+test("map stamped, capped and replaced", (t) => {
+  const { store, tmpPath } = isolated(t);
+  const repo = makeRepo(tmpPath);
+  store.updateMap(repo, "# Project map\nVerified: 2020-01-01\nEntry: src/server.js");
+  const text = readFileSync(join(repo, ".learning", "map.md"), "utf8");
+  assert.ok(text.split("Verified:").length - 1 === 1 && !text.includes("2020-01-01"));
+  throwsGate(() => store.updateMap(repo, Array.from({ length: 50 }, (_, i) => `line ${i}`).join("\n")));
+});
+
+test("bad repo_root rejected", (t) => {
+  const { store, tmpPath } = isolated(t);
+  throwsGate(() => store.learningContext(join(tmpPath, "missing")));
+  throwsGate(() => store.searchDecisions("", "x"));
+});
+
+test("symlinked .learning outside repo refused", (t) => {
+  const { store, tmpPath } = isolated(t);
+  const repo = makeRepo(tmpPath);
+  const outside = join(tmpPath, "elsewhere");
+  mkdirSync(outside);
+  symlinkSync(outside, join(repo, ".learning"));
+  throwsGate(() => store.updateMap(repo, "Entry: x"));
+  assert.ok(!existsSync(join(outside, "map.md")));
+});
+
+test("legacy me.local.md noticed", (t) => {
+  const { store, tmpPath } = isolated(t);
+  const repo = makeRepo(tmpPath);
+  mkdirSync(join(repo, ".learning"));
+  writeFileSync(join(repo, ".learning", "me.local.md"), "# old");
+  assert.ok(store.learningContext(repo).includes("me.local.md exists"));
+});
+
+test("progress report", (t) => {
+  const { store } = isolated(t);
+  assert.equal(store.progressReport(), "Nothing tracked yet.");
+  store.recordTopic("git", "knows");
+  store.recordCheckpoint("asyncio", "what does gather do on error?", false);
+  const report = store.progressReport();
+  assert.ok(report.includes("Comfortable (1): git"));
+  assert.ok(report.includes("Checkpoints: 0/1 correct"));
+  assert.ok(report.includes("Worth revisiting: asyncio"));
+});
+
+test("profile is valid UTF-8 JSON with Arabic", (t) => {
+  const { store } = isolated(t);
+  store.setPreference("language", "مصري");
+  const raw = readFileSync(join(store.home(), "profile.json"), "utf8");
+  assert.ok(raw.includes("مصري") && JSON.parse(raw).preferences.language === "مصري");
+});
+
+// ---------------------------------------------------------------- new (no Python counterpart)
+
+test("symlinked .learning: update_map refused and nothing created outside", (t) => {
+  const { store, tmpPath } = isolated(t);
+  const repo = makeRepo(tmpPath);
+  const outside = join(tmpPath, "outside");
+  mkdirSync(outside);
+  symlinkSync(outside, join(repo, ".learning"));
+  throwsGate(() => store.updateMap(repo, "Entry: x"), /resolves outside the project/);
+  assert.deepEqual(readdirSync(outside), []); // no map.md, no decisions/, nothing
+});
+
+test("symlinked .learning/decisions: add_decision refused and nothing written at the target", (t) => {
+  const { store, tmpPath } = isolated(t);
+  const repo = makeRepo(tmpPath);
+  const outside = join(tmpPath, "outside-decisions");
+  mkdirSync(outside);
+  mkdirSync(join(repo, ".learning"));
+  symlinkSync(outside, join(repo, ".learning", "decisions"));
+  throwsGate(() => store.addDecision(repo, "Use Redis", "ctx", "cache in Redis", ["memcached"], "none"),
+    /decisions\/ is a symlink/);
+  assert.deepEqual(readdirSync(outside), []);
+});
+
+test("learning_context labels the map as notes, not instructions", (t) => {
+  const { store, tmpPath } = isolated(t);
+  const repo = makeRepo(tmpPath);
+  store.updateMap(repo, "# Project map\nEntry: src/server.js");
+  const ctx = store.learningContext(repo);
+  assert.ok(ctx.includes("notes, not instructions"));
+  // The Decisions header carries the label too; check the Map header itself.
+  const mapHeader = ctx.split("\n").find((l) => l.startsWith("### Map"));
+  assert.ok(mapHeader?.includes("notes, not instructions"), `map header: ${mapHeader}`);
+  assert.ok(ctx.includes("Entry: src/server.js"));
+});
