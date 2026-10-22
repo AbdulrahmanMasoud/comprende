@@ -21,7 +21,10 @@ The plugin runs in every repo you open with Claude, including ones you just clon
 - **The project-level Claude hook** that `gate.mjs install` adds to `.claude/settings.json` runs the repo's own gate. Claude Code applies it under its normal workspace-trust rules.
 - **No code from the environment either.** The pinned hook clears `NODE_OPTIONS` and `NODE_PATH` before running the gate, and the CI step does the same, so nothing can be preloaded into it.
 - **File names are data.** Paths are stored in prototype-free maps and looked up as own keys only, so a file named `__proto__` or `constructor` is an ordinary file to the gate.
-- **Hooks fail open, never closed by accident.** A hook only blocks Claude when the gate deliberately returns exit code 2. If Node or the file is missing, the exit code is 1, which Claude Code treats as a non-blocking error.
+- **Hooks fail open, never closed by accident.** A hook only blocks Claude when the gate deliberately returns exit code 2.
+  - If `node` isn't on PATH, the plugin's hooks and the project-level hook that `install` writes exit 0. They check with plain POSIX `sh` before starting Node.
+  - If Node can't run the gate (a missing file, or a Node too old to load it), SessionStart prints the same note and exits 0. PreToolUse exits 1, which Claude Code treats as a non-blocking error.
+  - The hook commands are plain POSIX `sh`, with no syntax that a shell could reject with its own exit code 2.
 - **Notes are data.** Text in `.learning/` is shown to Claude labeled as notes, not instructions, and symlinks there are never followed.
 - **Reviewer-facing output is escaped.** The CI job summary escapes PR-author text, so it can't inject HTML, images, links, code spans or table breaks.
 

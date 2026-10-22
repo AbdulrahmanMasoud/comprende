@@ -1149,17 +1149,29 @@ export function claudeHook(stdinText: string, fromPlugin = false): number {
   return 2;
 }
 
-/** SessionStart hook (plugin). In a repo that uses the gate: install the local
- *  pre-push hook if this clone lacks it, and tell Claude the repo is gated so
- *  the ownership-check protocol is followed. Elsewhere: nothing. Never throws —
- *  a session must always start. */
+const MIN_NODE = 20;
+// hooks/hooks.json carries the same note for a missing or unusable node.
+const NODE_NOTE = "Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.";
+
+/** SessionStart hook (plugin). Never throws — a session must always start. */
 export function sessionStart(stdinText: string): Record<string, unknown> {
+  const lines: string[] = [];
+  const node = process.versions.node;
+  if (Number.parseInt(node, 10) < MIN_NODE) lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
+  lines.push(...gateContext(stdinText));
+  return lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {};
+}
+
+/** In a repo that uses the gate: install the local pre-push hook if this clone
+ *  lacks it, and tell Claude the repo is gated so the ownership-check protocol
+ *  is followed. Elsewhere: nothing. */
+function gateContext(stdinText: string): string[] {
   try {
     const payload = JSON.parse(stdinText || "{}");
     const root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
-    if (!lstat(join(root, CONFIG_PATH))) return {};
+    if (!lstat(join(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
-    if (cfg.mode === "off") return {};
+    if (cfg.mode === "off") return [];
     const lines = [
       `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`,
     ];
@@ -1176,9 +1188,9 @@ export function sessionStart(stdinText: string): Record<string, unknown> {
         } else if (result.startsWith("SKIPPED")) lines.push("The gate's pre-push hook wasn't added: " + result);
       }
     }
-    return { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } };
+    return lines;
   } catch {
-    return {};
+    return [];
   }
 }
 
@@ -1292,7 +1304,8 @@ jobs:
             --branch "$HEAD_REF" --labels-json "$PR_LABELS"
 `;
 
-const CLAUDE_HOOK_COMMAND = `node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
+// Without node, exit 0: any other non-2 code would still be shown as a hook error on every Bash call.
+const CLAUDE_HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
 
 const RULESET_NAME = "Ownership gate";
 export const CHECK_NAME = "Ownership check"; // the workflow job's name = the status check context

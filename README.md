@@ -30,6 +30,10 @@ In Claude Code:
 
 The only requirement is **Node.js 20+**. Nothing else gets installed: the plugin ships as ready-to-run files that use only Node's built-ins. The [**GitHub CLI**](https://cli.github.com/) is optional: it's used to set up branch rules automatically.
 
+Claude Code itself can be installed without Node. If `node` is missing or older than 20, Claude tells you so in one line when the session starts, with a link to [nodejs.org](https://nodejs.org). Until then, the hooks step aside and never block a command.
+
+**On Windows**, Claude Code runs hook commands in Git Bash, where all of this works. Without Git Bash it falls back to PowerShell. There, the Node check at session start fails with a one-time, non-blocking hook error, and the push guard doesn't run, because it's attached to the Bash tool. Install [Git for Windows](https://gitforwindows.org) to get both.
+
 ## Using it
 
 Just build things. Claude decides what deserves an explanation. You can steer it in plain words, in any language:
@@ -126,7 +130,7 @@ The lead **never** sees scores, wrong answers, or how many tries it took. Those 
 - **Local hooks can be bypassed** with `--no-verify`. CI plus the ruleset can't.
 - **Code-owner review** means the lead can't approve their own PRs that change the gate. On one-person repos, use `protect --no-code-owners`.
 - **Rulesets aren't available for private repos on GitHub's free plan.** Use classic branch protection there.
-- **GitHub only for now.** CI tests it on Linux and macOS with Node 20, 22 and 24. Windows should work with Node and Git for Windows, but it isn't tested yet.
+- **GitHub only for now.** CI tests it on Linux and macOS with Node 20, 22 and 24. Windows should work with Node and Git for Windows (Git Bash), but it isn't tested yet.
 
 ## Repository layout
 

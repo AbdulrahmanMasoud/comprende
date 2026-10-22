@@ -3,11 +3,13 @@
 // the repo's gate, the CI job summary for reviewers, and `protect`.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { accessSync, chmodSync, constants, existsSync, mkdirSync, readFileSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
 
-import { ENV, REPO_GATE, SUMMARY, commitAll, gate, gateCli, git, runGate, setup, throwsGate, write } from "./helpers.mjs";
+import { ENV, REPO, REPO_GATE, SUMMARY, commitAll, gate, gateCli, git, runGate, setup, throwsGate, tmp as tmpDir, write } from "./helpers.mjs";
 
 /** The plugin's copy of the gate (dist/gate.mjs), like the Python `plugin()`. */
 const plugin = (cwd, args, { input = "", env } = {}) => gateCli(args, { input, env: env ?? ENV, cwd });
@@ -64,6 +66,86 @@ test("session start silent when gate is off", (t) => {
   cfg.ownership_check.mode = "off";
   writeFileSync(cfgPath, JSON.stringify(cfg));
   assert.deepEqual(JSON.parse(plugin(tmp, ["session-start"], { input: JSON.stringify({ cwd: dev }) }).stdout), {});
+});
+
+// ---------------------------------------------------------------- Node.js missing or too old
+
+const HOOKS = JSON.parse(readFileSync(join(REPO, "hooks/hooks.json"), "utf8")).hooks;
+const SESSION_START = HOOKS.SessionStart[0].hooks[0].command;
+const PRE_TOOL_USE = HOOKS.PreToolUse[0].hooks[0].command;
+const NODE_NOTE = /Node\.js 20 or newer.*https:\/\/nodejs\.org/;
+const GIT = spawnSync("/bin/sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+
+/** A PATH folder holding git and a `node` that is missing, broken, or the
+ *  real one reporting another version. */
+function fakeBin(t, node) {
+  const bin = tmpDir(t);
+  symlinkSync(GIT, join(bin, "git"));
+  if (node === "missing") return bin;
+  const exe = join(bin, "node");
+  if (node === "broken") writeFileSync(exe, "#!/bin/sh\necho 'SyntaxError: Unexpected token' >&2\nexit 1\n");
+  else {
+    const pre = join(bin, "fake-version.mjs");
+    writeFileSync(pre, `Object.defineProperty(process.versions, "node", { value: ${JSON.stringify(node)} });\n`);
+    writeFileSync(exe, `#!/bin/sh\nexec "${process.execPath}" --import "${pathToFileURL(pre).href}" "$@"\n`);
+  }
+  chmodSync(exe, 0o755);
+  return bin;
+}
+
+/** Run a hooks.json command the way Claude Code does on macOS and Linux. */
+const runHook = (command, bin, input = "", shell = "/bin/sh") =>
+  spawnSync(shell, ["-c", command], {
+    input, encoding: "utf8", env: { HOME: bin, PATH: bin, CLAUDE_PLUGIN_ROOT: REPO, GIT_CONFIG_NOSYSTEM: "1" },
+  });
+
+const contextOf = (r) => JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+
+test("hooks without node: SessionStart tells Claude, PreToolUse allows", (t) => {
+  const { dev } = setup(t);
+  const bin = fakeBin(t, "missing");
+  const start = runHook(SESSION_START, bin, JSON.stringify({ cwd: dev }));
+  assert.equal(start.status, 0, start.stderr);
+  assert.match(contextOf(start), NODE_NOTE);
+  const pre = runHook(PRE_TOOL_USE, bin, pushEvent(dev));
+  assert.deepEqual([pre.status, pre.stdout, pre.stderr], [0, "", ""]);
+  // The project-level hook that install writes for teammates without the plugin.
+  const settings = JSON.parse(readFileSync(join(dev, ".claude/settings.json"), "utf8"));
+  const project = spawnSync("/bin/sh", ["-c", settings.hooks.PreToolUse[0].hooks[0].command], {
+    input: pushEvent(dev), encoding: "utf8", env: { PATH: bin, CLAUDE_PROJECT_DIR: dev },
+  });
+  assert.deepEqual([project.status, project.stdout, project.stderr], [0, "", ""]);
+});
+
+test("hooks with a node that can't run the gate: a note, never exit 2", (t) => {
+  const { dev } = setup(t);
+  const bin = fakeBin(t, "broken");
+  const start = runHook(SESSION_START, bin, JSON.stringify({ cwd: dev }));
+  assert.equal(start.status, 0, start.stderr);
+  assert.match(contextOf(start), NODE_NOTE);
+  assert.notEqual(runHook(PRE_TOOL_USE, bin, pushEvent(dev)).status, 2);
+});
+
+test("session start on Node older than 20 adds the note; 20+ doesn't", (t) => {
+  const { dev } = setup(t);
+  const old = runHook(SESSION_START, fakeBin(t, "18.20.4"), JSON.stringify({ cwd: dev }));
+  assert.equal(old.status, 0, old.stderr);
+  assert.match(contextOf(old), NODE_NOTE);
+  assert.match(contextOf(old), /18\.20\.4/);
+  assert.match(contextOf(old), /ownership gate/);                  // the rest still works
+  const current = runHook(SESSION_START, fakeBin(t, "20.0.0"), JSON.stringify({ cwd: dev }));
+  assert.doesNotMatch(contextOf(current), NODE_NOTE);
+});
+
+test("hook commands are valid in every POSIX shell here and exit 0 without node", (t) => {
+  const bin = fakeBin(t, "missing");
+  const shells = ["/bin/sh", "/bin/bash", "/bin/dash", "/bin/zsh", "/usr/bin/dash"].filter((s) => existsSync(s));
+  for (const shell of shells) {
+    for (const command of [SESSION_START, PRE_TOOL_USE]) {
+      assert.equal(spawnSync(shell, ["-n", "-c", command]).status, 0, `${shell} can't parse: ${command}`);
+      assert.equal(runHook(command, bin, "{}", shell).status, 0, `${shell}: ${command}`);
+    }
+  }
 });
 
 // ---------------------------------------------------------------- plugin PreToolUse hook

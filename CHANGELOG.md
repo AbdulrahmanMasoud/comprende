@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Missing or old Node.js is reported, never silent:**
+  - If `node` isn't on PATH, the SessionStart hook still prints valid JSON. It tells Claude to say, in one line, that Comprende needs Node.js 20+ and where to get it. The check is plain POSIX `sh`.
+  - The same note appears when `node` exists but can't run the gate, or when it's older than 20. `session-start` checks `process.versions.node`.
+  - The plugin's PreToolUse hook exits 0 when `node` is missing. So does the project-level hook that `install` writes into `.claude/settings.json`; repos installed earlier keep their old command until it's edited. Neither can block Bash by accident.
+  - README: what happens on Windows with and without Git Bash.
 - **Fixes:**
   - `learning_context` still returns your profile when a project's `.learning/` folder is refused, for example because it's a symlink. Before, the whole call failed.
   - A symlinked `.learning/` is refused with ".learning/ is a symlink". Before, the message said it "resolves outside the project", which was wrong when the link pointed inside the project.

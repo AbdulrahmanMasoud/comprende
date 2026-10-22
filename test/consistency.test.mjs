@@ -23,10 +23,13 @@ test("manifests, hooks and the MCP config point at real files", () => {
   const hooks = json("hooks/hooks.json").hooks;
   const commands = Object.values(hooks).flatMap((groups) => groups.flatMap((g) => g.hooks.map((h) => h.command)));
   for (const c of commands) {
-    assert.match(c, /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/dist\/gate\.mjs" /);
+    // The only thing a hook ever runs with node is the plugin's own gate.
+    const targets = [...c.matchAll(/\bnode\s+"([^"]+)"/g)].map((m) => m[1]);
+    assert.ok(targets.length > 0, c);
+    for (const target of targets) assert.equal(target, "${CLAUDE_PLUGIN_ROOT}/dist/gate.mjs");
     assert.ok(existsSync(join(REPO, "dist/gate.mjs")));
   }
-  assert.ok(commands.some((c) => c.endsWith(" session-start")));
+  assert.ok(commands.some((c) => /gate\.mjs" session-start\b/.test(c)));
   assert.ok(commands.some((c) => c.endsWith(" claude-hook --from-plugin")));
   const mcp = json(".mcp.json").mcpServers["comprende"];
   assert.equal(mcp.command, "node");

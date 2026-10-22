@@ -941,13 +941,22 @@ function claudeHook(stdinText, fromPlugin = false) {
   process.stderr.write("Blocked by the ownership gate:\n- " + problems.join("\n- ") + "\n");
   return 2;
 }
+var MIN_NODE = 20;
+var NODE_NOTE = "Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.";
 function sessionStart(stdinText) {
+  const lines = [];
+  const node = process.versions.node;
+  if (Number.parseInt(node, 10) < MIN_NODE) lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
+  lines.push(...gateContext(stdinText));
+  return lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {};
+}
+function gateContext(stdinText) {
   try {
     const payload = JSON.parse(stdinText || "{}");
     const root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
-    if (!lstat(join(root, CONFIG_PATH))) return {};
+    if (!lstat(join(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
-    if (cfg.mode === "off") return {};
+    if (cfg.mode === "off") return [];
     const lines = [
       `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`
     ];
@@ -962,9 +971,9 @@ function sessionStart(stdinText) {
         } else if (result.startsWith("SKIPPED")) lines.push("The gate's pre-push hook wasn't added: " + result);
       }
     }
-    return { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } };
+    return lines;
   } catch {
-    return {};
+    return [];
   }
 }
 function prePush(stdinText, repo) {
@@ -1070,7 +1079,7 @@ jobs:
           node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
             --branch "$HEAD_REF" --labels-json "$PR_LABELS"
 `;
-var CLAUDE_HOOK_COMMAND = `node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
+var CLAUDE_HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
 var RULESET_NAME = "Ownership gate";
 var CHECK_NAME = "Ownership check";
 function rulesetBody(approvals = 1, codeOwners = true) {

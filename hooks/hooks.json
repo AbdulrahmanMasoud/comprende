@@ -1,12 +1,12 @@
 {
-  "description": "Ownership gate: in repos that use it, reminds Claude to run the ownership check, installs the local pre-push hook, and stops Claude from pushing a change nobody verified. Does nothing in other repos.",
+  "description": "Ownership gate: in repos that use it, reminds Claude to run the ownership check, installs the local pre-push hook, and stops Claude from pushing a change nobody verified. Does nothing in other repos. If Node.js is missing, SessionStart tells Claude to say so and PreToolUse steps aside.",
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/gate.mjs\" session-start",
+            "command": "command -v node >/dev/null 2>&1 || { printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende could not start: node is not on PATH. Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.\"}}'; exit 0; }; node \"${CLAUDE_PLUGIN_ROOT}/dist/gate.mjs\" session-start || printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende could not start: this Node.js could not run it. Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.\"}}'",
             "timeout": 30
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/gate.mjs\" claude-hook --from-plugin",
+            "command": "command -v node >/dev/null 2>&1 || exit 0; exec node \"${CLAUDE_PLUGIN_ROOT}/dist/gate.mjs\" claude-hook --from-plugin",
             "timeout": 60
           }
         ]

@@ -23,6 +23,10 @@ Claude بيشرح الكود اللي بيكتبه، باختصار وفي ال�
 - **Node.js 20+** بس. مفيش أي حاجة تانية بتتسطّب.
 - **[gh](https://cli.github.com/)**: اختياري، علشان إعدادات GitHub تتعمل أوتوماتيك.
 
+ممكن يكون Claude Code متسطّب من غير Node. لو `node` مش موجود، أو أقدم من 20، فـ Claude هيقولك ده في سطر واحد أول ما الـ session تبدأ، ومعاه لينك [nodejs.org](https://nodejs.org). ولحد ما تسطّبه، الـ hooks مش هتمنع أي أمر.
+
+**على Windows:** Claude Code بيشغّل الـ hooks في Git Bash، وهناك كل ده شغال. ولو مفيش Git Bash، بيستخدم PowerShell بداله. ساعتها الـ check بتاع Node في أول الـ session بيطلّع hook error مرة واحدة، والـ error ده مش بيوقف أي حاجة. وكمان الـ push guard مش هيشتغل، لأنه مربوط بالـ Bash tool. سطّب [Git for Windows](https://gitforwindows.org) عشان الاتنين يشتغلوا.
+
 ## الاستخدام
 
 ابني عادي، وClaude هو اللي بيقرر إيه اللي يستاهل شرح. وتقدر توجّهه بالكلام:
