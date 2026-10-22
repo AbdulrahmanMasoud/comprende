@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { REPO } from "./helpers.mjs";
+import { ENV, REPO, sh, tmp } from "./helpers.mjs";
 
 const read = (rel) => readFileSync(join(REPO, rel));
 const json = (rel) => JSON.parse(read(rel).toString("utf8"));
@@ -43,4 +43,51 @@ test("the gate imports nothing but node: built-ins", () => {
   assert.ok(specs.length > 0);
   for (const s of specs) assert.ok(s.startsWith("node:"), `unexpected import ${s}`);
   assert.match(code, /^\/\/ ownership-gate-version: \d+$/m);
+});
+
+test("both READMEs open with a Quick start for the three kinds of user", () => {
+  const en = read("README.md").toString("utf8");
+  const quick = en.indexOf("## Quick start");
+  assert.ok(quick > 0 && quick < en.indexOf("## Install"), "Quick start comes before Install");
+  const section = en.slice(quick, en.indexOf("\n## ", quick + 1));
+  for (const who of ["Solo developer", "Team lead", "Team member"]) assert.ok(section.includes(who), who);
+  assert.ok(section.includes("Enable the ownership gate in this repo") && section.includes("protect"));
+  assert.ok(section.includes("docs/demo.tape"));
+  const ar = read("README.ar.md").toString("utf8");
+  const arQuick = ar.indexOf("## البداية السريعة");
+  assert.ok(arQuick > 0 && arQuick < ar.indexOf("## التسطيب"), "Arabic Quick start comes before التسطيب");
+  assert.ok(ar.includes("/plugin install comprende@comprende"));
+});
+
+/** The commands the tape types, in order (each `Type` line up to its `Enter`). */
+function tapeCommands(tape) {
+  const out = [];
+  let current = "";
+  for (const line of tape.split("\n")) {
+    const typed = /^Type\s+(?:"(.*)"|`(.*)`)\s*$/.exec(line);
+    if (typed) current += typed[1] ?? typed[2];
+    else if (/^Enter\b/.test(line)) {
+      out.push(current);
+      current = "";
+    }
+  }
+  return out;
+}
+
+test("docs/demo.tape runs: the push is blocked, a report is saved, the push goes through", (t) => {
+  const tape = read("docs/demo.tape").toString("utf8");
+  assert.match(tape, /^Output docs\/demo\.gif$/m);
+  const commands = tapeCommands(tape);
+  assert.ok(commands.length >= 6, `only ${commands.length} commands`);
+  // Run exactly what VHS would type, from the repo root, in bash, with one
+  // output stream as on screen.
+  const home = tmp(t);
+  const script = ["exec 2>&1", ...commands].join("\n");
+  const r = sh(REPO, "bash", ["--noprofile", "--norc", "-c", script], { check: false, env: { ...ENV, HOME: home, TMPDIR: home } });
+  const out = r.stdout;
+  assert.equal(r.status, 0, out);
+  const blocked = out.indexOf("Ownership gate blocked");
+  const saved = out.indexOf("Saved .learning/checks/");
+  const pushed = out.indexOf("pushed: feature/sum");
+  assert.ok(blocked >= 0 && saved > blocked && pushed > saved, out);
 });

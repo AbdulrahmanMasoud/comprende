@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **README opens with a Quick start:** three short paths, for a solo developer, a team lead and a team member. The same section is in README.ar.md.
+- **Terminal demo:** `docs/demo.tape`, a [VHS](https://github.com/charmbracelet/vhs) script that shows a push being blocked, a report being saved and the push going through. Render it with `vhs docs/demo.tape`. A test runs the same commands, so the demo stays true.
 - **A fast path for small changes:**
   - **New config keys:** `small_change_lines` (default 10, `0` turns it off) and `small_summary_chars` (default 30).
   - **What counts as small:** the change adds and removes at most `small_change_lines` lines across its non-ignored files, counted with `git diff --numstat` from the fork point. It also has no sensitive file, no submodule and no binary file.

@@ -12,6 +12,27 @@ For teams, an optional <b>ownership gate</b> makes sure the developer who ships 
 
 <p align="center"><a href="README.ar.md">العربية</a></p>
 
+## Quick start
+
+**Solo developer.** Two commands in Claude Code, nothing to configure:
+
+```
+/plugin marketplace add AbdulrahmanMasoud/comprende
+/plugin install comprende@comprende
+```
+
+Then build as usual. Claude explains what's worth explaining, briefly, in your language. You need Node.js 20+.
+
+**Team lead.** Install the plugin, open Claude in your repo and say:
+
+> Enable the ownership gate in this repo.
+
+Claude opens a PR that adds the gate. Review `.learning/config.json` in it, mainly the `sensitive` globs, and merge. Then run `node .learning/gate.mjs protect --apply`, or ask Claude to, so the check is required on your default branch.
+
+**Team member.** Install the plugin with the two commands above. That's it: your first session in the repo sets up the local hook, and Claude runs the check with you before you push.
+
+To see it in a terminal, [`docs/demo.tape`](docs/demo.tape) shows a push being blocked, a report being saved and the push going through. To render it as a GIF, install [VHS](https://github.com/charmbracelet/vhs) and run `vhs docs/demo.tape`.
+
 ---
 
 AI writes code fast. The risk is a developer who asks for a feature, clicks approve and checks that it runs, then merges code they can't explain, change, or debug at 2am. This plugin works on both halves of that problem:
@@ -151,6 +172,7 @@ hooks/hooks.json      SessionStart (auto-setup) and PreToolUse (block unverified
 src/                  TypeScript source: gate.ts, store.ts, server.ts, learning.ts
 dist/                 the built, dependency-free files the plugin runs (committed)
 test/                 node:test suite against real git repos
+docs/demo.tape        VHS script for the terminal demo (vhs docs/demo.tape writes docs/demo.gif)
 CLAUDE.md             notes for Claude Code when working on this repo (incl. an end-to-end test plan)
 ```
 

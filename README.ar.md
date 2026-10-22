@@ -10,6 +10,27 @@ Claude بيشرح الكود اللي بيكتبه، باختصار وفي ال�
 
 [English](README.md)
 
+## البداية السريعة
+
+**لو شغال لوحدك.** أمرين جوه Claude Code، ومن غير أي إعدادات:
+
+```
+/plugin marketplace add AbdulrahmanMasoud/comprende
+/plugin install comprende@comprende
+```
+
+وبعدين ابني عادي. Claude هيشرح اللي يستاهل شرح بس، باختصار وبلغتك. محتاج Node.js 20+.
+
+**لو إنت الـ team lead.** سطّب الـ plugin، وافتح Claude في الـ repo بتاعك وقوله:
+
+> فعّل بوابة الفهم في المشروع ده
+
+Claude هيفتح PR بيضيف البوابة. راجع `.learning/config.json` في الـ PR ده، خصوصًا الـ `sensitive` globs، واعمل merge. وبعدين شغّل `node .learning/gate.mjs protect --apply`، أو اطلبها من Claude، عشان الـ check يبقى إجباري على الـ default branch.
+
+**لو إنت عضو في التيم.** سطّب الـ plugin بالأمرين اللي فوق، وبس كده. أول session ليك في الـ repo بتظبط الـ local hook، و Claude بيعمل معاك الـ check قبل الـ push.
+
+عايز تشوفه في الـ terminal؟ [`docs/demo.tape`](docs/demo.tape) بيوريك push بيتمنع، وبعدين report بيتحفظ، وبعدين الـ push بيعدّي. وعشان تطلّعه GIF، سطّب [VHS](https://github.com/charmbracelet/vhs) وشغّل `vhs docs/demo.tape`.
+
 ## التسطيب
 
 جوه Claude Code:
