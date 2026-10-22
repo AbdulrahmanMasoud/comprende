@@ -12,9 +12,12 @@
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test --test-concurrency=4 test/*.test.mjs",
-    "check": "npm run typecheck && npm run build && npm test"
+    "check": "npm run typecheck && npm run build && npm test",
+    "lint": "biome check --error-on-warnings .",
+    "format": "biome check --write ."
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.2",
     "@modelcontextprotocol/sdk": "1.32.1",
     "@types/node": "22.20.5",
     "esbuild": "0.28.2",
