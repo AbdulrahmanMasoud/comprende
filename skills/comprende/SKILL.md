@@ -96,6 +96,8 @@ In team settings it's not enough that code works and got approved — the develo
 
 It is on when `.learning/config.json` says `"mode": "required"`, offered when `suggested`, and always available when the user asks ("check me", "اختبرني"). Read `references/ownership-check.md` before running any part of it. It covers the question types, how to judge answers, the report rules, how to turn the gate on for a repo, and what the team lead sees.
 
+When the gate is on, commit the report first, then push in a separate command: the push hook checks the branch before a command runs, so `git commit … && git push` is blocked.
+
 ## User controls
 
 Recognize natural phrasing in any language:
