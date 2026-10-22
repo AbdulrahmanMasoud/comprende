@@ -27,7 +27,12 @@
 - **Fixes:**
   - `status` and `save` say "1 changed line" and "1 file fingerprinted" instead of "1 changed lines" and "1 files fingerprinted".
   - When the Claude hook blocks a push and a valid report is saved but not committed, it now says so: commit it first, then push as a separate command. The hook checks the branch before a command runs, so `git commit … && git push` in one command used to fail with a confusing "No ownership report". The protocol now tells Claude to push separately.
-  - The ownership-check protocol now says how to save a report without the MCP tool: write the JSON to a file inside `.git/` and run `gate.mjs save --input <file>`. It must never go through a heredoc (Claude Code's shell checks can block it) or into a working-tree file, which the gate would count as part of the change. A test pins that a file under `.git/` is never part of the change.
+  - **Saving without the MCP tool** has one documented route. Write the JSON to `.learning/report.local.json` and run `gate.mjs save --input .learning/report.local.json`. Never use a heredoc, which Claude Code's shell checks can block, and never any other file.
+    - The gate treats exactly that path, as a plain file (mode 100644), as plumbing. A look-alike such as `.learning/x.local.json` is still checked.
+    - `install` adds the path to `.gitignore`, keeping existing lines.
+    - A `.gitignore` edit counts as plumbing only when it adds exactly that one line, so the PR that installs the gate still needs no report.
+    - A successful `save --input` deletes the file. A failed one leaves it, and no other input file is ever deleted.
+    - Why not `.git/`: Claude Code won't let Claude write there, even with an allow rule.
   - `learning_context` still returns your profile when a project's `.learning/` folder is refused, for example because it's a symlink. Before, the whole call failed.
   - A symlinked `.learning/` is refused with ".learning/ is a symlink". Before, the message said it "resolves outside the project", which was wrong when the link pointed inside the project.
   - A decimal `min_summary_chars` outside the gate's own section of `.learning/config.json`, or in a duplicate key that a later one replaces, no longer makes the whole config invalid.

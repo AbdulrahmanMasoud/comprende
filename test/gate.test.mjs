@@ -4,11 +4,11 @@
 // fresh CI-style clone checked out at the PR head.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { accessSync, constants, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { accessSync, chmodSync, constants, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import {
-  ENV, REPO_GATE, SUMMARY, commitAll, gate, git, payload, runGate, setup, sh, throwsGate, tmp, write,
+  ENV, REPO_GATE, SUMMARY, commitAll, gate, git, gitTry, payload, runGate, setup, sh, throwsGate, tmp, write,
 } from "./helpers.mjs";
 
 const read = (root, rel) => readFileSync(join(root, rel), "utf8");
@@ -513,21 +513,72 @@ test("no fast path while the base branch's gate predates it, so CI agrees", (t) 
 
 // ---------------------------------------------------------------- saving without the MCP tool
 
-test("the documented fallback: report JSON under .git/ is never part of the change", (t) => {
+const INPUT = ".learning/report.local.json";
+
+test("report.local.json is never part of the change; nothing else is exempt", (t) => {
+  const { dev } = setup(t);
+  assert.equal(gitTry(dev, "check-ignore", "-q", INPUT).status, 0);           // install ignores it
+  write(dev, "src/app.js", "export const app = 2;\n");
+  write(dev, INPUT, JSON.stringify(payload()));
+  git(dev, "add", "-f", INPUT);                                               // even when tracked anyway
+  const paths = () => gate.status(dev).files.map((f) => f.path);
+  assert.deepEqual(paths(), ["src/app.js"]);
+  write(dev, ".learning/x.local.json", "{}\n");                              // a look-alike is checked
+  assert.deepEqual(paths(), [".learning/x.local.json", "src/app.js"]);
+  unlinkSync(join(dev, ".learning/x.local.json"));
+  chmodSync(join(dev, INPUT), 0o755);                                         // only as a plain file
+  assert.deepEqual(paths(), [INPUT, "src/app.js"]);
+});
+
+test("install adds report.local.json to .gitignore once and keeps its lines", (t) => {
+  const { dev } = setup(t);
+  assert.equal(read(dev, ".gitignore"), `${INPUT}\n`);                       // created when missing
+  writeFileSync(join(dev, ".gitignore"), "node_modules/\n*.log");            // no trailing newline
+  assert.ok(gate.install(dev).includes(`added ${INPUT} to .gitignore`));
+  assert.equal(read(dev, ".gitignore"), `node_modules/\n*.log\n${INPUT}\n`);
+  assert.ok(gate.install(dev).includes(`.gitignore already ignores ${INPUT}`));
+  assert.equal(read(dev, ".gitignore"), `node_modules/\n*.log\n${INPUT}\n`);
+});
+
+test("the install PR needs no report; any other .gitignore edit is a change", (t) => {
+  const dir = tmp(t);                                                         // main has no gate yet
+  const remote = join(dir, "remote.git");
+  git(dir, "init", "-q", "--bare", "-b", "main", remote);
+  const dev = join(dir, "dev");
+  git(dir, "clone", "-q", remote, dev);
+  git(dev, "checkout", "-q", "-b", "main");
+  write(dev, "src/app.js", "export const app = 1;\n");
+  write(dev, ".gitignore", "node_modules/\n");
+  commitAll(dev, "init");
+  git(dev, "push", "-q", "-u", "origin", "main");
+  git(dev, "remote", "set-head", "origin", "main");
+  git(dev, "checkout", "-q", "-b", "chore/ownership-gate");
+  gate.install(dev);
+  commitAll(dev, "add ownership gate");
+  assert.equal(read(dev, ".gitignore"), `node_modules/\n${INPUT}\n`);
+  assert.deepEqual(gate.verify(dev), [true, [], "required"]);
+  write(dev, ".gitignore", `node_modules/\n${INPUT}\ndist/\n`);
+  commitAll(dev, "ignore dist too");
+  const [passed, problems] = gate.verify(dev);
+  assert.ok(!passed && problems[0].includes("No ownership report"), problems.join("\n"));
+});
+
+test("save --input deletes report.local.json only after the report is written", (t) => {
   const { dev } = setup(t);
   write(dev, "src/app.js", "export const app = 2;\n");
-  const paths = () => gate.status(dev).files.map((f) => f.path);
-  // In the working tree it would be: untracked files are part of the change.
-  write(dev, "report.json", JSON.stringify(payload()));
-  assert.ok(paths().includes("report.json"));
-  unlinkSync(join(dev, "report.json"));
-  // Under .git/ it never is, and save --input reads it from there.
-  const input = join(".git", "comprende-report.json");
-  write(dev, input, JSON.stringify(payload()));
-  assert.deepEqual(paths(), ["src/app.js"]);
-  const r = runGate(dev, ["save", "--input", input]);
+  const report = join(dev, gate.reportRelpath("feature/rate-limit"));
+  write(dev, INPUT, JSON.stringify({ summary: "too short", verified: { "src/app.js": ["x"] } }));
+  assert.notEqual(runGate(dev, ["save", "--input", INPUT]).status, 0);       // refused: kept
+  assert.ok(existsSync(join(dev, INPUT)) && !existsSync(report));
+  write(dev, INPUT, JSON.stringify(payload()));
+  const r = runGate(dev, ["save", "--input", INPUT]);
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(Object.keys(gate.readReport(dev, "feature/rate-limit").files), ["src/app.js"]);
+  assert.ok(existsSync(report) && !existsSync(join(dev, INPUT)));            // saved: removed
+  assert.match(r.stdout, /Removed \.learning\/report\.local\.json/);
+  const other = join(".git", "my-report.json");                              // any other input stays
+  write(dev, other, JSON.stringify(payload()));
+  assert.equal(runGate(dev, ["save", "--input", other]).status, 0);
+  assert.ok(existsSync(join(dev, other)));
   commitAll(dev, "change + report");
   assert.deepEqual(gate.verify(dev), [true, [], "required"]);
   assert.equal(sh(dev, "git", ["status", "--porcelain"]).stdout, "");

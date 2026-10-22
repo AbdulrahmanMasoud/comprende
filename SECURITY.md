@@ -25,6 +25,13 @@ The plugin runs in every repo you open with Claude, including ones you just clon
   - If `node` isn't on PATH, the plugin's hooks and the project-level hook that `install` writes exit 0. They check with plain POSIX `sh` before starting Node.
   - If Node can't run the gate (a missing file, or a Node too old to load it), SessionStart prints the same note and exits 0. PreToolUse exits 1, which Claude Code treats as a non-blocking error.
   - The hook commands are plain POSIX `sh`, with no syntax that a shell could reject with its own exit code 2.
+- **Exemptions are exact.** Only these skip the check:
+  - the gate's own files;
+  - the report and notes shapes in `.learning/`;
+  - `.learning/report.local.json`, at exactly that path and as a plain file;
+  - a `.gitignore` edit that adds exactly that one line and nothing else.
+
+  No pattern is exempt, so code can't hide in a look-alike file.
 - **Notes are data.** Text in `.learning/` is shown to Claude labeled as notes, not instructions, and symlinks there are never followed.
 - **The SessionStart context is fixed text.** The always-on line and the gate messages are constants. The only value read from the repo is the gate's mode, which must be `required`, `suggested` or `off`. File names, branch names and notes never go into it.
 - **Reviewer-facing output is escaped.** The CI job summary escapes PR-author text, so it can't inject HTML, images, links, code spans or table breaks.

@@ -71,10 +71,10 @@ Avoid trivia ("what does `map` return?"), yes/no questions, and anything answere
 
 Only if the MCP tool isn't available:
 
-1. Write the JSON below to a file **inside `.git/`**, for example `.git/comprende-report.json`. Git never tracks anything under `.git/`, so the file can't become part of the change.
-2. Run `node .learning/gate.mjs save --input .git/comprende-report.json`.
+1. Write the JSON below to **`.learning/report.local.json`**, exactly that path. The gate never counts that one file as part of the change, and `install` adds it to `.gitignore`.
+2. Run `node .learning/gate.mjs save --input .learning/report.local.json`. After the report is written, the gate deletes the file. If `save` refuses, the file stays: fix what it says and run it again.
 
-**Never use a heredoc** (or `echo`/`printf`) to pass the JSON. Claude Code's shell checks can block quoted braces, and a quoting slip changes the developer's summary. **Never write the JSON to a file in the working tree.** The gate counts untracked files as part of the change, so the scratch file would be fingerprinted with the code, and committed by `git add -A`.
+**Never use a heredoc** (or `echo`/`printf`) to pass the JSON. Claude Code's shell checks can block quoted braces, and a quoting slip changes the developer's summary. **Never use any other file**, in the working tree or in `.git/`. The gate counts every other untracked file as part of the change, and Claude Code treats `.git/` as a protected path.
 
 The JSON:
 
