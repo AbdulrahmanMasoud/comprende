@@ -35,6 +35,15 @@ export const ENV = Object.freeze({
   GIT_AUTHOR_EMAIL: "dev@example.com",
   GIT_COMMITTER_NAME: "Dev",
   GIT_COMMITTER_EMAIL: "dev@example.com",
+  // No background `git gc --auto` or maintenance in throwaway repos: a detached
+  // gc still writing into .git/objects makes the cleanup's rmdir fail
+  // (ENOTEMPTY) on slower machines. The gate adds its own GIT_CONFIG_* entries
+  // after these, so this doesn't change what it does.
+  GIT_CONFIG_COUNT: "2",
+  GIT_CONFIG_KEY_0: "gc.auto",
+  GIT_CONFIG_VALUE_0: "0",
+  GIT_CONFIG_KEY_1: "maintenance.auto",
+  GIT_CONFIG_VALUE_1: "false",
 });
 
 export class GateError extends Error {}
@@ -60,7 +69,7 @@ export function write(root, rel, text) {
 /** A fresh temp dir, removed when the test finishes. */
 export function tmp(t) {
   const d = mkdtempSync(join(tmpdir(), "eayb-test-"));
-  t.after(() => rmSync(d, { recursive: true, force: true }));
+  t.after(() => rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   return d;
 }
 
