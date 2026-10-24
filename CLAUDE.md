@@ -52,6 +52,7 @@ claude plugin validate ./.claude-plugin/marketplace.json
 - **Every bug fix gets a regression test.** It must fail before the fix. Put it in the test file for that topic, and name the test after the behavior.
 - **Keep docs in sync.** A user-visible change updates:
   - `README.md` and `README.ar.md` (Egyptian Arabic, technical terms in English). Keep both short: details go in `docs/`
+    - their example conversations are real Claude replies, shortened with "…". If the skill's behavior changes, record new ones (`claude -p` in a scratch repo); never write them by hand
   - `docs/teams.md` or `docs/how-it-works.md`, wherever the detail lives
   - `docs/demo.gif`, re-rendered with `vhs docs/demo.tape`, if the gate's output in the demo changes
   - `SECURITY.md`, if it touches the threat model

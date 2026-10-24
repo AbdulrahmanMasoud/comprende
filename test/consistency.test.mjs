@@ -1,10 +1,10 @@
 // The plugin's files agree with each other: manifests, built copies, docs and the demo.
 
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { ENV, NODE, REPO, SUMMARY, setup, sh, tmp } from "./helpers.mjs";
+import { ENV, git, NODE, REPO, SUMMARY, setup, sh, tmp } from "./helpers.mjs";
 
 const read = (rel) => readFileSync(join(REPO, rel));
 
@@ -65,12 +65,15 @@ test("the gate imports nothing but node: built-ins", () => {
   assert.match(code, /^\/\/ ownership-gate-version: \d+$/m);
 });
 
-/** The first `## ` section of a Markdown file, and everything above it. */
+/** The first `## ` section of a Markdown file. */
 function firstSection(md) {
   const start = md.indexOf("\n## ");
   const end = md.indexOf("\n## ", start + 1);
-  return { intro: md.slice(0, start), section: md.slice(start, end < 0 ? undefined : end) };
+  return md.slice(start, end < 0 ? undefined : end);
 }
+
+/** The bodies of a Markdown file's ```bash blocks, in order. */
+const bashBlocks = (md) => [...md.matchAll(/```bash\n([\s\S]*?)```/g)].map((m) => m[1]);
 
 /** GitHub's anchor for a Markdown heading. */
 const anchor = (heading) =>
@@ -87,18 +90,52 @@ const headingAnchors = (rel) =>
     .filter((l) => /^#{1,6} /.test(l))
     .map((l) => anchor(l.replace(/^#+ /, "")));
 
-test("both READMEs show the demo, then open with a Quick start for the three kinds of user", () => {
+test("both READMEs open with the install commands, then cover both parts", () => {
+  const en = read("README.md").toString("utf8");
+  const ar = read("README.ar.md").toString("utf8");
+  for (const md of [en, ar]) {
+    const install = firstSection(md);
+    // The terminal commands install for the user, so the plugin is on in every project.
+    assert.ok(install.includes("claude plugin marketplace add AbdulrahmanMasoud/comprende"));
+    assert.ok(install.includes("claude plugin install comprende@comprende"));
+    assert.ok(install.includes("`/mcp`"), "how to check that the install worked");
+    assert.ok(md.includes("](docs/demo.gif)"), "the demo GIF is embedded");
+    assert.ok(md.includes("node .learning/gate.mjs protect --apply"));
+  }
+  assert.ok(en.includes("Enable the ownership gate in this repo") && en.includes('"check me"'));
+  assert.deepEqual(bashBlocks(ar), bashBlocks(en), "both READMEs give the same commands");
   assert.ok(existsSync(join(REPO, "docs/demo.gif")));
-  const en = firstSection(read("README.md").toString("utf8"));
-  assert.ok(en.intro.includes("](docs/demo.gif)"), "the demo GIF is above the first section");
-  assert.match(en.section, /^\n## Quick start\n/);
-  assert.ok(en.section.includes("/plugin install comprende@comprende"));
-  for (const who of ["Solo developer", "Team lead", "Team member"]) assert.ok(en.section.includes(who), who);
-  assert.ok(en.section.includes("Enable the ownership gate in this repo") && en.section.includes("protect"));
-  const ar = firstSection(read("README.ar.md").toString("utf8"));
-  assert.ok(ar.intro.includes("](docs/demo.gif)"), "the Arabic README shows the demo GIF too");
-  assert.ok(ar.section.includes("/plugin install comprende@comprende"), "README.ar.md opens with its Quick start");
   assert.ok(read("CONTRIBUTING.md").toString("utf8").includes("docs/demo.tape"), "the demo's source is documented");
+});
+
+test("the README's 'try it' script makes a gated repo where an unchecked push is blocked", (t) => {
+  const en = read("README.md").toString("utf8");
+  const [script] = bashBlocks(en.slice(en.indexOf("\n## Try it in 5 minutes\n")));
+  // The test can't use /tmp, the network or Claude, so it swaps those three
+  // lines and runs the rest exactly as written.
+  const swaps = new Map([
+    ["mkdir -p /tmp/comprende-try && cd /tmp/comprende-try", 'cd "$TRY"'],
+    ["git clone -q https://github.com/AbdulrahmanMasoud/comprende.git", 'ln -s "$COMPRENDE" comprende'],
+    ["claude", ""],
+  ]);
+  const lines = script.trim().split("\n");
+  for (const line of swaps.keys()) assert.ok(lines.includes(line), `the script no longer has: ${line}`);
+  const body = lines.map((l) => swaps.get(l) ?? l).join("\n");
+  const dir = tmp(t);
+  const env = { ...ENV, HOME: dir, TMPDIR: dir, TRY: dir, COMPRENDE: REPO };
+  sh(dir, "bash", ["--noprofile", "--norc", "-ec", body], { env });
+  const app = join(dir, "app");
+  assert.equal(git(app, "branch", "--show-current").stdout.trim(), "feature/sum");
+  git(app, "cat-file", "-e", "origin/main:.learning/gate.mjs");
+  // What the reader does next, without Claude: change the code and push it.
+  writeFileSync(
+    join(app, "math.js"),
+    "export const add = (a, b) => a + b;\nexport const sum = (xs) => xs.reduce(add, 0);\n",
+  );
+  git(app, "commit", "-qam", "add sum");
+  const push = sh(app, "git", ["push", "-u", "origin", "feature/sum"], { check: false, env });
+  assert.notEqual(push.status, 0);
+  assert.match(push.stderr, /Ownership gate blocked/);
 });
 
 test("relative links in the docs point at files that exist", () => {

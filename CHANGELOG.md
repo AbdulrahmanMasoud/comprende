@@ -4,7 +4,7 @@
 
 **Upgrading:** once a repo upgrades its gate (`gate.mjs install --upgrade`, merged into the base branch), the fast path for small changes is on by default, even if `.learning/config.json` doesn't list the new keys yet. To keep the old behaviour, set `"small_change_lines": 0`.
 
-- **A short README:** what Comprende does, the demo, a Quick start for a solo developer, a team lead and a team member, and how a check goes. The details moved to `docs/teams.md` (setting up the gate, settings, small changes, emergencies), `docs/how-it-works.md` (requirements, internals, honest limits) and `CONTRIBUTING.md`. README.ar.md mirrors the short README.
+- **A README you can follow:** install from the terminal (user scope, so it's on in every project) and how to check it worked; then each part as steps, with real Claude sessions (shortened) as examples; and a "Try it in 5 minutes" script that a test runs. The details moved to `docs/teams.md` (setting up the gate, settings, small changes, emergencies), `docs/how-it-works.md` (requirements, internals, honest limits) and `CONTRIBUTING.md`. README.ar.md mirrors it, with sessions recorded in Arabic.
 - **Terminal demo:** `docs/demo.gif`, embedded in both READMEs, shows a push being blocked, a report being saved and the push going through, in about 25 seconds. It's rendered with [VHS](https://github.com/charmbracelet/vhs) from `docs/demo.tape` (`vhs docs/demo.tape`). A test runs the same commands, so the demo stays true.
 - **A fast path for small changes:**
   - **New config keys:** `small_change_lines` (default 10, `0` turns it off) and `small_summary_chars` (default 30).
