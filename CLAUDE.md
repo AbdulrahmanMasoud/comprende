@@ -36,6 +36,8 @@ claude plugin validate ./.claude-plugin/marketplace.json
 - `src/util.ts`: helpers the gate and the store share, including the prototype-free `dict`/`own`/`get`
 - `dist/`: built output, **committed on purpose**, because that's what the plugin runs
 - `test/`: `node:test` suites against real git repos, one file per topic (install, config, fingerprints, checks, report, small-changes, push-detection, hooks, security, ci, store, mcp, consistency). `helpers.mjs` has the fixtures.
+- `docs/`: `teams.md` (setting up the gate), `how-it-works.md` (requirements, internals, limits), `demo.tape` → `demo.gif` (VHS)
+- `CONTRIBUTING.md`: setup, layout, tests, the demo, releasing
 - `biome.json`: formatting and lint (Markdown is left alone). `build.mjs`: the bundler.
 
 ## Rules that must not break
@@ -49,7 +51,9 @@ claude plugin validate ./.claude-plugin/marketplace.json
 - **Rules come from the base branch.** CI runs the base branch's `gate.mjs` and config, so a PR can't switch off its own check.
 - **Every bug fix gets a regression test.** It must fail before the fix. Put it in the test file for that topic, and name the test after the behavior.
 - **Keep docs in sync.** A user-visible change updates:
-  - `README.md` and `README.ar.md` (Egyptian Arabic, technical terms in English)
+  - `README.md` and `README.ar.md` (Egyptian Arabic, technical terms in English). Keep both short: details go in `docs/`
+  - `docs/teams.md` or `docs/how-it-works.md`, wherever the detail lives
+  - `docs/demo.gif`, re-rendered with `vhs docs/demo.tape`, if the gate's output in the demo changes
   - `SECURITY.md`, if it touches the threat model
   - the relevant `skills/comprende/references/*.md`
   - `CHANGELOG.md`

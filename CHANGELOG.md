@@ -4,8 +4,8 @@
 
 **Upgrading:** once a repo upgrades its gate (`gate.mjs install --upgrade`, merged into the base branch), the fast path for small changes is on by default, even if `.learning/config.json` doesn't list the new keys yet. To keep the old behaviour, set `"small_change_lines": 0`.
 
-- **README opens with a Quick start:** three short paths, for a solo developer, a team lead and a team member. The same section is in README.ar.md.
-- **Terminal demo:** `docs/demo.gif`, embedded in both READMEs, shows a push being blocked, a report being saved and the push going through. It's rendered with [VHS](https://github.com/charmbracelet/vhs) from `docs/demo.tape` (`vhs docs/demo.tape`). A test runs the same commands, so the demo stays true.
+- **A short README:** what Comprende does, the demo, a Quick start for a solo developer, a team lead and a team member, and how a check goes. The details moved to `docs/teams.md` (setting up the gate, settings, small changes, emergencies), `docs/how-it-works.md` (requirements, internals, honest limits) and `CONTRIBUTING.md`. README.ar.md mirrors the short README.
+- **Terminal demo:** `docs/demo.gif`, embedded in both READMEs, shows a push being blocked, a report being saved and the push going through, in about 25 seconds. It's rendered with [VHS](https://github.com/charmbracelet/vhs) from `docs/demo.tape` (`vhs docs/demo.tape`). A test runs the same commands, so the demo stays true.
 - **A fast path for small changes:**
   - **New config keys:** `small_change_lines` (default 10, `0` turns it off) and `small_summary_chars` (default 30).
   - **What counts as small:** the change adds and removes at most `small_change_lines` lines across its non-ignored files, counted with `git diff --numstat` from the fork point. It also has no sensitive file, no submodule and no binary file.
