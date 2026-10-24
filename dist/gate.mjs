@@ -1398,16 +1398,18 @@ jobs:
     name: Ownership check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Check the PR's own commit (not GitHub's merge commit) with full history,
           # so fingerprints match what the developer verified.
           ref: \${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
+          # The gate needs no dependencies; a restored cache is only a way in.
+          package-manager-cache: false
 
       - name: Verify ownership report
         env:

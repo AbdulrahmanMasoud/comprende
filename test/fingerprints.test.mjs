@@ -466,7 +466,11 @@ test("a submodule bump is visible even with ignore=all", (t) => {
   write(lib, "l.txt", "2 (unreviewed)\n");
   commitAll(lib, "l2");
   git(join(dev, "vendor/lib"), "pull", "-q", "origin", "main");
-  commitAll(dev, "bump submodule");
+  // Newer git (2.55 and 2.56 do this; 2.52 doesn't) has `git add -A` skip a submodule marked ignore=all, but
+  // `git add --force <path>` and `git commit -a` still commit the bump. That
+  // committed bump is what the gate must see.
+  git(dev, "add", "--force", "vendor/lib");
+  git(dev, "commit", "-qm", "bump submodule");
   const [passed, problems] = gate.verify(dev);
   assert.ok(!passed && problems[0].includes("vendor/lib"), JSON.stringify(problems));
 });
