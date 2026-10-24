@@ -1432,6 +1432,8 @@ jobs:
 `;
 var CLAUDE_HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
 var RULESET_NAME = "Ownership gate";
+var REQUIRE_BY_HAND = "https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#make-the-check-required";
+var HOOK_BY_HAND = "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-claude-hook-by-hand";
 var CHECK_NAME = "Ownership check";
 function rulesetBody(approvals = 1, codeOwners = true) {
   return {
@@ -1464,7 +1466,7 @@ function runGh(root, args, input) {
   } catch (e) {
     if (e.code === "ENOENT") {
       throw new GateError(
-        "The GitHub CLI (gh) isn't installed. Install it and run `gh auth login`, or set this up by hand: see the README's 'Protect the branch' section."
+        `The GitHub CLI (gh) isn't installed. Install it and run \`gh auth login\`, or make the check required by hand: ${REQUIRE_BY_HAND}`
       );
     }
     throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${e.message}`);
@@ -1474,7 +1476,7 @@ function runGh(root, args, input) {
     const low = err.toLowerCase();
     if (err.includes("Upgrade to GitHub Pro") || low.includes("upgrade") && low.includes("plan")) {
       throw new GateError(
-        "Rulesets aren't available for private repos on GitHub's free plan. Use Settings \u2192 Branches \u2192 branch protection instead (see README)."
+        `Rulesets aren't available for private repos on GitHub's free plan. Use Settings \u2192 Branches \u2192 branch protection instead: ${REQUIRE_BY_HAND}`
       );
     }
     if (err.includes("403") || err.includes("Must have admin rights") || err.includes("Resource not accessible")) {
@@ -1537,17 +1539,17 @@ function mergeClaudeSettings(path) {
     try {
       parsed = JSON.parse(raw || "{}");
     } catch {
-      return `SKIPPED Claude hook: ${path} is not valid JSON; add the hook by hand (see README).`;
+      return `SKIPPED Claude hook: ${path} is not valid JSON; ${HOOK_BY_HAND}`;
     }
-    if (!isRecord(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; add the hook by hand.`;
+    if (!isRecord(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; ${HOOK_BY_HAND}`;
     settings = parsed;
   }
   if (settings.hooks !== void 0 && !isRecord(settings.hooks))
-    return `SKIPPED Claude hook: "hooks" in ${path} is not an object; add the hook by hand.`;
+    return `SKIPPED Claude hook: "hooks" in ${path} is not an object; ${HOOK_BY_HAND}`;
   settings.hooks ??= {};
   const hooks = settings.hooks;
   if (hooks.PreToolUse !== void 0 && !Array.isArray(hooks.PreToolUse))
-    return `SKIPPED Claude hook: "hooks.PreToolUse" in ${path} is not a list; add the hook by hand.`;
+    return `SKIPPED Claude hook: "hooks.PreToolUse" in ${path} is not a list; ${HOOK_BY_HAND}`;
   hooks.PreToolUse ??= [];
   const groups = hooks.PreToolUse;
   for (const g of groups) {

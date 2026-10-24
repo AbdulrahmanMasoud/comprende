@@ -117,6 +117,16 @@ test("relative links in the docs point at files that exist", () => {
   }
 });
 
+test("the gate's 'do it by hand' messages link to a docs section that exists", () => {
+  const code = read("dist/gate.mjs").toString("utf8");
+  assert.doesNotMatch(code, /see (the )?README/, "link a section of docs/ instead");
+  const links = [
+    ...code.matchAll(/https:\/\/github\.com\/AbdulrahmanMasoud\/comprende\/blob\/main\/([\w./-]+)#([\w-]+)/g),
+  ];
+  assert.ok(links.length >= 2);
+  for (const [url, file, hash] of links) assert.ok(headingAnchors(file).includes(hash), url);
+});
+
 test("docs/demo.tape runs: the push is blocked, a report is saved, the push goes through", (t) => {
   const tape = read("docs/demo.tape").toString("utf8");
   assert.match(tape, /^Output docs\/demo\.gif$/m);

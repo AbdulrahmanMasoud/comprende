@@ -64,9 +64,15 @@ const CLAUDE_HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec nod
 
 const RULESET_NAME = "Ownership gate";
 
-export const CHECK_NAME = "Ownership check";
+// Where to do by hand what the gate couldn't do itself.
+const REQUIRE_BY_HAND =
+  "https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#make-the-check-required";
 
-// the workflow job's name = the status check context
+const HOOK_BY_HAND =
+  "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-claude-hook-by-hand";
+
+// The workflow job's name, which is also the status check's name.
+export const CHECK_NAME = "Ownership check";
 
 /** A repository ruleset for the default branch. Rulesets layer on top of
  *  existing branch protection (the strictest rule wins), so creating one never
@@ -103,7 +109,7 @@ function runGh(root: string, args: string[], input?: string): string {
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") {
       throw new GateError(
-        "The GitHub CLI (gh) isn't installed. Install it and run `gh auth login`, or set this up by hand: see the README's 'Protect the branch' section.",
+        `The GitHub CLI (gh) isn't installed. Install it and run \`gh auth login\`, or make the check required by hand: ${REQUIRE_BY_HAND}`,
       );
     }
     throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${(e as Error).message}`);
@@ -113,7 +119,7 @@ function runGh(root: string, args: string[], input?: string): string {
     const low = err.toLowerCase();
     if (err.includes("Upgrade to GitHub Pro") || (low.includes("upgrade") && low.includes("plan"))) {
       throw new GateError(
-        "Rulesets aren't available for private repos on GitHub's free plan. Use Settings → Branches → branch protection instead (see README).",
+        `Rulesets aren't available for private repos on GitHub's free plan. Use Settings → Branches → branch protection instead: ${REQUIRE_BY_HAND}`,
       );
     }
     if (err.includes("403") || err.includes("Must have admin rights") || err.includes("Resource not accessible")) {
@@ -183,18 +189,18 @@ export function mergeClaudeSettings(path: string): string {
     try {
       parsed = JSON.parse(raw || "{}");
     } catch {
-      return `SKIPPED Claude hook: ${path} is not valid JSON; add the hook by hand (see README).`;
+      return `SKIPPED Claude hook: ${path} is not valid JSON; ${HOOK_BY_HAND}`;
     }
-    if (!isRecord(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; add the hook by hand.`;
+    if (!isRecord(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; ${HOOK_BY_HAND}`;
     settings = parsed;
   }
   // Never replace a value we don't understand: that would drop the user's settings.
   if (settings.hooks !== undefined && !isRecord(settings.hooks))
-    return `SKIPPED Claude hook: "hooks" in ${path} is not an object; add the hook by hand.`;
+    return `SKIPPED Claude hook: "hooks" in ${path} is not an object; ${HOOK_BY_HAND}`;
   settings.hooks ??= {};
   const hooks = settings.hooks as Record<string, unknown>;
   if (hooks.PreToolUse !== undefined && !Array.isArray(hooks.PreToolUse))
-    return `SKIPPED Claude hook: "hooks.PreToolUse" in ${path} is not a list; add the hook by hand.`;
+    return `SKIPPED Claude hook: "hooks.PreToolUse" in ${path} is not a list; ${HOOK_BY_HAND}`;
   hooks.PreToolUse ??= [];
   const groups = hooks.PreToolUse as { hooks?: { command?: string }[] }[];
   for (const g of groups) {

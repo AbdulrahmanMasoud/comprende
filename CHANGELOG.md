@@ -29,6 +29,7 @@
   - `repo_root` and `COMPRENDE_HOME` still expand `~`, but no longer `~otheruser`.
 - **CI workflows on Node 24:** the workflow `install` writes uses `actions/checkout@v7` and `actions/setup-node@v7` (both on Node 24), runs the gate on Node 24, and turns off setup-node's dependency cache (`package-manager-cache: false`), since the gate needs no dependencies and a restored cache could be poisoned. Repos installed earlier keep their workflow until `install --upgrade` and a hand edit, or a fresh install. This repo's own CI uses the same action versions.
 - **Fixes:**
+  - The gate's "do it by hand" messages (no `gh`, no rulesets on GitHub's free plan, a `.claude/settings.json` that `install` can't merge into) link to the matching section of `docs/teams.md`. One of them pointed at a README section that didn't exist.
   - The submodule test stages its bump with `git add --force`: newer git (2.55+) no longer stages a submodule marked `ignore = all` through `git add -A`. The gate itself was unaffected: it reads committed diffs with `--ignore-submodules=none`.
   - The gate's hint says `("check me")` without the Arabic phrase, which terminals draw with its letters reversed. In conversation the skill still understands the phrase in any language.
   - `status` and `save` say "1 changed line" and "1 file fingerprinted" instead of "1 changed lines" and "1 files fingerprinted".
