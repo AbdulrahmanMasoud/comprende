@@ -11,6 +11,12 @@ Comprende is a plugin for Claude Code. It does two things:
 1. **Claude explains the code it writes**, briefly and in your language, but only the parts worth explaining: new APIs, non-obvious logic, risks. This works in every project.
 2. **The ownership check** (optional, per repo). Before your code is pushed, Claude asks you a few questions about it, and you write the PR summary. Without that, the push and the merge are blocked.
 
+<p align="center">
+  <a href="https://youtu.be/KeoRSyM0zu8"><img src="https://img.youtube.com/vi/KeoRSyM0zu8/maxresdefault.jpg" width="640" alt="Video: Stop Merging AI Code You Don't Understand"></a>
+  <br>
+  <a href="https://youtu.be/KeoRSyM0zu8">▶ Watch the video: Stop Merging AI Code You Don't Understand</a>
+</p>
+
 ## Install
 
 Run these two commands in your terminal. You need [Node.js](https://nodejs.org) 20+.

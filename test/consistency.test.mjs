@@ -104,6 +104,9 @@ test("both READMEs open with the install commands, then cover both parts", () =>
   }
   assert.ok(en.includes("Enable the ownership gate in this repo") && en.includes('"check me"'));
   assert.deepEqual(bashBlocks(ar), bashBlocks(en), "both READMEs give the same commands");
+  const videos = (md) => [...md.matchAll(/https:\/\/youtu\.be\/[\w-]+/g)].map((m) => m[0]);
+  assert.ok(videos(en).length > 0);
+  assert.deepEqual(videos(ar), videos(en), "both READMEs link the same video");
   assert.ok(existsSync(join(REPO, "docs/demo.gif")));
   assert.ok(read("CONTRIBUTING.md").toString("utf8").includes("docs/demo.tape"), "the demo's source is documented");
 });
