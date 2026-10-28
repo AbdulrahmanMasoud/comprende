@@ -17,7 +17,7 @@ import { isSensitive, loadConfig, needsNoQuestions, rulesFromBase, rulesFromBase
 import { atomicWrite, readRepoFile } from "./files.js";
 import { currentBranch, readFileAtRev, repoRoot, resolveBase, revHasFile } from "./git.js";
 import { matches } from "./glob.js";
-import { previousReport, readReport, renderReport, reportPath } from "./report.js";
+import { parseEvidence, previousReport, readReport, renderReport, reportPath } from "./report.js";
 import { GATE_REL, GATE_VERSION, GateError, REPORT_INPUT, sorted, VERSION_RE } from "./shared.js";
 
 // English only: terminals draw right-to-left text in reverse order. The skill understands the phrase in any language.
@@ -188,7 +188,17 @@ export function save(
   if (askable.length && !Object.keys(verified).length)
     throw new GateError("No verified files — the check needs at least one area the developer explained.");
 
-  const data = { version: GATE_VERSION, branch: br, base: baseRef, date: today(), summary, verified, files: changes };
+  const evidence = parseEvidence(payload.evidence);
+  const data = {
+    version: GATE_VERSION,
+    branch: br,
+    base: baseRef,
+    date: today(),
+    summary,
+    verified,
+    files: changes,
+    ...(evidence ? { evidence } : {}),
+  };
   const rel = reportPath(br);
   atomicWrite(join(root, rel), renderReport(data));
   const extra = sorted([...untracked].filter((p) => own(changes, p)));

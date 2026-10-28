@@ -1,7 +1,7 @@
 // What runs in CI: the workflow, verify on a fresh clone, and the job summary reviewers see.
 
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import YAML, { parse as parseYaml } from "yaml";
@@ -134,6 +134,39 @@ test("the job summary shows reviewers the summary and what was verified", (t) =>
   assert.ok(md.includes("| src/auth/login.js 🔒 | token check &lt;b&gt; |"));
   assert.ok(!md.includes("<script>") && md.includes("&lt;script&gt;") && !md.includes("![x]"));
   assert.ok(md.includes("never scores or mistakes"));
+});
+
+test("the job summary says how many questions were asked, and warns when none were recorded", (t) => {
+  const { dev, tmp } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  const summaryFile = join(tmp, "summary.md");
+  const env = { ...ENV, GITHUB_ACTIONS: "true", GITHUB_STEP_SUMMARY: summaryFile };
+
+  gate.save({ summary: SUMMARY, verified: { "src/app.js": ["limit math"] } }, dev);
+  commitAll(dev, "report without a question log");
+  assert.equal(runGate(dev, ["verify"], { env }).status, 0);
+  let md = readFileSync(summaryFile, "utf8");
+  assert.ok(md.includes("No questions were recorded for this report"), md);
+  assert.ok(read(dev, ".learning/checks/feature%2Frate-limit.md").includes("none recorded"));
+
+  write(dev, "src/app.js", "export const app = 3;\n");
+  const evidence = { questions: 2, digest: "a".repeat(64) };
+  gate.save({ summary: SUMMARY, verified: { "src/app.js": ["limit math"] }, evidence }, dev);
+  commitAll(dev, "report with a question log");
+  rmSync(summaryFile); // CI appends to the step summary
+  assert.equal(runGate(dev, ["verify"], { env }).status, 0);
+  md = readFileSync(summaryFile, "utf8");
+  assert.ok(md.includes("**Questions asked during the check:** 2") && !md.includes("No questions were recorded"), md);
+});
+
+test("evidence with the wrong shape is dropped, never trusted", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  for (const evidence of [{ questions: 0, digest: "a".repeat(64) }, { questions: 3, digest: "not-a-digest" }, "lots"]) {
+    gate.save({ summary: SUMMARY, verified: { "src/app.js": ["limit math"] }, evidence }, dev);
+    const text = read(dev, ".learning/checks/feature%2Frate-limit.md");
+    assert.ok(text.includes("none recorded") && !text.includes('"evidence"'), text);
+  }
 });
 
 test("the job summary on failure", (t) => {

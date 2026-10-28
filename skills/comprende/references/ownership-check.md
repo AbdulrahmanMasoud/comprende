@@ -64,6 +64,7 @@ Avoid trivia ("what does `map` return?"), yes/no questions, and anything answere
 - Stay generous with language and strict with substance. A correct idea in broken English or Arabic passes, and fluent vagueness doesn't.
 - If they ask to be told the answer, tell them and explain it, then still ask the different follow-up. Being told isn't the same as owning it.
 - Record each result privately with `record_checkpoint` when the MCP is available. Mistakes stay in their personal profile and never go in the report.
+- **Log every ownership question with `record_answer`** right after you judge it, in-flight and final alike: the file, the concept, the question type, the question and your verdict. Never the answer itself. `save_check_report` puts only the number of questions and a digest of that log in the report, and CI shows reviewers the count. A report with no logged questions is flagged to the reviewer, so never skip this, and never log a question you didn't ask.
 
 ## The report
 
