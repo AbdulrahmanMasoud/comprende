@@ -65,6 +65,13 @@ export function jobSummary(
         `| ${escapeMarkdown(path)}${tag} | ${(get(report.verified, path) ?? []).map(escapeMarkdown).join("; ")} |`,
       );
     }
+    out.push(
+      "",
+      report.evidence
+        ? `**Questions asked during the check:** ${report.evidence.questions}`
+        : "⚠️ **No questions were recorded for this report.** It was saved without the check's question log " +
+            "(by hand, or with an older version of the plugin). Ask the developer to walk you through the change.",
+    );
     const rest = sorted(Object.keys(report.files).filter((p) => !own(report!.verified, p)));
     if (rest.length)
       out.push(

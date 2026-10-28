@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Questions leave a trace:** a new MCP tool, `record_answer`, logs each ownership-check question after Claude judges the answer: the file, the concept, the question type, the question and the verdict, never the answer. The log stays in `~/.comprende/evidence/` (or `$COMPRENDE_HOME/evidence/`), one file per repo and branch, named by a hash. `save_check_report` adds `evidence: {questions, digest}` to the report: the count and a SHA-256 digest of the log, nothing else.
+  - **What reviewers see:** the report and the CI job summary say how many questions were asked. A report with no logged questions (saved by hand, or by an older plugin) still passes, but the job summary warns the reviewer to ask for a walkthrough.
+  - **Compatibility, and why `GATE_VERSION` stays 3:** `evidence` is optional. Older reports, reports saved with `gate.mjs save` directly, and older gates reading a newer report all keep working. A malformed `evidence` is dropped, never trusted.
+  - **Honest limit:** the log is written by the developer's own Claude, so it shows that the check ran, not proof that it couldn't be faked.
+
 ## 0.2.0
 
 **Upgrading:** once a repo upgrades its gate (`gate.mjs install --upgrade`, merged into the base branch), the fast path for small changes is on by default, even if `.learning/config.json` doesn't list the new keys yet. To keep the old behaviour, set `"small_change_lines": 0`.

@@ -9,9 +9,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
-import { repoRoot } from "./gate/git.js";
+import { currentBranch, repoRoot } from "./gate/git.js";
 import { GateError } from "./gate/shared.js";
 import { StoreError } from "./store/common.js";
+import { evidenceFor, QUESTION_KINDS, RESULTS, recordAnswer } from "./store/evidence.js";
 import { EVENTS, progressReport, recordCheckpoint, recordTopic, setPreference } from "./store/profile.js";
 import { addDecision, learningContext, searchDecisions, updateMap } from "./store/project.js";
 
@@ -123,6 +124,17 @@ async function gateCli(path: string, args: string[], stdin?: string): Promise<st
     );
   }
   return text(proc.stdout);
+}
+
+/** The repo root and branch the question log is keyed by, as the gate sees them. */
+function repoAndBranch(path: string, branch: string): [string, string] {
+  try {
+    const root = repoRoot(path);
+    return [root, currentBranch(root, branch.trim() || null)];
+  } catch (e) {
+    if (e instanceof GateError) throw new ToolError(e.message);
+    throw e;
+  }
 }
 
 const option = (name: string, value: string): string[] => (value.trim() ? [`--${name}`, value] : []);
@@ -299,6 +311,31 @@ const TOOLS: Record<string, Tool> = {
     run: (a) => gateCli(a.repo_root, ["status", ...option("base", a.base), ...option("branch", a.branch)]),
   }),
 
+  record_answer: tool({
+    description:
+      "Log one ownership-check question right after you judge the answer, in-flight\n" +
+      "or final. Only the question and your verdict are kept, in the developer's\n" +
+      "home folder; the answer never is. save_check_report puts the count and a\n" +
+      "digest in the report, so reviewers see that questions were really asked.",
+    annotations: WRITES,
+    shape: {
+      repo_root: RepoRoot,
+      file: str("file", "The changed file the question is about, relative to the repo root."),
+      concept: str("concept", "The concept it checks, as a short noun phrase, e.g. 'fail-open when Redis is down'."),
+      kind: z.enum(QUESTION_KINDS).describe("The question type.").meta({ title: "Kind" }),
+      question: str("question", "The question you asked, in one line."),
+      result: z
+        .enum(RESULTS)
+        .describe("Your verdict on the answer, by the rules in the ownership-check guide.")
+        .meta({ title: "Result" }),
+      branch: Branch("branch").default(""),
+    },
+    run: (a) => {
+      const [root, branch] = repoAndBranch(a.repo_root, a.branch);
+      return call(() => recordAnswer(root, branch, a.file, a.concept, a.kind, a.question, a.result));
+    },
+  }),
+
   save_check_report: tool({
     description:
       "Save the ownership report after the final check passes. It fingerprints\n" +
@@ -325,7 +362,9 @@ const TOOLS: Record<string, Tool> = {
       branch: Branch("branch").default(""),
     },
     run: (a) => {
-      const payload = JSON.stringify({ summary: a.summary, verified: a.verified });
+      const [root, branch] = repoAndBranch(a.repo_root, a.branch);
+      const evidence = evidenceFor(root, branch);
+      const payload = JSON.stringify({ summary: a.summary, verified: a.verified, ...(evidence ? { evidence } : {}) });
       return gateCli(a.repo_root, ["save", ...option("base", a.base), ...option("branch", a.branch)], payload);
     },
   }),

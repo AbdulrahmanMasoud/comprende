@@ -1,7 +1,7 @@
 // The MCP server end to end: a real stdio session, and the gate tools it exposes.
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -23,6 +23,7 @@ const EXPECTED_TOOLS = new Set([
   "add_decision",
   "update_map",
   "gate_status",
+  "record_answer",
   "save_check_report",
 ]);
 
@@ -98,6 +99,23 @@ async function sessionFlow(home, repo) {
       },
     });
     assert.ok(short.isError === true && textOf(short).includes("summary"));
+    const asked = await session.callTool({
+      name: "record_answer",
+      arguments: {
+        repo_root: repo,
+        file: "app.py",
+        concept: "v1 callers break",
+        kind: "break",
+        question: "What happens to a client still sending the v1 format?",
+        result: "understood",
+      },
+    });
+    assert.ok(!asked.isError && textOf(asked).includes("1 question on this branch"), textOf(asked));
+    const badKind = await session.callTool({
+      name: "record_answer",
+      arguments: { repo_root: repo, file: "app.py", concept: "c", kind: "trivia", question: "q", result: "understood" },
+    });
+    assert.equal(badKind.isError, true);
     const ok = await session.callTool({
       name: "save_check_report",
       arguments: {
@@ -110,6 +128,9 @@ async function sessionFlow(home, repo) {
     });
     assert.ok(!ok.isError, textOf(ok));
     assert.ok(existsSync(join(repo, ".learning", "checks", "feat.md")));
+    const report = readFileSync(join(repo, ".learning", "checks", "feat.md"), "utf8");
+    assert.ok(report.includes("Questions asked during the check: 1"), report);
+    assert.ok(/"digest": "[0-9a-f]{64}"/.test(report) && !report.includes("v1 format?"), report);
   } finally {
     await session.close();
   }

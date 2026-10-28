@@ -17,7 +17,19 @@ export interface Report {
   summary: string;
   verified: Record<string, string[]>;
   files: Record<string, unknown>;
+  /** How many questions were logged during the check, and a digest of that log. Absent on
+   *  reports saved without the MCP server (by hand, or by an older plugin). */
+  evidence?: { questions: number; digest: string };
   _outdated?: boolean;
+}
+
+/** `evidence` as saved, or undefined when it's missing or has the wrong shape. */
+export function parseEvidence(v: unknown): { questions: number; digest: string } | undefined {
+  if (!isRecord(v)) return undefined;
+  const { questions, digest } = v;
+  if (typeof questions !== "number" || !Number.isInteger(questions) || questions < 1) return undefined;
+  if (typeof digest !== "string" || !/^[0-9a-f]{64}$/.test(digest)) return undefined;
+  return { questions, digest };
 }
 
 /** JSON with sorted keys, so reports are stable and diff-friendly. */
@@ -57,6 +69,12 @@ export function renderReport(data: Report & { branch: string; date: string; base
       "",
       `Also in this change (reviewed, no specific questions): ${unverified.map((p) => `\`${p}\``).join(", ")}`,
     );
+  lines.push(
+    "",
+    data.evidence
+      ? `Questions asked during the check: ${data.evidence.questions}`
+      : "Questions asked during the check: none recorded",
+  );
   lines.push("", DATA_MARKER, "```json", sortedKeysJson(data, 1), "```", "");
   return lines.join("\n");
 }
@@ -90,7 +108,11 @@ export function parseReport(text: string): Report {
       `Report was made by gate v${String(data.version)}; this gate is v${GATE_VERSION}. If your branch is behind the base, merge it first; then run the check again.`,
     );
   }
-  return data as unknown as Report;
+  const report = data as unknown as Report;
+  const evidence = parseEvidence(data.evidence);
+  if (evidence) report.evidence = evidence;
+  else delete report.evidence;
+  return report;
 }
 
 export function readReport(root: string, branch: string, rev?: string | null): Report | null {

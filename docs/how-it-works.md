@@ -44,9 +44,13 @@ The whole gate is `gate.mjs`, one bundled file that imports only Node's built-in
 
 The plugin only ever runs its own copy of the gate and never executes code from the repo it's looking at. It reads the repo's config as data. It installs the local git hook automatically only when the repo's `gate.mjs` is byte-identical to the plugin's. Because the gate imports only `node:` built-ins, no file in a repo can stand in for a module it loads. Details: [SECURITY.md](../SECURITY.md).
 
+### Questions leave a trace
+
+Each question Claude asks during the check is logged with the `record_answer` tool: the file, the concept, the question type, the question and the verdict, never the answer. The log stays in `~/.comprende/evidence/` on the developer's machine. When the report is saved, it gets only the number of questions and a SHA-256 digest of the log, and CI shows reviewers that count. A report saved without any logged questions still passes, but CI warns the reviewer.
+
 ## Limits, honestly
 
-- **A determined developer can write a report by hand.** The report is a file in their own repo, and nothing outside it can vouch for it. The gate makes skipping deliberate and permanent in git history under their name; it can't make skipping impossible. Treat it as a process tool, not a security boundary. A reviewer reading the summary is part of the system.
+- **A determined developer can write a report by hand**, or log questions that were never asked. The report is a file in their own repo, and nothing outside it can vouch for it. The gate makes skipping deliberate and permanent in git history under their name; it can't make skipping impossible. Treat it as a process tool, not a security boundary. A reviewer reading the summary is part of the system.
 - **Local hooks can be bypassed** with `--no-verify`. CI plus the ruleset can't.
 - **Code-owner review** means the lead can't approve their own PRs that change the gate. On one-person repos, use `protect --no-code-owners`.
 - **Rulesets aren't available for private repos on GitHub's free plan.** Use classic branch protection there.
