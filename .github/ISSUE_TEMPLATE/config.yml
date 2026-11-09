@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/AbdulrahmanMasoud/comprende/blob/main/SECURITY.md#reporting
+    about: A way to get unverified code merged with CI green. Please report it privately, not in an issue.
