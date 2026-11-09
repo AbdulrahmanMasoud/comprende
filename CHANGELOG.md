@@ -6,9 +6,12 @@
 - **CI:**
   - lint, typecheck and the `dist/` check now run once, in their own job, instead of in each of the six test jobs
   - a new Consistency job checks that `plugin.json`, `package.json`, `package-lock.json` and this file agree on the version, runs `claude plugin validate` on both manifests, and runs actionlint on the workflows
-  - an experimental Windows job (Node 22, Git Bash) runs the tests but can't fail the run
+  - a separate "Windows (experimental)" workflow runs the tests on Windows (Node 22, Git Bash) on pushes to `main`, weekly and by hand. It never runs on PRs and isn't required. [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10) lists what fails there.
 - **Releases:** pushing a tag `vX.Y.Z` on `main` checks it against the version files, runs CI, and publishes the GitHub Release with that version's notes from this file.
 - Dependabot, and templates for PRs, bug reports and feature requests.
+- **Dev dependencies:**
+  - `@types/node` now targets Node 20, the oldest Node in `engines.node`, so typecheck rejects newer APIs. Dependabot skips its major updates, and a test keeps it in step with `engines.node`.
+  - `body-parser` is overridden to `^2.4.0` for [GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828). It's a dev-only dependency of the MCP SDK and isn't in `dist/`.
 
 ## 0.2.0
 

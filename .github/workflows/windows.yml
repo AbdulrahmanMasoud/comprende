@@ -1,0 +1,37 @@
+name: Windows (experimental)
+
+# Windows isn't supported yet: issue #10 lists what fails and why.
+# This workflow tracks it outside the PR checks, so a red result here never
+# shows up on a contributor's PR. Branch protection doesn't require it. Until
+# Windows is supported, expect it to fail, and so to put a red X on main's commits.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly (Mondays, 06:00 UTC), to catch changes in the runner image, Node or
+    # Git for Windows between pushes.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests
+    runs-on: windows-latest
+    defaults:
+      run:
+        # Git Bash.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # One Node version is enough to track Windows until it's supported: 22,
+      # the middle of the range ci.yml tests.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
