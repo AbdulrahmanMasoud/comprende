@@ -37,25 +37,16 @@ jobs:
           git diff --exit-code -- dist skills/comprende/scripts \
             || { echo "::error::dist/ is out of date. Run 'npm run build' and commit the result."; exit 1; }
 
+  # Windows runs in windows.yml instead: it isn't supported yet, and a red X
+  # on every PR would confuse contributors.
   test:
-    name: Tests (${{ matrix.os }}, Node ${{ matrix.node }}${{ matrix.experimental && ', experimental' || '' }})
+    name: Tests (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
-    # Windows isn't supported yet. Its job shows what fails there without failing the run.
-    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         node: [20, 22, 24]
-        experimental: [false]
-        include:
-          - os: windows-latest
-            node: 22
-            experimental: true
-    defaults:
-      run:
-        # Git Bash on Windows.
-        shell: bash
     steps:
       - uses: actions/checkout@v7
         with:
