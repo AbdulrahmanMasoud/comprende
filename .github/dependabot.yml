@@ -23,6 +23,13 @@ updates:
       default-days: 7
     allow:
       - dependency-type: development
+    ignore:
+      # @types/node must match the oldest Node we support (engines.node in
+      # package.json), not the newest Node, so typecheck rejects APIs that the
+      # oldest supported Node doesn't have. Bump its major only together with
+      # engines.node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         dependency-type: development

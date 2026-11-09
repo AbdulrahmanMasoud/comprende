@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { parse as parseYaml } from "yaml";
 import { ENV, git, NODE, REPO, SUMMARY, setup, sh, tmp } from "./helpers.mjs";
 
 const read = (rel) => readFileSync(join(REPO, rel));
@@ -60,6 +61,26 @@ test("manifests, hooks and the MCP config point at real files", () => {
 test("the version files agree with the newest CHANGELOG entry", () => {
   const r = sh(REPO, NODE, [join(REPO, "tools/release.mjs"), "check"], { check: false });
   assert.equal(r.status, 0, r.stderr);
+});
+
+/** The oldest Node major that package.json's engines.node allows, from ">=N". */
+function oldestSupportedNode() {
+  const { engines } = json("package.json");
+  const oldest = /^>=(\d+)$/.exec(engines.node)?.[1];
+  assert.ok(oldest, `engines.node should be '>=N', not '${engines.node}'`);
+  return Number(oldest);
+}
+
+test("@types/node is for the oldest Node in engines.node, so typecheck rejects newer APIs", () => {
+  const types = json("package.json").devDependencies["@types/node"];
+  const major = /^\^?(\d+)\.\d+\.\d+$/.exec(types)?.[1];
+  assert.ok(major, `@types/node should be 'N.x.y' or '^N.x.y', not '${types}'`);
+  assert.equal(Number(major), oldestSupportedNode(), `@types/node is ${types}`);
+});
+
+test("CI's oldest Node is the oldest in engines.node", () => {
+  const nodes = parseYaml(read(".github/workflows/ci.yml").toString("utf8")).jobs.test.strategy.matrix.node;
+  assert.equal(Math.min(...nodes), oldestSupportedNode(), `ci.yml tests Node ${nodes.join(", ")}`);
 });
 
 test("the gate imports nothing but node: built-ins", () => {
