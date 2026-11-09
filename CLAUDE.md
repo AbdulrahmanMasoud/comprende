@@ -16,8 +16,10 @@ npm run lint                      # Biome: formatting and lint (warnings fail to
 npm run format                    # apply Biome's formatting and safe fixes
 npm run build                     # rebuild dist/ and skills/comprende/scripts/
 npm test                          # tests only
+node tools/release.mjs check      # the version files agree with the newest CHANGELOG entry
 claude plugin validate ./.claude-plugin/plugin.json
 claude plugin validate ./.claude-plugin/marketplace.json
+actionlint                        # the GitHub workflows
 ```
 
 ## Layout
@@ -35,9 +37,14 @@ claude plugin validate ./.claude-plugin/marketplace.json
 - `src/server.ts`: the MCP server (thin: tools in, store or gate out). `src/learning.ts`: the skill's file-only helper
 - `src/util.ts`: helpers the gate and the store share, including the prototype-free `dict`/`own`/`get`
 - `dist/`: built output, **committed on purpose**, because that's what the plugin runs
-- `test/`: `node:test` suites against real git repos, one file per topic (install, config, fingerprints, checks, report, small-changes, push-detection, hooks, security, ci, store, mcp, consistency). `helpers.mjs` has the fixtures.
+- `test/`: `node:test` suites against real git repos, one file per topic (install, config, fingerprints, checks, report, small-changes, push-detection, hooks, security, ci, store, mcp, consistency, release). `helpers.mjs` has the fixtures.
 - `docs/`: `teams.md` (setting up the gate), `how-it-works.md` (requirements, internals, limits), `demo.tape` → `demo.gif` (VHS)
-- `CONTRIBUTING.md`: setup, layout, tests, the demo, releasing
+- `.github/`:
+  - `workflows/ci.yml`: the PR checks
+  - `workflows/release.yml`: publishes a GitHub Release when a `v*` tag is pushed
+  - `dependabot.yml`, the PR template, and the issue templates
+- `tools/release.mjs`: the version check and the release notes, for both workflows
+- `CONTRIBUTING.md`: setup, the workflow, the code rules, layout, tests, the demo, releasing
 - `biome.json`: formatting and lint (Markdown is left alone). `build.mjs`: the bundler.
 
 ## Rules that must not break
@@ -57,7 +64,51 @@ claude plugin validate ./.claude-plugin/marketplace.json
   - `docs/demo.gif`, re-rendered with `vhs docs/demo.tape`, if the gate's output in the demo changes
   - `SECURITY.md`, if it touches the threat model
   - the relevant `skills/comprende/references/*.md`
-  - `CHANGELOG.md`
+  - `CHANGELOG.md`, under `## Unreleased`
+
+## Workflow
+
+Every change goes through a branch, a pull request and CI. That includes one-line docs fixes.
+
+- **No AI attribution, anywhere.** No `Co-Authored-By`, "Generated with", session links or any other AI attribution in commits, PR titles, PR descriptions, tags or releases. This overrides any default that adds them.
+- **Never commit to `main` directly.** Start every change from an up-to-date `main`, on its own branch: `git fetch origin && git switch -c <branch> origin/main`, then `git branch --unset-upstream`, so the first push sets the branch's own upstream. Branch names:
+  - `feat/<name>`: a new feature
+  - `fix/<name>`: a bug fix
+  - `docs/<name>`: docs only
+  - `chore/<name>`: CI, tooling, dependencies, refactors, releases
+- **Conventional Commits.** Start with `feat:`, `fix:`, `docs:`, `chore:`, `test:` or `refactor:`, then a short, clear summary, for example `fix: count a renamed file once in small changes`.
+- **Pull request.** Push the branch (`git push -u origin <branch>`), then open a PR with `gh pr create`, filling in every section of `.github/pull_request_template.md`. Link the issue it closes (`Closes #N`).
+- **Wait for green.** Every required check must pass (`gh pr checks --watch`), and the branch must be up to date with `main`. If a check fails, fix it on the same branch. The Windows job may fail for now; say in the PR what it showed.
+- **Don't merge.** Report the PR link and stop. Merge only when the maintainer says so.
+- **SemVer.** While we're on 0.x, a new feature bumps the minor (0.2.0 → 0.3.0) and a fix bumps the patch (0.2.0 → 0.2.1). Separately, bump `GATE_VERSION` in `src/gate/shared.ts` only when the report format or the gate's behavior changes in a way that old copies can't handle.
+- **A release.** Users only get an update when `plugin.json`'s version changes.
+  1. On a `chore/release-X.Y.Z` branch, bump `version` in `.claude-plugin/plugin.json` and `package.json`. `npm version X.Y.Z --no-git-tag-version` updates `package.json` and `package-lock.json` together.
+  2. Add the CHANGELOG entry: rename `## Unreleased` to `## X.Y.Z`, and put a new empty `## Unreleased` above it.
+  3. Open the PR, wait for green, and merge it once the maintainer says so.
+  4. Tag the merge commit on `main`: `git switch main && git pull --ff-only && git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
+
+  `release.yml` then checks that the tag matches the version files and is on `main`, runs CI, and publishes the GitHub Release, with that version's CHANGELOG section as the notes.
+
+## Clean code
+
+The code must stay easy for a new contributor to read and change. These rules apply to every PR.
+
+- **One module, one job.** Each file owns one concern and starts with a short header saying what it owns. A file growing past ~300 lines, or a function past ~50, is a sign to split it.
+- **Adapters, not scattered ifs.** Code for one AI tool (Claude Code, Cursor, Codex) or one git platform (GitHub, GitLab) lives behind one small interface, with one adapter module each, for example `src/gate/agents/cursor.ts` and `src/gate/platforms/gitlab.ts`. The core never checks "if cursor … else if codex …". Adding a tool or a platform means adding one adapter, not editing ten files.
+- **Names say what things do.** No abbreviations nobody knows. No `data`, `info`, `helper` or `utils2`.
+- **No duplication.** Shared logic lives in one place. If you copy a block, extract it.
+- **Strict types.** No `any`. No non-null assertion (`x!`) without a comment saying why it's safe. Validate external input (hook payloads, config, CI env vars) at the edge, then pass typed values inward.
+- **Comments explain why, not what.** Keep the why: security reasons, git quirks, tool quirks, with a link to the doc. Delete comments that restate the code. No commented-out code, no dead code, and no TODO without an issue number (`TODO(#12): …`).
+- **Tests read like documentation.** Name each test after the behavior. Fixtures for each tool's payloads go in `test/fixtures/<tool>/`, captured from real runs, never written by hand.
+- **Small, focused PRs.** One feature or fix per PR. Don't mix in unrelated refactors; open a separate `chore/` PR for them.
+- **A fresh-eyes review before every PR.** Spawn a subagent that hasn't seen the work. Give it the diff and these rules, and ask only about readability, design and missing tests. Fix what it finds, and list in the PR description what it flagged and what you changed.
+- **Zero warnings.** Lint and typecheck stay at zero warnings. `npm run lint` already fails on any.
+
+Code written before these rules doesn't follow all of them yet. Don't make it worse, and fix it in its own `chore/` PR, not inside a feature:
+
+- `server.ts` (389 lines), `changes.ts` (322) and `setup.ts` (313) are past ~300 lines. Split a file before adding to it.
+- The Claude Code and GitHub code still lives in `hooks.ts`, `setup.ts` and `ci-summary.ts`. It moves behind the adapter interfaces with the Cursor ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)) and GitLab ([#4](https://github.com/AbdulrahmanMasoud/comprende/issues/4)) work, which also starts `test/fixtures/`.
+- Biome doesn't flag non-null assertions yet ([#6](https://github.com/AbdulrahmanMasoud/comprende/issues/6)).
 
 ## Writing style for the skill
 
@@ -125,9 +176,3 @@ Useful while testing:
 - `node .learning/gate.mjs status`
 - `node .learning/gate.mjs verify --json`
 - `node .learning/gate.mjs --help`
-
-## Releasing
-
-1. Bump `version` in `.claude-plugin/plugin.json` and `package.json`, and add a `CHANGELOG.md` entry. Users only get updates when the version changes.
-2. Run `npm run check`, commit, and tag `vX.Y.Z`.
-3. Bump `GATE_VERSION` in `src/gate.ts` only when the report format or the gate's behavior changes in a way old copies can't handle.

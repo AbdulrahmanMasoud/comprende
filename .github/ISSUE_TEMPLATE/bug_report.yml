@@ -1,0 +1,79 @@
+name: Bug report
+description: Something in Comprende doesn't work as the docs say.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Found a way to get unverified code merged with CI green? Please don't open a public issue:
+        see [SECURITY.md](https://github.com/AbdulrahmanMasoud/comprende/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Comprende version
+      description: Shown in `/plugin`, or the `version` in `.claude-plugin/plugin.json`.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: tool
+    attributes:
+      label: AI tool
+      options:
+        - Claude Code
+        - Cursor
+        - Codex
+        - Other, or none (the git hook or CI only)
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "macOS 15.4, Ubuntu 24.04, Windows 11 with Git Bash"
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      description: The output of `node --version`.
+      placeholder: "v22.12.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Git platform
+      options:
+        - GitHub
+        - GitLab (gitlab.com)
+        - GitLab (self-managed)
+        - Other, or none
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps that shows it, starting from a fresh repo if you can.
+      placeholder: |
+        1. git init …
+        2. node .learning/gate.mjs install --repo .
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: What happened instead. Paste the output, with any secrets removed.
+      render: text
+    validations:
+      required: true

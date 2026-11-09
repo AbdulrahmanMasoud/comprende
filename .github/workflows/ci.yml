@@ -4,24 +4,30 @@ on:
   push:
     branches: [main]
   pull_request:
+  # release.yml runs these same checks on a tag before it publishes.
+  workflow_call:
 
 permissions:
   contents: read
 
+# A new push to a PR replaces the run for the old one. Runs on main are never cancelled.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Branch protection on main requires these jobs by their names. Renaming one
+# means updating the ruleset too (see CONTRIBUTING.md).
 jobs:
-  test:
-    name: Tests (${{ matrix.os }}, Node ${{ matrix.node }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        node: [20, 22, 24]
+  lint-and-build:
+    name: Lint, typecheck and build
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 24
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
@@ -30,4 +36,59 @@ jobs:
           npm run build
           git diff --exit-code -- dist skills/comprende/scripts \
             || { echo "::error::dist/ is out of date. Run 'npm run build' and commit the result."; exit 1; }
+
+  test:
+    name: Tests (${{ matrix.os }}, Node ${{ matrix.node }}${{ matrix.experimental && ', experimental' || '' }})
+    runs-on: ${{ matrix.os }}
+    # Windows isn't supported yet. Its job shows what fails there without failing the run.
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [20, 22, 24]
+        experimental: [false]
+        include:
+          - os: windows-latest
+            node: 22
+            experimental: true
+    defaults:
+      run:
+        # Git Bash on Windows.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci
       - run: npm test
+
+  consistency:
+    name: Consistency
+    runs-on: ubuntu-latest
+    env:
+      # Pinned so that a new Claude Code release can't turn every PR red overnight.
+      # Bump it by hand when a release changes what `plugin validate` checks.
+      CLAUDE_CODE_VERSION: 2.1.319
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: The version files agree with the newest CHANGELOG entry
+        run: node tools/release.mjs check
+      # Runs without a login: validating files needs no account.
+      - name: claude plugin validate
+        run: |
+          npx --yes "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION" plugin validate ./.claude-plugin/plugin.json
+          npx --yes "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION" plugin validate ./.claude-plugin/marketplace.json
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color

@@ -1,0 +1,36 @@
+name: Feature request
+description: Something Comprende should do that it doesn't yet.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you're trying to do, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like
+      description: How it would work for you. Commands, output or a short example help.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Explain as you build (the skill)
+        - The ownership gate
+        - Cursor
+        - Codex
+        - GitLab
+        - Docs
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've tried

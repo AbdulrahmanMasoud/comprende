@@ -1,0 +1,31 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # A release must be a week old before it's proposed, so a compromised
+    # release has time to be caught and pulled first.
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    allow:
+      - dependency-type: development
+    groups:
+      dev-dependencies:
+        dependency-type: development
+    commit-message:
+      prefix: chore
+      include: scope
