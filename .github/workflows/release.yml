@@ -1,0 +1,57 @@
+name: Release
+
+# Pushing a tag vX.Y.Z on main publishes the GitHub Release for that version.
+# The steps before the tag are in CONTRIBUTING.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    name: The tag matches the version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history, to check that the tagged commit is on main.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: The tag, the version files and the newest CHANGELOG entry agree
+        run: node tools/release.mjs check --tag "$GITHUB_REF_NAME"
+      - name: The tagged commit is on main
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "::error::$GITHUB_REF_NAME isn't on main. Tag the merge commit on main."; exit 1; }
+
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish the GitHub Release
+    needs: [tag, ci]
+    runs-on: ubuntu-latest
+    # The only job with write access, and it installs nothing: npm ci runs
+    # dependencies' install scripts, so it stays in the read-only jobs.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Create the release with this version's CHANGELOG notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          node tools/release.mjs notes "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
