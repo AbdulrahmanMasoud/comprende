@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 0.2.1
+
+**Upgrading:** run `node .learning/gate.mjs install --upgrade` in its own PR.
+- It replaces the gate and adds one line, `.learning/gate.mjs -text`, to `.gitattributes`.
+- While the base branch still runs the older gate, CI counts that line as a change, so the upgrade PR needs one check: a small change, so one question. Or use the skip label.
+- Once the upgrade is merged, the line needs no report.
+- `GATE_VERSION` stays 3:
+  - The report format is unchanged, so old and new gates still read each other's reports.
+  - The new exemption is offered only when the gate CI runs lists it (`// ownership-gate-features: small-change gitattributes`), so local and CI agree, as with the fast path in 0.2.0.
+
+- **Fixes for Windows**, from [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10):
+  - **Reports with CRLF line endings parse again.**
+    - A report checked out by git's `core.autocrlf`, or saved by a Windows editor, read as having no data block, so every file showed as new and needed its questions again (after a rebase, say).
+    - The parser now accepts LF and CRLF on every platform. The gate still writes LF.
+  - **`save --input` deletes `.learning/report.local.json` behind 8.3 short names.**
+    - It compared the input path with the repo root as strings. The two didn't match when one came through a short name (`C:\Users\RUNNER~1\…`), so the file was kept.
+    - It now resolves both with the native `realpath`, which expands short names, and compares them ignoring letter case on Windows.
+  - **A CRLF copy of `.learning/gate.mjs` no longer silently loses the pre-push hook.**
+    - git's `core.autocrlf` checked the gate out with CRLF on Windows, so it was never byte-identical to the plugin's copy, and SessionStart didn't install the hook.
+    - `install` now adds `.learning/gate.mjs -text` to `.gitattributes`, appended once and keeping the file's other lines, so git checks the gate out byte for byte.
+    - The plugin's own repo has a `.gitattributes` that does the same for `dist/` and the skill's scripts.
+    - When the only difference between the copies is line endings, SessionStart and `install` now say so, and how to fix it: `git -c core.autocrlf=false checkout -- .learning/gate.mjs`, or an update for an older plugin install. Before, the message only said the copies differ.
+- **The MCP server reports the plugin's version.** It still said 0.2.0. `build.mjs` now sets it from `package.json`, and a test checks it against `plugin.json`.
 - **Contributing:** every change now goes through a branch, a pull request and CI, and `main` is protected. [CONTRIBUTING.md](CONTRIBUTING.md) has the workflow, the commit format, how versions are chosen and the code rules.
 - **CI:**
   - lint, typecheck and the `dist/` check now run once, in their own job, instead of in each of the six test jobs
