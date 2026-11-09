@@ -137,6 +137,8 @@ export const gate = {
   renderReport: (data) => testFn("render_report", data),
   parseReport: (text) => testFn("parse_report", text),
   samePath: (a, b, platform) => testFn("same_path", a, b, platform),
+  antigravityPreToolUse: (stdin) => testFn("antigravity_pre_tool_use", stdin),
+  antigravitySessionStart: (stdin) => testFn("antigravity_session_start", stdin),
   const: (name) => testFn(name),
 };
 

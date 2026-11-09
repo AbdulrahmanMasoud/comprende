@@ -1,0 +1,19 @@
+{
+  "name": "comprende",
+  "displayName": "Comprende",
+  "description": "Proof of understanding for AI-written code: explains code while building it, with an ownership gate before shipping.",
+  "version": "0.2.1",
+  "author": {
+    "name": "Abdulrahman Masoud",
+    "url": "https://github.com/AbdulrahmanMasoud"
+  },
+  "homepage": "https://github.com/AbdulrahmanMasoud/comprende",
+  "repository": "https://github.com/AbdulrahmanMasoud/comprende",
+  "logo": "assets/icon.png",
+  "suggestedPrompts": [
+    "اشرح لي الكود أثناء بنائه باختصار",
+    "فعّل بوابة الفهم في هذا المشروع",
+    "اختبرني في التغييرات الأخيرة قبل الـ push"
+  ]
+}
+

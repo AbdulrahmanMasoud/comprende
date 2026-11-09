@@ -119,7 +119,13 @@ export function sessionStart(stdinText: string): Record<string, unknown> {
 function gatedRepoContext(stdinText: string): string[] {
   try {
     const payload = JSON.parse(stdinText || "{}");
-    const root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+    const ws =
+      Array.isArray(payload?.workspacePaths) &&
+      payload.workspacePaths.length > 0 &&
+      typeof payload.workspacePaths[0] === "string"
+        ? payload.workspacePaths[0]
+        : "";
+    const root = repoRoot(ws || payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
     if (!lstat(join(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];
@@ -260,4 +266,74 @@ export function installHooks(repo?: string | null, auto = false): string[] {
   writeFileSync(hook, PRE_PUSH_HOOK(pin), "utf8");
   chmodSync(hook, 0o755);
   return [`${verb} pre-push hook (${hook}) for gate.mjs sha256 ${pin.slice(0, 12)}`];
+}
+
+/** SessionStart hook for Antigravity. Emits injectSteps with systemMessage. */
+export function antigravitySessionStart(stdinText: string): Record<string, unknown> {
+  const lines: string[] = [];
+  const node = process.versions.node;
+  if (Number.parseInt(node, 10) < MIN_NODE)
+    lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
+  if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
+  lines.push(...gatedRepoContext(stdinText));
+  return lines.length
+    ? {
+        injectSteps: [
+          {
+            systemMessage: {
+              systemMessage: lines.join(" "),
+            },
+          },
+        ],
+      }
+    : {};
+}
+
+/** PreToolUse hook for Antigravity (matcher: run_command).
+ * Returns { decision: "deny", reason: "..." } or { decision: "allow" }. */
+export function antigravityPreToolUse(stdinText: string): Record<string, unknown> {
+  let root: string;
+  try {
+    const payload = JSON.parse(stdinText || "{}");
+    const toolCall = payload?.toolCall as { name?: string; args?: { CommandLine?: string } } | undefined;
+    const toolName = toolCall?.name ?? payload?.tool_name ?? "";
+    const command = String(toolCall?.args?.CommandLine ?? payload?.tool_input?.command ?? "");
+    if ((toolName !== "run_command" && toolName !== "Bash") || !isPushCommand(command)) {
+      return { decision: "allow" };
+    }
+    const ws =
+      Array.isArray(payload?.workspacePaths) &&
+      payload.workspacePaths.length > 0 &&
+      typeof payload.workspacePaths[0] === "string"
+        ? payload.workspacePaths[0]
+        : "";
+    root = repoRoot(ws || payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+    if (!lstat(join(root, CONFIG_PATH))) return { decision: "allow" };
+  } catch {
+    return { decision: "allow" };
+  }
+  let passed: boolean;
+  let problems: string[];
+  let mode: string;
+  try {
+    [passed, problems, mode] = verify(root);
+  } catch (e) {
+    if (!(e instanceof GateError)) return { decision: "allow" };
+    [passed, problems, mode] = [false, [(e as Error).message], "required"];
+  }
+  if (passed || mode !== "required") return { decision: "allow" };
+
+  const pending = uncommittedReport(root);
+  if (pending) {
+    return {
+      decision: "deny",
+      reason:
+        `Blocked by the ownership gate: the report ${pending} is saved but not committed. Commit it first, then push as a separate command. ` +
+        "This hook checks the branch before a command runs, so a push in the same command as the commit is blocked too.",
+    };
+  }
+  return {
+    decision: "deny",
+    reason: `Blocked by the ownership gate:\n- ${problems.join("\n- ")}`,
+  };
 }

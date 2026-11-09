@@ -1291,7 +1291,8 @@ function sessionStart(stdinText) {
 function gatedRepoContext(stdinText) {
   try {
     const payload = JSON.parse(stdinText || "{}");
-    const root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+    const ws = Array.isArray(payload?.workspacePaths) && payload.workspacePaths.length > 0 && typeof payload.workspacePaths[0] === "string" ? payload.workspacePaths[0] : "";
+    const root = repoRoot(ws || payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
     if (!lstat(join9(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];
@@ -1419,6 +1420,62 @@ function installHooks(repo, auto = false) {
   writeFileSync3(hook, PRE_PUSH_HOOK(pin), "utf8");
   chmodSync2(hook, 493);
   return [`${verb} pre-push hook (${hook}) for gate.mjs sha256 ${pin.slice(0, 12)}`];
+}
+function antigravitySessionStart(stdinText) {
+  const lines = [];
+  const node = process.versions.node;
+  if (Number.parseInt(node, 10) < MIN_NODE)
+    lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
+  if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
+  lines.push(...gatedRepoContext(stdinText));
+  return lines.length ? {
+    injectSteps: [
+      {
+        systemMessage: {
+          systemMessage: lines.join(" ")
+        }
+      }
+    ]
+  } : {};
+}
+function antigravityPreToolUse(stdinText) {
+  let root;
+  try {
+    const payload = JSON.parse(stdinText || "{}");
+    const toolCall = payload?.toolCall;
+    const toolName = toolCall?.name ?? payload?.tool_name ?? "";
+    const command = String(toolCall?.args?.CommandLine ?? payload?.tool_input?.command ?? "");
+    if (toolName !== "run_command" && toolName !== "Bash" || !isPushCommand(command)) {
+      return { decision: "allow" };
+    }
+    const ws = Array.isArray(payload?.workspacePaths) && payload.workspacePaths.length > 0 && typeof payload.workspacePaths[0] === "string" ? payload.workspacePaths[0] : "";
+    root = repoRoot(ws || payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+    if (!lstat(join9(root, CONFIG_PATH))) return { decision: "allow" };
+  } catch {
+    return { decision: "allow" };
+  }
+  let passed;
+  let problems;
+  let mode;
+  try {
+    [passed, problems, mode] = verify(root);
+  } catch (e) {
+    if (!(e instanceof GateError)) return { decision: "allow" };
+    [passed, problems, mode] = [false, [e.message], "required"];
+  }
+  if (passed || mode !== "required") return { decision: "allow" };
+  const pending = uncommittedReport(root);
+  if (pending) {
+    return {
+      decision: "deny",
+      reason: `Blocked by the ownership gate: the report ${pending} is saved but not committed. Commit it first, then push as a separate command. This hook checks the branch before a command runs, so a push in the same command as the commit is blocked too.`
+    };
+  }
+  return {
+    decision: "deny",
+    reason: `Blocked by the ownership gate:
+- ${problems.join("\n- ")}`
+  };
 }
 
 // src/gate/setup.ts
@@ -1691,6 +1748,8 @@ Commands (run from inside the repo, or pass --repo):
   pre-push       Git pre-push hook entry point (reads refs from stdin)
   claude-hook    Claude Code PreToolUse hook entry point (reads JSON from stdin)
   session-start  Claude Code SessionStart hook (plugin): the always-on note; in gated repos, the git hook
+  antigravity-pre-tool-use  Antigravity PreToolUse hook entry point (reads JSON from stdin)
+  antigravity-session-start Antigravity SessionStart hook entry point (reads JSON from stdin)
   install        Add the gate, config, CI workflow, Claude hook and git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
   protect        Create the GitHub ruleset that makes the check required (gh; dry run by default)
@@ -1780,6 +1839,10 @@ function testCall(fn, a) {
       return parseReport(String(a[0]));
     case "same_path":
       return samePath(String(a[0]), String(a[1]), String(a[2]));
+    case "antigravity_pre_tool_use":
+      return antigravityPreToolUse(String(a[0]));
+    case "antigravity_session_start":
+      return antigravitySessionStart(String(a[0]));
     default:
       throw new GateError(`unknown test function ${fn}`);
   }
@@ -1874,6 +1937,12 @@ ${HELP}`);
         return claudeHook(readStdin(), Boolean(opts["from-plugin"]));
       case "session-start":
         out(JSON.stringify(sessionStart(readStdin())));
+        return 0;
+      case "antigravity-pre-tool-use":
+        out(JSON.stringify(antigravityPreToolUse(readStdin())));
+        return 0;
+      case "antigravity-session-start":
+        out(JSON.stringify(antigravitySessionStart(readStdin())));
         return 0;
       case "install":
       case "install-hooks":

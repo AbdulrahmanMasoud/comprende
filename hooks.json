@@ -1,0 +1,26 @@
+{
+  "comprende-session": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "command -v node >/dev/null 2>&1 || exit 0; node ./dist/gate.mjs antigravity-session-start",
+        "timeout": 30
+      }
+    ]
+  },
+  "comprende-gate": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v node >/dev/null 2>&1 || exit 0; node ./dist/gate.mjs antigravity-pre-tool-use",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}
+

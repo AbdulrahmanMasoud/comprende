@@ -19,7 +19,15 @@ import { deleteReportInputFile, formatStatus, save, status, verify } from "./com
 import { type Config, isSensitive } from "./config.js";
 import { samePath } from "./files.js";
 import { currentBranch, repoRoot } from "./git.js";
-import { ALWAYS_ON, claudeHook, installHooks, prePush, sessionStart } from "./hooks.js";
+import {
+  ALWAYS_ON,
+  antigravityPreToolUse,
+  antigravitySessionStart,
+  claudeHook,
+  installHooks,
+  prePush,
+  sessionStart,
+} from "./hooks.js";
 import { isPushCommand } from "./push-detect.js";
 import { parseReport, readReport, renderReport, reportPath } from "./report.js";
 import { CHECK_NAME, install, mergeClaudeSettings, protect, WORKFLOW } from "./setup.js";
@@ -35,6 +43,8 @@ Commands (run from inside the repo, or pass --repo):
   pre-push       Git pre-push hook entry point (reads refs from stdin)
   claude-hook    Claude Code PreToolUse hook entry point (reads JSON from stdin)
   session-start  Claude Code SessionStart hook (plugin): the always-on note; in gated repos, the git hook
+  antigravity-pre-tool-use  Antigravity PreToolUse hook entry point (reads JSON from stdin)
+  antigravity-session-start Antigravity SessionStart hook entry point (reads JSON from stdin)
   install        Add the gate, config, CI workflow, Claude hook and git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
   protect        Create the GitHub ruleset that makes the check required (gh; dry run by default)
@@ -136,6 +146,10 @@ function testCall(fn: string, a: unknown[]): unknown {
       return parseReport(String(a[0]));
     case "same_path":
       return samePath(String(a[0]), String(a[1]), String(a[2]));
+    case "antigravity_pre_tool_use":
+      return antigravityPreToolUse(String(a[0]));
+    case "antigravity_session_start":
+      return antigravitySessionStart(String(a[0]));
     default:
       throw new GateError(`unknown test function ${fn}`);
   }
@@ -227,6 +241,12 @@ export function main(argv: string[]): number {
         return claudeHook(readStdin(), Boolean(opts["from-plugin"]));
       case "session-start":
         out(JSON.stringify(sessionStart(readStdin())));
+        return 0;
+      case "antigravity-pre-tool-use":
+        out(JSON.stringify(antigravityPreToolUse(readStdin())));
+        return 0;
+      case "antigravity-session-start":
+        out(JSON.stringify(antigravitySessionStart(readStdin())));
         return 0;
       case "install":
       case "install-hooks":
