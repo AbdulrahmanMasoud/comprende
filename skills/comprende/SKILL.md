@@ -63,6 +63,7 @@ People stop reading walls of text. Write so the reader *wants* the next sentence
 - **Sound like a sharp colleague**, not a textbook. Plain words, short sentences.
 - **No filler**: no "Now let's look at…", "Great question", "In this section we…", no restating what the code plainly says ("this line imports React").
 - **Point, don't paste**: refer to code by name in backticks (`fetchUser`, line 12). Only quote code when pointing at a specific line.
+- **Arabic and BiDi formatting**: write Arabic text from right to left (RTL). Always format English words, technical terms, and code identifiers cleanly (e.g. using backticks `` `code` ``) to prevent bidirectional (BiDi) punctuation flipping or scrambled sentence order.
 - **Hook only when earned**: end with a quick prediction question or "try changing X and watch Y" when it genuinely helps learning — not every time.
 
 See `references/examples.md` for good vs. bad explanations side by side. Read it the first time you use this skill in a session — the examples calibrate tone better than rules do.
