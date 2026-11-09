@@ -135,6 +135,17 @@ Never comment `@dependabot rebase` or `@dependabot recreate` on that PR. Dependa
 
 `package.json` overrides `body-parser` to `^2.4.0`, for [GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828). It's an indirect dev dependency (the MCP SDK → `express` → `body-parser`) and is never in `dist/`. Remove the override once `express` requires `^2.4.0` itself.
 
+### Pinned tools
+
+CI pins two tools by exact version, and Dependabot can't update either one:
+
+| Tool | Pinned in `ci.yml` | How to find the newest |
+| --- | --- | --- |
+| Claude Code, for `claude plugin validate` | `CLAUDE_CODE_VERSION` | `npm view @anthropic-ai/claude-code dist-tags.latest` |
+| actionlint | `uses: docker://rhysd/actionlint:<version>` | `gh release view -R rhysd/actionlint --json tagName -q '.tagName \| ltrimstr("v")'` |
+
+Pin Claude Code to npm's `latest` tag, which is what users get by default, not its slower `stable` channel. Check both before every release, and bump them in their own `chore/` PR. The Consistency job then checks that the plugin still validates and the workflows still lint.
+
 ## Layout
 
 ```
@@ -183,7 +194,7 @@ The consistency test runs the same commands, so the demo can't drift from what t
 
 `plugin.json` sets `version`, so people who installed the plugin only get an update when it changes. Users update with `/plugin marketplace update comprende`, or by turning on auto-update for this marketplace in `/plugin`.
 
-1. **Bump the version** on a `chore/release-X.Y.Z` branch, in `.claude-plugin/plugin.json` and `package.json`. `npm version X.Y.Z --no-git-tag-version` updates `package.json` and `package-lock.json` together.
+1. **Bump the version** on a `chore/release-X.Y.Z` branch, in `.claude-plugin/plugin.json` and `package.json`. `npm version X.Y.Z --no-git-tag-version` updates `package.json` and `package-lock.json` together. Before you start, check the [pinned CI tools](#pinned-tools), and bump any that are behind in their own `chore/` PR first.
 2. **Add the CHANGELOG entry:** rename `## Unreleased` to `## X.Y.Z`, and put a new empty `## Unreleased` above it.
 3. **Open the PR.** The maintainer merges it once CI is green. The Consistency job runs `node tools/release.mjs check`, so a missed version file fails there.
 4. **Tag the merge commit on `main`:**
