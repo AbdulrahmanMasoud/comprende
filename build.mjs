@@ -11,6 +11,8 @@ const version = gateSrc.match(/export const GATE_VERSION = (\d+)/)?.[1];
 if (!version) throw new Error("GATE_VERSION not found in src/gate/shared.ts");
 const features = gateSrc.match(/export const GATE_FEATURES = "([^"]*)"/)?.[1];
 if (features === undefined) throw new Error("GATE_FEATURES not found in src/gate/shared.ts");
+// The MCP server reports the plugin's version, and package.json is its one source.
+const pluginVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
 
 const common = {
   bundle: true,
@@ -40,6 +42,7 @@ const entries = [
     name: "server",
     src: "src/server.ts",
     banner: `${header("src/server.ts")}import { createRequire as __cr } from "node:module"; const require = __cr(import.meta.url);`,
+    define: { COMPRENDE_VERSION: JSON.stringify(pluginVersion) },
   },
 ];
 
@@ -47,7 +50,7 @@ for (const e of entries) {
   const src = e.src;
   if (!existsSync(src)) continue;
   const out = `dist/${e.name}.mjs`;
-  await build({ ...common, entryPoints: [src], outfile: out, banner: { js: e.banner } });
+  await build({ ...common, entryPoints: [src], outfile: out, banner: { js: e.banner }, define: e.define ?? {} });
   chmodSync(out, 0o755);
   if (e.name !== "server") {
     const code = readFileSync(out, "utf8");

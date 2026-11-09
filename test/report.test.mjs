@@ -81,3 +81,42 @@ test("save --input deletes report.local.json only after the report is written", 
   assert.deepEqual(gate.verify(dev), [true, [], "required"]);
   assert.equal(sh(dev, "git", ["status", "--porcelain"]).stdout, "");
 });
+
+test("a report with CRLF line endings reads the same as with LF", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  gate.save(payload(), dev);
+  const lf = readFileSync(join(dev, gate.reportRelpath("feature/rate-limit")), "utf8");
+  assert.deepEqual(gate.parseReport(lf.replaceAll("\n", "\r\n")), gate.parseReport(lf));
+});
+
+test("a report with CRLF line endings still counts: no new questions, and verify passes", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  gate.save(payload(), dev);
+  const report = join(dev, gate.reportRelpath("feature/rate-limit"));
+  // What git's core.autocrlf checks out on Windows (after a rebase, say), or an editor saves there.
+  writeFileSync(report, readFileSync(report, "utf8").replaceAll("\n", "\r\n"));
+  const st = gate.status(dev);
+  assert.deepEqual(
+    st.files.map((f) => f.state),
+    ["ok"],
+  );
+  assert.deepEqual(st.must_verify, []);
+  commitAll(dev, "change + CRLF report"); // the blob keeps CRLF: core.autocrlf is off here
+  assert.deepEqual(gate.verify(dev), [true, [], "required"]);
+});
+
+// save --input resolves both paths with the native realpath (which expands 8.3
+// short names) before comparing them. Only Windows runs that part: here, the comparison.
+test("paths are compared ignoring letter case on Windows only", () => {
+  const long = "C:\\Users\\runneradmin\\repo\\.learning\\report.local.json";
+  const otherCase = "c:\\users\\RUNNERADMIN\\repo\\.learning\\report.local.json";
+  assert.equal(gate.samePath(long, otherCase, "win32"), true);
+  assert.equal(gate.samePath(long, otherCase, "linux"), false);
+  assert.equal(
+    gate.samePath("/srv/repo/.learning/report.local.json", "/srv/repo/.learning/report.local.json", "linux"),
+    true,
+  );
+  assert.equal(gate.samePath(long, "C:\\Users\\runneradmin\\other\\.learning\\report.local.json", "win32"), false);
+});

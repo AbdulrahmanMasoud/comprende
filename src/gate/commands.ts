@@ -1,9 +1,9 @@
 // The gate's three verbs: status (what needs checking), save (write the report) and
 // verify (does a commit match its report). The hooks and CI all call verify.
 
-import { existsSync, realpathSync, unlinkSync } from "node:fs";
+import { existsSync, unlinkSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { dict, get, isFile, isRecord, isSymlink, own, today } from "../util.js";
+import { dict, get, isRecord, own, today } from "../util.js";
 import {
   changedLinesText,
   collectChanges,
@@ -14,8 +14,9 @@ import {
   smallChange,
 } from "./changes.js";
 import { isSensitive, loadConfig, needsNoQuestions, rulesFromBase, rulesFromBaseOrWorktree } from "./config.js";
-import { atomicWrite, readRepoFile } from "./files.js";
-import { currentBranch, readFileAtRev, repoRoot, resolveBase, revHasFile } from "./git.js";
+import { gateHeader } from "./features.js";
+import { atomicWrite, realPath, samePath } from "./files.js";
+import { currentBranch, repoRoot, resolveBase } from "./git.js";
 import { matches } from "./glob.js";
 import { previousReport, readReport, renderReport, reportPath } from "./report.js";
 import { GATE_REL, GATE_VERSION, GateError, REPORT_INPUT, sorted, VERSION_RE } from "./shared.js";
@@ -60,28 +61,14 @@ export function status(repo?: string | null, base?: string | null, branch?: stri
     );
   }
   const localGate = join(root, GATE_REL);
-  if (isFile(localGate) && !isSymlink(localGate)) {
-    let head = "";
-    try {
-      head = readRepoFile(localGate, 8 * 1024 * 1024).slice(0, 4096);
-    } catch {
-      /* unreadable: no note */
-    }
-    const v = VERSION_RE.exec(head);
-    if (v && Number(v[1]) !== GATE_VERSION) {
-      notes.push(
-        `This repo's ${GATE_REL} is v${v[1]} but the running gate is v${GATE_VERSION}. CI runs the base branch's copy, so update whichever is older (the plugin, or \`gate.mjs install --upgrade\` in a PR).`,
-      );
-    }
+  const localVersion = VERSION_RE.exec(gateHeader(root, null));
+  if (localVersion && Number(localVersion[1]) !== GATE_VERSION) {
+    notes.push(
+      `This repo's ${GATE_REL} is v${localVersion[1]} but the running gate is v${GATE_VERSION}. CI runs the base branch's copy, so update whichever is older (the plugin, or \`gate.mjs install --upgrade\` in a PR).`,
+    );
   }
-  if (existsSync(localGate) && revHasFile(root, baseRef, GATE_REL)) {
-    let head = "";
-    try {
-      head = readFileAtRev(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
-    } catch {
-      /* unreadable: no note */
-    }
-    const v = VERSION_RE.exec(head);
+  if (existsSync(localGate)) {
+    const v = VERSION_RE.exec(gateHeader(root, baseRef));
     if (v && Number(v[1]) !== GATE_VERSION) {
       notes.push(
         `The base branch runs gate v${v[1]} but this one is v${GATE_VERSION}: merge the base branch first, or CI will reject the report.`,
@@ -247,8 +234,8 @@ export function verify(
 export function deleteReportInputFile(input: string, repo: string | null): string {
   try {
     const abs = resolve(input);
-    const root = realpathSync(repoRoot(repo));
-    if (join(realpathSync(dirname(abs)), basename(abs)) !== join(root, REPORT_INPUT)) return "";
+    const expected = join(realPath(repoRoot(repo)), REPORT_INPUT);
+    if (!samePath(join(realPath(dirname(abs)), basename(abs)), expected)) return "";
     unlinkSync(abs);
     return ` Removed ${REPORT_INPUT}.`;
   } catch {

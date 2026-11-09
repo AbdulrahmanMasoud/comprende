@@ -1,15 +1,16 @@
 // Turning the gate on for a repo: install (gate copy, config, CI workflow, Claude hook,
-// .gitignore line, CODEOWNERS) and protect (the GitHub ruleset that makes the check required).
+// the .gitignore and .gitattributes lines, CODEOWNERS) and protect (the GitHub ruleset
+// that makes the check required).
 
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { isRecord, lstat } from "../util.js";
-import { withIgnoreLine } from "./changes.js";
 import { DEFAULT_CONFIG } from "./config.js";
 import { atomicWrite, MAX_CONFIG_BYTES, readRepoFile } from "./files.js";
 import { type RunResult, repoRoot, resolveBase, run } from "./git.js";
-import { installHooks } from "./hooks.js";
-import { CONFIG_PATH, GATE_FILES, GATE_REL, GateError, REPORT_INPUT, SELF, splitLines } from "./shared.js";
+import { type GateCopyDifference, gateCopyDifference, installHooks } from "./hooks.js";
+import { addInstallLine, INSTALL_LINES } from "./install-lines.js";
+import { CONFIG_PATH, GATE_FILES, GATE_REL, GateError, SELF, splitLines } from "./shared.js";
 
 export const WORKFLOW = `name: Ownership check
 
@@ -214,27 +215,15 @@ export function mergeClaudeSettings(path: string): string {
   return `merged a Claude Code PreToolUse hook into ${path} (other settings kept)`;
 }
 
-/** Add REPORT_INPUT to the repo's .gitignore (created if missing), keeping its lines. */
-function ignoreReportInput(root: string): string {
-  const path = join(root, ".gitignore");
-  const st = lstat(path);
-  if (st && (st.isSymbolicLink() || !st.isFile()))
-    return `SKIPPED .gitignore: not a regular file; add ${REPORT_INPUT} to it by hand.`;
-  let text = Buffer.alloc(0);
-  if (st) {
-    try {
-      text = Buffer.from(readRepoFile(path, MAX_CONFIG_BYTES), "utf8");
-      if (!text.equals(readFileSync(path))) throw new GateError("it isn't valid UTF-8");
-    } catch (e) {
-      return `SKIPPED .gitignore: ${(e as Error).message}; add ${REPORT_INPUT} to it by hand.`;
-    }
-  }
-  if (splitLines(text.toString("utf8")).some((l) => [REPORT_INPUT, `/${REPORT_INPUT}`].includes(l.trim()))) {
-    return `.gitignore already ignores ${REPORT_INPUT}`;
-  }
-  atomicWrite(path, withIgnoreLine(text).toString("utf8"));
-  return `added ${REPORT_INPUT} to .gitignore`;
-}
+/** What install says about an existing gate.mjs it wasn't asked to replace. */
+const EXISTING_GATE_NOTE: Record<GateCopyDifference, string> = {
+  none: "up to date",
+  "repo-crlf": `differs only in its CRLF line endings (git's core.autocrlf): run \`git -c core.autocrlf=false checkout -- ${GATE_REL}\`, and the .gitattributes line keeps it byte for byte from then on`,
+  // --upgrade would copy those CRLF line endings into the repo.
+  "plugin-crlf":
+    "matches, apart from this gate's own CRLF line endings (git's core.autocrlf): update the plugin instead of using --upgrade",
+  content: "exists (pass --upgrade to replace)",
+};
 
 function setUpCodeowners(root: string, owner?: string | null): string {
   const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
@@ -271,8 +260,7 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
   if (!SELF) throw new GateError("Can't locate this gate's own file to install it.");
   if (existsSync(target) && resolve(target) === resolve(SELF)) done.push(`${GATE_REL} is this file`);
   else if (existsSync(target) && !upgrade) {
-    const same = readFileSync(target).equals(readFileSync(SELF));
-    done.push(`${GATE_REL} ${same ? "up to date" : "exists (pass --upgrade to replace)"}`);
+    done.push(`${GATE_REL} ${EXISTING_GATE_NOTE[gateCopyDifference(readFileSync(target), readFileSync(SELF))]}`);
   } else {
     mkdirSync(dirname(target), { recursive: true });
     copyFileSync(SELF, target);
@@ -303,7 +291,7 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
   }
 
   done.push(mergeClaudeSettings(join(root, ".claude", "settings.json")));
-  done.push(ignoreReportInput(root));
+  for (const { file, line } of INSTALL_LINES) done.push(addInstallLine(root, file, line));
   done.push(...installHooks(root));
   done.push(
     `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch — without it CI only warns.`,

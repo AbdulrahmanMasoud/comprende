@@ -12,38 +12,28 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dict, get, isRecord, own } from "../util.js";
 import { type Config, isSensitive, needsNoQuestions } from "./config.js";
+import { ciGateHasFeature } from "./features.js";
 import {
   decodePath,
   git,
   gitBytes,
   gitEnv,
   readBlob,
-  readFileAtRev,
   refExists,
-  revHasFile,
   run,
   splitNul,
   WORKTREE_SAFE,
   withWorktreeIndex,
 } from "./git.js";
 import { matches } from "./glob.js";
+import { isInstallLineEdit } from "./install-lines.js";
 import type { Report } from "./report.js";
-import {
-  FEATURES_RE,
-  GATE_FILES,
-  GATE_REL,
-  GateError,
-  REGULAR_MODES,
-  REPORT_INPUT,
-  sorted,
-  splitLines,
-  ZERO_SHA,
-} from "./shared.js";
+import { GATE_FILES, GateError, REGULAR_MODES, REPORT_INPUT, sorted, splitLines, ZERO_SHA } from "./shared.js";
 
 // Exact shapes only (no subfolders, markdown only), so nothing executable can hide here.
 const PLUMBING_RE = /^\.learning\/(checks\/[^/]+\.md|decisions\/[^/]+\.md|map\.md|[^/]+\.local\.md)$/;
 
-interface Change {
+export interface Change {
   mode: string;
   blob: string;
   base: string;
@@ -60,23 +50,6 @@ export function isPlumbing(path: string, mode = "100644"): boolean {
   // Exactly this path and only as a plain file: a pattern would let code hide in look-alikes.
   if (path === REPORT_INPUT) return mode === "100644";
   return PLUMBING_RE.test(path) && (mode === "100644" || mode === "000000");
-}
-
-/** install's own .gitignore edit: the old file plus exactly one line,
- *  REPORT_INPUT, byte for byte. Any other edit to .gitignore is a change.
- *  This keeps the PR that installs the gate free of anything to verify. */
-function isReportIgnoreEdit(root: string, path: string, c: Change): boolean {
-  if (path !== ".gitignore" || c.mode !== "100644") return false;
-  const before = c.base === ZERO_SHA ? Buffer.alloc(0) : c.base_mode === "100644" ? readBlob(root, c.base) : null;
-  const after = readBlob(root, c.blob);
-  if (!before || !after) return false;
-  return after.equals(withIgnoreLine(before));
-}
-
-/** `text` with REPORT_INPUT appended as its own line: what install writes. */
-export function withIgnoreLine(text: Buffer): Buffer {
-  const sep = text.length && text[text.length - 1] !== 0x0a ? "\n" : "";
-  return Buffer.concat([text, Buffer.from(`${sep}${REPORT_INPUT}\n`)]);
 }
 
 /** [{path: {mode, blob, base, base_mode}}, untracked paths, fork point] for
@@ -105,6 +78,7 @@ export function collectChanges(root: string, base: string, rev?: string | null):
   }
   const fields = splitNul(raw);
   const changes: Changes = dict();
+  const ciGateHas = (feature: string) => ciGateHasFeature(root, base, rev ?? null, feature);
   let i = 0;
   while (i < fields.length - 1) {
     const meta = fields[i].toString("latin1");
@@ -116,7 +90,7 @@ export function collectChanges(root: string, base: string, rev?: string | null):
     const path = decodePath(fields[i + 1]);
     i += 2;
     const change = { mode: newmode, blob: newsha, base: oldsha, base_mode: oldmode };
-    if (!isPlumbing(path, newmode) && !isReportIgnoreEdit(root, path, change)) changes[path] = change;
+    if (!isPlumbing(path, newmode) && !isInstallLineEdit(root, path, change, ciGateHas)) changes[path] = change;
   }
   return [Object.fromEntries(sorted(Object.keys(changes)).map((k) => [k, changes[k]])), untracked, mb];
 }
@@ -242,17 +216,6 @@ export function needsVerification(
   return out;
 }
 
-/** Does the base branch's gate (the copy CI runs) list `feature` in its header? */
-function baseGateHasFeature(root: string, baseRef: string, feature: string): boolean {
-  if (!revHasFile(root, baseRef, GATE_REL)) return false;
-  try {
-    const head = readFileAtRev(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
-    return (FEATURES_RE.exec(head)?.[1] ?? "").trim().split(/\s+/).includes(feature);
-  } catch {
-    return false;
-  }
-}
-
 /** Added + removed lines in `paths` between the fork point and `rev` (the
  *  working tree, as `git add -A` would commit it, when rev is null); null if
  *  one of them is binary. The diff options are fixed, so local diff config
@@ -296,7 +259,7 @@ interface Small {
  *  at most small_change_lines lines in total, and nothing in it is sensitive, a
  *  submodule or binary. It then needs a summary of small_summary_chars instead
  *  of min_summary_chars; everything else is checked as usual. It only applies
- *  when the base branch's gate knows it, so local and CI always agree. */
+ *  when the gate CI runs knows it, so local and CI always agree. */
 export function smallChange(
   root: string,
   baseRef: string,
@@ -312,7 +275,7 @@ export function smallChange(
   const counted = new Set(entries.filter(([p]) => !matches(p, cfg.ignore)).map(([p]) => p));
   const lines = changedLines(root, mb, rev, counted);
   if (lines === null || lines > cfg.small_change_lines) return no(lines);
-  if (!baseGateHasFeature(root, baseRef, "small-change")) {
+  if (!ciGateHasFeature(root, baseRef, rev, "small-change")) {
     return no(
       lines,
       `This would count as a small change (${changedLinesText(lines)}), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`,

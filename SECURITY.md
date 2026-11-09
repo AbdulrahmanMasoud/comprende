@@ -17,6 +17,8 @@ The plugin runs in every repo you open with Claude, including ones you just clon
 - **No repo code in the plugin's hooks or MCP server.** They run only the plugin's own `dist/gate.mjs`. A repo's `.learning/config.json` is read as data: never through a symlink, at most 256 KB, and strictly validated.
 - **The local `pre-push` hook is pinned.** It records the SHA-256 of the `.learning/gate.mjs` it was installed for. On every push, it reads the file, checks the hash, and runs exactly those bytes as an in-memory module. That module can import only Node's `node:` built-ins, so nothing next to `gate.mjs` (no `node_modules`, no `package.json`) can stand in for anything it loads. If `gate.mjs` later changes (a pull, a checkout), the hook refuses to run it and tells you how to re-trust it.
 - **Automatic install only for known code.** The plugin installs that hook automatically only when the repo's `gate.mjs` is byte-identical to the plugin's own copy, and only into the repo's own `.git/hooks`. It never writes into a custom `core.hooksPath`, which is often shared by every repo on the machine. Set `OWNERSHIP_GATE_NO_AUTO_HOOK=1` to turn auto-install off.
+  - A copy that differs only in line endings (CRLF, from git's `core.autocrlf` on Windows) isn't byte-identical, so it isn't trusted either. SessionStart says what the difference is and how to fix it, with fixed text.
+  - `install` adds `.learning/gate.mjs -text` to `.gitattributes`, so git checks the gate out byte for byte.
 - **No commands from the repo's own git config.** `core.fsmonitor` is forced off for every git call the gate makes. Filter commands (`filter.*.clean/smudge/process`) defined in a repo's own `.git/config` are refused. That only happens when someone hands you a repo as an archive, since a normal clone doesn't carry `.git/config`. Filters you set up globally, like git-lfs, keep working. If the local ones are yours (git-crypt, `git lfs install --local`), set `OWNERSHIP_GATE_TRUST_REPO_CONFIG=1`.
 - **The project-level Claude hook** that `gate.mjs install` adds to `.claude/settings.json` runs the repo's own gate. Claude Code applies it under its normal workspace-trust rules.
 - **No code from the environment either.** The pinned hook clears `NODE_OPTIONS` and `NODE_PATH` before running the gate, and the CI step does the same, so nothing can be preloaded into it. The CI workflow restores no dependency cache either.
@@ -29,7 +31,8 @@ The plugin runs in every repo you open with Claude, including ones you just clon
   - the gate's own files;
   - the report and notes shapes in `.learning/`;
   - `.learning/report.local.json`, at exactly that path and as a plain file;
-  - a `.gitignore` edit that adds exactly that one line and nothing else.
+  - a `.gitignore` edit that adds exactly that one line and nothing else;
+  - a `.gitattributes` edit that adds exactly `.learning/gate.mjs -text` and nothing else, and only once the gate CI runs knows this exemption (it lists `gitattributes` in its header). That line only stops git converting the gate's line endings.
 
   No pattern is exempt, so code can't hide in a look-alike file.
 - **Notes are data.** Text in `.learning/` is shown to Claude labeled as notes, not instructions, and symlinks there are never followed.

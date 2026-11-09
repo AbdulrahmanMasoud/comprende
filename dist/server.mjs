@@ -23632,6 +23632,7 @@ var CHECKS_DIR = `${LEARNING}/checks`;
 var CONFIG_PATH = `${LEARNING}/config.json`;
 var GATE_REL = `${LEARNING}/gate.mjs`;
 var REPORT_INPUT = `${LEARNING}/report.local.json`;
+var GATE_ATTRIBUTES_LINE = `${GATE_REL} -text`;
 var ZERO_SHA = "0".repeat(40);
 var GateError = class extends Error {
 };
@@ -24327,7 +24328,7 @@ var TOOLS = {
   })
 };
 function buildServer() {
-  const server = new McpServer({ name: "comprende", version: "0.2.0" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "comprende", version: "0.2.1" }, { instructions: INSTRUCTIONS });
   for (const [name, t] of Object.entries(TOOLS)) {
     server.registerTool(
       name,

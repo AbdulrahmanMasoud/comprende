@@ -1,11 +1,12 @@
 // Reading and writing files a repo controls: never through a symlink, never a FIFO,
-// never more than a size limit, and atomically when writing.
+// never more than a size limit, and atomically when writing. Plus comparing real paths.
 import {
   chmodSync,
   closeSync,
   mkdirSync,
   openSync,
   readSync,
+  realpathSync,
   renameSync,
   statSync,
   unlinkSync,
@@ -18,6 +19,8 @@ import { GateError } from "./shared.js";
 export const MAX_CONFIG_BYTES = 256 * 1024;
 
 export const MAX_REPORT_BYTES = 4 * 1024 * 1024;
+
+export const MAX_GATE_BYTES = 8 * 1024 * 1024;
 
 /** Read a repo-controlled file safely: never through a symlink (it could point
  *  at /dev/zero or a secret), never a FIFO, never more than `limit` bytes. */
@@ -64,4 +67,13 @@ export function atomicWrite(path: string, content: string): void {
     }
     throw e;
   }
+}
+
+/** A path's real form: symlinks resolved and, on Windows, 8.3 short names
+ *  (C:\Users\RUNNER~1) expanded to long ones, which only the native realpath does. */
+export const realPath = (path: string): string => realpathSync.native(path);
+
+/** Whether two real paths (from realPath) name the same file. Windows file systems ignore letter case. */
+export function samePath(a: string, b: string, platform: string = process.platform): boolean {
+  return platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
 }

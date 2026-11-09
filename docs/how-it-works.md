@@ -42,7 +42,7 @@ The whole gate is `gate.mjs`, one bundled file that imports only Node's built-in
 
 ### Safe in repos you don't trust
 
-The plugin only ever runs its own copy of the gate and never executes code from the repo it's looking at. It reads the repo's config as data. It installs the local git hook automatically only when the repo's `gate.mjs` is byte-identical to the plugin's. Because the gate imports only `node:` built-ins, no file in a repo can stand in for a module it loads. Details: [SECURITY.md](../SECURITY.md).
+The plugin only ever runs its own copy of the gate and never executes code from the repo it's looking at. It reads the repo's config as data. It installs the local git hook automatically only when the repo's `gate.mjs` is byte-identical to the plugin's. A copy that differs only in line endings isn't trusted either, and the session says how to fix it. That's why `install` adds `.learning/gate.mjs -text` to `.gitattributes`: git then checks the gate out byte for byte on every platform. Because the gate imports only `node:` built-ins, no file in a repo can stand in for a module it loads. Details: [SECURITY.md](../SECURITY.md).
 
 ## Limits, honestly
 
@@ -51,4 +51,4 @@ The plugin only ever runs its own copy of the gate and never executes code from 
 - **Code-owner review** means the lead can't approve their own PRs that change the gate. On one-person repos, use `protect --no-code-owners`.
 - **Rulesets aren't available for private repos on GitHub's free plan.** Use classic branch protection there.
 - **GitHub only for now.**
-- **Linux and macOS only for now.** CI tests both with Node 20, 22 and 24. Windows isn't supported yet: an experimental workflow runs the tests there with Git Bash, and some of them fail. [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10) lists what fails and why.
+- **Linux and macOS only for now.** CI tests both with Node 20, 22 and 24. Windows isn't supported yet: an experimental workflow runs the tests there with Git Bash, and some of them fail. 0.2.1 fixed the gate bugs that reached users (CRLF reports, 8.3 short paths, CRLF copies of the gate); the rest are in the test suite. [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10) lists what fails and why.

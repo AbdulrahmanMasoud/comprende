@@ -1,12 +1,12 @@
 // The MCP server end to end: a real stdio session, and the gate tools it exposes.
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { callTool, ENV, git, NODE, REPO_GATE, SERVER, setup, tmp, write } from "./helpers.mjs";
+import { callTool, ENV, git, NODE, REPO, REPO_GATE, SERVER, setup, tmp, write } from "./helpers.mjs";
 
 /** Node version of impl.code_version_stub / code_write_marker. */
 const codeVersionStub = (version, marker) =>
@@ -132,4 +132,17 @@ test("the MCP server never runs the repo's gate copy and flags a version differe
   const out = callTool("gate_status", { repo_root: dev, base: "", branch: "" });
   assert.ok(!existsSync(marker));
   assert.ok(out.includes("src/app.js [new]") && out.includes("is v1 but the running gate is"), out);
+});
+
+test("the MCP server reports the plugin's version", async (t) => {
+  const plugin = JSON.parse(readFileSync(join(REPO, ".claude-plugin/plugin.json"), "utf8"));
+  const session = new Client({ name: "e2e-test", version: "0.0.0" });
+  await session.connect(
+    new StdioClientTransport({ command: NODE, args: [SERVER], env: { ...ENV, COMPRENDE_HOME: tmp(t) } }),
+  );
+  try {
+    assert.deepEqual(session.getServerVersion(), { name: "comprende", version: plugin.version });
+  } finally {
+    await session.close();
+  }
 });
