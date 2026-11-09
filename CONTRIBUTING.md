@@ -100,16 +100,40 @@ The Claude Code and GitHub code was written before this rule and isn't behind th
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every PR and on `main`:
 
-| Job | What it checks | Required |
-| --- | --- | --- |
-| `Lint, typecheck and build` | `npm run typecheck`, `npm run lint`, and that `dist/` matches a fresh build | yes |
-| `Tests (ubuntu-latest, Node 20)` … `Tests (macos-latest, Node 24)` | `npm test` on Ubuntu and macOS, Node 20, 22 and 24 | yes |
-| `Consistency` | the versions agree (`node tools/release.mjs check`), `claude plugin validate` on both manifests, `actionlint` on the workflows | yes |
-| `Tests (windows-latest, Node 22, experimental)` | `npm test` in Git Bash. Windows isn't supported yet, so this job can fail without failing the run | no |
+| Job | What it checks |
+| --- | --- |
+| `Lint, typecheck and build` | `npm run typecheck`, `npm run lint`, and that `dist/` matches a fresh build |
+| `Tests (ubuntu-latest, Node 20)` … `Tests (macos-latest, Node 24)` | `npm test` on Ubuntu and macOS, Node 20, 22 and 24 |
+| `Consistency` | the versions agree (`node tools/release.mjs check`), `claude plugin validate` on both manifests, `actionlint` on the workflows |
 
-Branch protection requires the jobs by name. If you rename one, update the ruleset in the repo settings in the same PR.
+Branch protection requires every one of these jobs, by name. If you rename one, update the ruleset in the repo settings in the same PR.
 
-Dependabot opens one grouped PR a week for GitHub Actions and one for npm devDependencies. Some devDependencies are bundled into `dist/`, so their PR can fail `dist/ matches the source`. Check out the branch, run `npm run build`, and push the result.
+### Windows
+
+Windows isn't supported yet. A separate workflow, "Windows (experimental)" ([`.github/workflows/windows.yml`](.github/workflows/windows.yml)), runs `npm test` on `windows-latest` with Node 22, in Git Bash. It runs:
+
+- on every push to `main`
+- every Monday at 06:00 UTC
+- by hand: `gh workflow run windows.yml`, or "Run workflow" on the Actions tab
+
+It never runs on PRs and isn't required, so a failure there blocks nothing. Until Windows is supported, expect it to fail, and so to show a red X on `main`'s commits. [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10) lists what fails and why.
+
+### Dependabot
+
+Dependabot opens one grouped PR a week for GitHub Actions, and one for npm devDependencies. It skips major updates of `@types/node`, which must stay on the oldest Node in `engines.node`. `test/consistency.test.mjs` checks that, and it runs with `npm test`.
+
+The MCP SDK and zod are bundled into `dist/server.mjs`, so a PR that bumps them, or esbuild, usually fails `dist/ matches the source`. To fix it:
+
+1. Check out its branch: `gh pr checkout <N>`.
+2. Run `npm ci && npm run build`.
+3. Commit (`chore: rebuild dist for dependency updates`) and push.
+4. If `main` has moved since, update the branch from the PR page ("Update branch"), or with `gh pr update-branch <N>`.
+
+Never comment `@dependabot rebase` or `@dependabot recreate` on that PR. Dependabot rewrites its branch with only its own commit, which drops your rebuild commit.
+
+### Overrides
+
+`package.json` overrides `body-parser` to `^2.4.0`, for [GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828). It's an indirect dev dependency (the MCP SDK → `express` → `body-parser`) and is never in `dist/`. Remove the override once `express` requires `^2.4.0` itself.
 
 ## Layout
 

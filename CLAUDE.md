@@ -42,6 +42,7 @@ actionlint                        # the GitHub workflows
 - `.github/`:
   - `workflows/ci.yml`: the PR checks
   - `workflows/release.yml`: publishes a GitHub Release when a `v*` tag is pushed
+  - `workflows/windows.yml`: "Windows (experimental)", the tests on Windows. Not required, and never on PRs (see CONTRIBUTING.md)
   - `dependabot.yml`, the PR template, and the issue templates
 - `tools/release.mjs`: the version check and the release notes, for both workflows
 - `CONTRIBUTING.md`: setup, the workflow, the code rules, layout, tests, the demo, releasing
@@ -78,7 +79,7 @@ Every change goes through a branch, a pull request and CI. That includes one-lin
   - `chore/<name>`: CI, tooling, dependencies, refactors, releases
 - **Conventional Commits.** Start with `feat:`, `fix:`, `docs:`, `chore:`, `test:` or `refactor:`, then a short, clear summary, for example `fix: count a renamed file once in small changes`.
 - **Pull request.** Push the branch (`git push -u origin <branch>`), then open a PR with `gh pr create`, filling in every section of `.github/pull_request_template.md`. Link the issue it closes (`Closes #N`).
-- **Wait for green.** Every required check must pass (`gh pr checks --watch`), and the branch must be up to date with `main`. If a check fails, fix it on the same branch. The Windows job may fail for now; say in the PR what it showed.
+- **Wait for green.** Every required check must pass (`gh pr checks --watch`), and the branch must be up to date with `main`. If a check fails, fix it on the same branch. Windows isn't on PRs: it runs in its own workflow, which isn't required (see CONTRIBUTING.md).
 - **Don't merge.** Report the PR link and stop. Merge only when the maintainer says so.
 - **SemVer.** While we're on 0.x, a new feature bumps the minor (0.2.0 → 0.3.0) and a fix bumps the patch (0.2.0 → 0.2.1). Separately, bump `GATE_VERSION` in `src/gate/shared.ts` only when the report format or the gate's behavior changes in a way that old copies can't handle.
 - **A release.** Users only get an update when `plugin.json`'s version changes.

@@ -9,7 +9,7 @@ Back to the [README](../README.md). Setting up the gate: [The gate for teams](te
 
 Claude Code itself can run without Node. If `node` is missing or older than 20, Claude tells you so in one line when the session starts, with a link to [nodejs.org](https://nodejs.org). Until then, the hooks step aside and never block a command.
 
-**On Windows**, Claude Code runs hook commands in Git Bash, where all of this works. Without Git Bash it falls back to PowerShell. There, the Node check at session start fails with a one-time, non-blocking hook error, and the push guard doesn't run, because it's attached to the Bash tool. Install [Git for Windows](https://gitforwindows.org) to get both.
+**On Windows**, Claude Code runs hook commands in Git Bash, where these Node checks work. Windows as a whole isn't supported yet (see the limits below). Without Git Bash, Claude Code falls back to PowerShell. There, the Node check at session start fails with a one-time, non-blocking hook error, and the push guard doesn't run, because it's attached to the Bash tool. Install [Git for Windows](https://gitforwindows.org) to get both.
 
 ## Explain as you build
 
@@ -50,4 +50,5 @@ The plugin only ever runs its own copy of the gate and never executes code from 
 - **Local hooks can be bypassed** with `--no-verify`. CI plus the ruleset can't.
 - **Code-owner review** means the lead can't approve their own PRs that change the gate. On one-person repos, use `protect --no-code-owners`.
 - **Rulesets aren't available for private repos on GitHub's free plan.** Use classic branch protection there.
-- **GitHub only for now.** CI tests it on Linux and macOS with Node 20, 22 and 24. Windows should work with Node and Git for Windows (Git Bash), but it isn't tested yet.
+- **GitHub only for now.**
+- **Linux and macOS only for now.** CI tests both with Node 20, 22 and 24. Windows isn't supported yet: an experimental workflow runs the tests there with Git Bash, and some of them fail. [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10) lists what fails and why.
