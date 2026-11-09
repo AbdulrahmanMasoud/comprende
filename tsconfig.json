@@ -16,7 +16,9 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "allowUnreachableCode": false,
-    "allowUnusedLabels": false
+    "allowUnusedLabels": false,
+    "allowJs": true,
+    "checkJs": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "tools/**/*.mjs"]
 }

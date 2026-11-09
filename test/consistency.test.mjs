@@ -57,6 +57,11 @@ test("manifests, hooks and the MCP config point at real files", () => {
   assert.ok(existsSync(join(REPO, "dist/server.mjs")));
 });
 
+test("the version files agree with the newest CHANGELOG entry", () => {
+  const r = sh(REPO, NODE, [join(REPO, "tools/release.mjs"), "check"], { check: false });
+  assert.equal(r.status, 0, r.stderr);
+});
+
 test("the gate imports nothing but node: built-ins", () => {
   const code = read("dist/gate.mjs").toString("utf8");
   const specs = [...code.matchAll(/^\s*import\b[^"'\n]*["']([^"']+)["']/gm)].map((m) => m[1]);
