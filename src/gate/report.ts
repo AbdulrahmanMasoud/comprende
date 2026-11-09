@@ -63,7 +63,9 @@ export function renderReport(data: Report & { branch: string; date: string; base
 
 function extractDataBlock(text: string): string | null {
   const after = text.split(DATA_MARKER).slice(1).join(DATA_MARKER);
-  const m = /```json\n([\s\S]*?)\n```/.exec(after);
+  // The gate writes LF, but a report checked out by git's core.autocrlf, or
+  // saved by an editor, on Windows has CRLF. JSON treats \r as whitespace.
+  const m = /```json\r?\n([\s\S]*?)\r?\n```/.exec(after);
   return m ? m[1] : null;
 }
 

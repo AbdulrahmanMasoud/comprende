@@ -24,10 +24,21 @@ node <plugin>/dist/gate.mjs install --repo . --owner @your-org/leads
 - `.github/workflows/ownership-check.yml`: the CI check
 - `.claude/settings.json`: a hook that stops Claude from pushing unverified code (other settings kept)
 - `.gitignore`: one line, `.learning/report.local.json`
+- `.gitattributes`: one line, `.learning/gate.mjs -text`, so git never rewrites the gate's line endings (on Windows, `core.autocrlf` would)
 - `.github/CODEOWNERS`: the gate's files need the lead's review (with `--owner`)
 - the local git `pre-push` hook
 
 **Teammates** with the plugin don't need to do anything: their first session in the repo installs their git hook. Teammates without the plugin run `node .learning/gate.mjs install-hooks` once per clone.
+
+### Upgrading the gate
+
+After the plugin updates, upgrade the repo's copy in its own PR:
+
+```bash
+node <plugin>/dist/gate.mjs install --upgrade --repo .
+```
+
+CI runs the base branch's gate. So when an upgrade brings something the older gate doesn't know yet, CI still checks the upgrade PR the old way. For example, the `.gitattributes` line from 0.2.1 counts as a change until the upgrade is merged: a one-line small change, so one question. Or use the skip label. The local checks follow the same rule, so they never pass what CI then fails.
 
 ## Make the check required
 

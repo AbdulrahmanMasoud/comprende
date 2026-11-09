@@ -164,6 +164,7 @@ test/                 node:test suites against real git repos, one file per topi
 tools/release.mjs     the version check and the release notes, for CI and releases
 docs/                 the longer docs, and the terminal demo (demo.tape, demo.gif)
 .github/              CI and release workflows, Dependabot, PR and issue templates
+.gitattributes        keeps dist/ and the skill's scripts byte for byte (no CRLF on Windows)
 CLAUDE.md             notes for Claude Code when working on this repo (incl. an end-to-end test plan)
 ```
 

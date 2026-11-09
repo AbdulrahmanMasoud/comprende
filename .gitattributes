@@ -1,0 +1,5 @@
+# The files the plugin runs, byte for byte on every platform. SessionStart
+# trusts a repo's .learning/gate.mjs only when it equals dist/gate.mjs byte for
+# byte, and git's core.autocrlf would otherwise check these out with CRLF on Windows.
+dist/** -text
+skills/comprende/scripts/** -text

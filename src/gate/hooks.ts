@@ -12,7 +12,7 @@ import { MAX_CONFIG_BYTES, readRepoFile } from "./files.js";
 import { git, repoRoot, resolveBase } from "./git.js";
 import { isPushCommand } from "./push-detect.js";
 import { uncommittedReport } from "./report.js";
-import { CONFIG_PATH, GATE_REL, GateError, SELF, splitLines, ZERO_SHA } from "./shared.js";
+import { CONFIG_PATH, GATE_ATTRIBUTES_LINE, GATE_REL, GateError, SELF, splitLines, ZERO_SHA } from "./shared.js";
 
 function projectHasGateHook(root: string): boolean {
   try {
@@ -79,6 +79,27 @@ export const ALWAYS_ON =
   "Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: " +
   "explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
 
+const withLfEndings = (bytes: Buffer) => Buffer.from(bytes.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
+
+export type GateCopyDifference = "none" | "repo-crlf" | "plugin-crlf" | "content";
+
+/** How a repo's gate.mjs differs from the plugin's: not at all, only in CRLF
+ *  line endings on one side (git's core.autocrlf on Windows), or in content.
+ *  Only "none" is trusted: the other answers just change what the user is told. */
+export function gateCopyDifference(repoCopy: Buffer, pluginCopy: Buffer): GateCopyDifference {
+  if (repoCopy.equals(pluginCopy)) return "none";
+  if (!withLfEndings(repoCopy).equals(withLfEndings(pluginCopy))) return "content";
+  return repoCopy.includes("\r\n") ? "repo-crlf" : "plugin-crlf";
+}
+
+// Why the pre-push hook wasn't installed automatically. Fixed text, like the
+// rest of the SessionStart context: nothing read from the repo goes into it.
+const UNTRUSTED_GATE_NOTE: Record<Exclude<GateCopyDifference, "none">, string> = {
+  content: `This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`,
+  "repo-crlf": `This repo's ${GATE_REL} differs from the plugin's copy only in its line endings: git's core.autocrlf checked it out with CRLF. The local pre-push hook trusts only a byte-identical copy, so it was NOT installed automatically. Tell the user in one line to run \`git -c core.autocrlf=false checkout -- ${GATE_REL}\`, then \`node ${GATE_REL} install\`, which adds \`${GATE_ATTRIBUTES_LINE}\` to .gitattributes so it stays that way.`,
+  "plugin-crlf": `The plugin's own copy of gate.mjs has CRLF line endings (git's core.autocrlf, in an install from before Comprende 0.2.1), so it differs from this repo's ${GATE_REL} only in its line endings, and the local pre-push hook was NOT installed automatically. Tell the user in one line to update the plugin: \`/plugin marketplace update comprende\`.`,
+};
+
 /** SessionStart hook (plugin). Never throws — a session must always start. */
 export function sessionStart(stdinText: string): Record<string, unknown> {
   const lines: string[] = [];
@@ -109,11 +130,9 @@ function gatedRepoContext(stdinText: string): string[] {
     if (process.env.OWNERSHIP_GATE_NO_AUTO_HOOK !== "1" && isFile(repoGate) && !isSymlink(repoGate)) {
       // The installed hook runs the repo's gate on every push. Only set that up
       // automatically when it's byte-identical to this (trusted) copy.
-      if (!SELF || !readFileSync(repoGate).equals(readFileSync(SELF))) {
-        lines.push(
-          `This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`,
-        );
-      } else {
+      const difference = SELF ? gateCopyDifference(readFileSync(repoGate), readFileSync(SELF)) : "content";
+      if (difference !== "none") lines.push(UNTRUSTED_GATE_NOTE[difference]);
+      else {
         const result = installHooks(root, true)[0];
         if (result.startsWith("installed") || result.startsWith("re-pinned")) {
           lines.push(

@@ -15,6 +15,9 @@ import { StoreError } from "./store/common.js";
 import { EVENTS, progressReport, recordCheckpoint, recordTopic, setPreference } from "./store/profile.js";
 import { addDecision, learningContext, searchDecisions, updateMap } from "./store/project.js";
 
+// package.json's version, set by build.mjs, so the server can't report a stale one.
+declare const COMPRENDE_VERSION: string;
+
 const INSTRUCTIONS = `\
 Memory for explaining code while building it. It remembers what the user
 already knows (across all their projects) and, per project, a short map and
@@ -332,7 +335,7 @@ const TOOLS: Record<string, Tool> = {
 };
 
 function buildServer(): McpServer {
-  const server = new McpServer({ name: "comprende", version: "0.2.0" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "comprende", version: COMPRENDE_VERSION }, { instructions: INSTRUCTIONS });
   for (const [name, t] of Object.entries(TOOLS)) {
     server.registerTool(
       name,

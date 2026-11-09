@@ -227,3 +227,11 @@ test("the shared test fixtures are usable", () => {
   assert.ok(SUMMARY.length >= 80);
   assert.ok(NODE);
 });
+
+test("dist/ and the skill's scripts are checked out byte for byte, whatever core.autocrlf says", () => {
+  // SessionStart trusts .learning/gate.mjs only when it equals dist/gate.mjs byte for byte.
+  const built = git(REPO, "ls-files", "dist", "skills/comprende/scripts").stdout.trim().split("\n");
+  assert.ok(built.includes("dist/gate.mjs") && built.includes("skills/comprende/scripts/gate.mjs"), built.join(", "));
+  const attrs = git(REPO, "check-attr", "text", "--", ...built).stdout;
+  for (const file of built) assert.ok(attrs.includes(`${file}: text: unset`), attrs);
+});

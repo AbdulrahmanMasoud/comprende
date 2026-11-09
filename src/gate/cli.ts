@@ -17,6 +17,7 @@ import { collectChanges, isPlumbing } from "./changes.js";
 import { annotate, escapeMarkdown, jobSummary } from "./ci-summary.js";
 import { deleteReportInputFile, formatStatus, save, status, verify } from "./commands.js";
 import { type Config, isSensitive } from "./config.js";
+import { samePath } from "./files.js";
 import { currentBranch, repoRoot } from "./git.js";
 import { ALWAYS_ON, claudeHook, installHooks, prePush, sessionStart } from "./hooks.js";
 import { isPushCommand } from "./push-detect.js";
@@ -133,6 +134,8 @@ function testCall(fn: string, a: unknown[]): unknown {
       return renderReport(a[0] as Parameters<typeof renderReport>[0]);
     case "parse_report":
       return parseReport(String(a[0]));
+    case "same_path":
+      return samePath(String(a[0]), String(a[1]), String(a[2]));
     default:
       throw new GateError(`unknown test function ${fn}`);
   }

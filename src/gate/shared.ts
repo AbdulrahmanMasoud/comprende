@@ -4,9 +4,11 @@ import { fileURLToPath } from "node:url";
 export const GATE_VERSION = 3;
 
 // What this gate accepts beyond its version, written into the bundle's header
-// by build.mjs. A gate only offers a feature locally when the base branch's
-// copy (the one CI runs) lists it too.
-export const GATE_FEATURES = "small-change";
+// by build.mjs. A gate only offers a feature locally when the copy CI runs
+// lists it too (see features.ts).
+// - small-change: the fast path for small changes
+// - gitattributes: install's one .gitattributes line (GATE_ATTRIBUTES_LINE) needs no report
+export const GATE_FEATURES = "small-change gitattributes";
 
 const LEARNING = ".learning";
 
@@ -20,6 +22,11 @@ export const GATE_REL = `${LEARNING}/gate.mjs`;
 // plumbing at exactly this path, install adds it to .gitignore, and a
 // successful save deletes it.
 export const REPORT_INPUT = `${LEARNING}/report.local.json`;
+
+// The .gitattributes line install adds. Without it, git's core.autocrlf checks
+// gate.mjs out with CRLF on Windows, and the copy is then never byte-identical
+// to the plugin's, so SessionStart can't trust it and installs no pre-push hook.
+export const GATE_ATTRIBUTES_LINE = `${GATE_REL} -text`;
 
 export const ZERO_SHA = "0".repeat(40);
 

@@ -29,7 +29,8 @@ actionlint                        # the GitHub workflows
 - `.mcp.json`: the `comprende` MCP server (`dist/server.mjs`)
 - `skills/comprende/SKILL.md` plus `references/` (signals, formats, examples, memory, ownership-check)
 - `src/gate/`: the ownership gate, bundled into `dist/gate.mjs` from `cli.ts`. One module per concern, each with a header saying what it owns:
-  - `shared.ts` (names, paths, version and features), `files.ts` (safe reads and writes), `glob.ts` (Comprende's glob rules)
+  - `shared.ts` (names, paths, version and features), `files.ts` (safe reads and writes, real paths), `glob.ts` (Comprende's glob rules)
+  - `features.ts` (a gate's header, and what the gate CI runs knows), `install-lines.ts` (install's `.gitignore` and `.gitattributes` lines)
   - `git.ts` (safe git runner, temp index, inert repo config), `config.ts` (config, validation, rules from the base)
   - `changes.ts` (fingerprints, plumbing, 3-way replay, states, small changes), `report.ts` (the report file)
   - `commands.ts` (status, save, verify), `push-detect.ts`, `hooks.ts`, `setup.ts` (install, protect), `ci-summary.ts`, `cli.ts`
@@ -47,6 +48,7 @@ actionlint                        # the GitHub workflows
 - `tools/release.mjs`: the version check and the release notes, for both workflows
 - `CONTRIBUTING.md`: setup, the workflow, the code rules, layout, tests, the demo, releasing
 - `biome.json`: formatting and lint (Markdown is left alone). `build.mjs`: the bundler.
+- `.gitattributes`: keeps `dist/` and `skills/comprende/scripts/` byte for byte on every platform, since SessionStart compares the repo's `gate.mjs` with `dist/gate.mjs` byte for byte
 
 ## Rules that must not break
 
@@ -107,7 +109,7 @@ The code must stay easy for a new contributor to read and change. These rules ap
 
 Code written before these rules doesn't follow all of them yet. Don't make it worse, and fix it in its own `chore/` PR, not inside a feature:
 
-- `server.ts` (389 lines), `changes.ts` (322) and `setup.ts` (313) are past ~300 lines. Split a file before adding to it.
+- `server.ts` (389 lines) and `setup.ts` (310) are past ~300 lines. Split a file before adding to it.
 - The Claude Code and GitHub code still lives in `hooks.ts`, `setup.ts` and `ci-summary.ts`. It moves behind the adapter interfaces with the Cursor ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)) and GitLab ([#4](https://github.com/AbdulrahmanMasoud/comprende/issues/4)) work, which also starts `test/fixtures/`.
 - Biome doesn't flag non-null assertions yet ([#6](https://github.com/AbdulrahmanMasoud/comprende/issues/6)).
 

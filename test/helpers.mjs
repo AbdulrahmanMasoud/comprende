@@ -136,6 +136,7 @@ export const gate = {
   mdSafe: (text) => testFn("md_safe", text),
   renderReport: (data) => testFn("render_report", data),
   parseReport: (text) => testFn("parse_report", text),
+  samePath: (a, b, platform) => testFn("same_path", a, b, platform),
   const: (name) => testFn(name),
 };
 

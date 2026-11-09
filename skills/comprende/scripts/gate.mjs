@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Generated from src/gate/ by build.mjs. Edit the source, then run `npm run build`.
 // ownership-gate-version: 3
-// ownership-gate-features: small-change
+// ownership-gate-features: small-change gitattributes
 
 // src/gate/cli.ts
-import { appendFileSync, readFileSync as readFileSync3, readSync as readSync2 } from "node:fs";
+import { appendFileSync, readFileSync as readFileSync4, readSync as readSync2 } from "node:fs";
 
 // src/util.ts
 import { lstatSync, statSync } from "node:fs";
@@ -36,7 +36,7 @@ var isFile = (p) => {
 // src/gate/changes.ts
 import { mkdtempSync as mkdtempSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import { join as join4 } from "node:path";
+import { join as join6 } from "node:path";
 
 // src/gate/config.ts
 import { join as join3 } from "node:path";
@@ -48,6 +48,7 @@ import {
   mkdirSync,
   openSync,
   readSync,
+  realpathSync,
   renameSync,
   statSync as statSync2,
   unlinkSync,
@@ -63,6 +64,7 @@ var CHECKS_DIR = `${LEARNING}/checks`;
 var CONFIG_PATH = `${LEARNING}/config.json`;
 var GATE_REL = `${LEARNING}/gate.mjs`;
 var REPORT_INPUT = `${LEARNING}/report.local.json`;
+var GATE_ATTRIBUTES_LINE = `${GATE_REL} -text`;
 var ZERO_SHA = "0".repeat(40);
 var REGULAR_MODES = ["100644", "100755"];
 var GATE_FILES = [
@@ -93,6 +95,7 @@ var FEATURES_RE = /^\/\/ ownership-gate-features: (.*)$/m;
 // src/gate/files.ts
 var MAX_CONFIG_BYTES = 256 * 1024;
 var MAX_REPORT_BYTES = 4 * 1024 * 1024;
+var MAX_GATE_BYTES = 8 * 1024 * 1024;
 function readRepoFile(path, limit) {
   const st = lstat(path);
   if (!st || st.isSymbolicLink() || !st.isFile())
@@ -134,6 +137,10 @@ function atomicWrite(path, content) {
     }
     throw e;
   }
+}
+var realPath = (path) => realpathSync.native(path);
+function samePath(a, b, platform = process.platform) {
+  return platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
 // src/gate/git.ts
@@ -498,24 +505,69 @@ function isSensitive(path, mode, cfg) {
 }
 var needsNoQuestions = (path, mode, cfg) => matches(path, cfg.ignore) && !isSensitive(path, mode, cfg);
 
+// src/gate/features.ts
+import { join as join4 } from "node:path";
+function gateHeader(root, rev) {
+  try {
+    if (rev === null) return readRepoFile(join4(root, GATE_REL), MAX_GATE_BYTES).slice(0, 4096);
+    if (!revHasFile(root, rev, GATE_REL)) return "";
+    return readFileAtRev(root, rev, GATE_REL, MAX_GATE_BYTES).slice(0, 4096);
+  } catch {
+    return "";
+  }
+}
+function ciGateHasFeature(root, baseRef, rev, feature) {
+  const header = revHasFile(root, baseRef, GATE_REL) ? gateHeader(root, baseRef) : gateHeader(root, rev);
+  return (FEATURES_RE.exec(header)?.[1] ?? "").trim().split(/\s+/).includes(feature);
+}
+
+// src/gate/install-lines.ts
+import { readFileSync } from "node:fs";
+import { join as join5 } from "node:path";
+var INSTALL_LINES = [
+  { file: ".gitignore", line: REPORT_INPUT },
+  { file: ".gitattributes", line: GATE_ATTRIBUTES_LINE, feature: "gitattributes" }
+];
+function withLine(text, line) {
+  const sep2 = text.length && text[text.length - 1] !== 10 ? "\n" : "";
+  return Buffer.concat([text, Buffer.from(`${sep2}${line}
+`)]);
+}
+function addInstallLine(root, file, line) {
+  const path = join5(root, file);
+  const st = lstat(path);
+  if (st && (st.isSymbolicLink() || !st.isFile()))
+    return `SKIPPED ${file}: not a regular file; add ${line} to it by hand.`;
+  let text = Buffer.alloc(0);
+  if (st) {
+    try {
+      text = Buffer.from(readRepoFile(path, MAX_CONFIG_BYTES), "utf8");
+      if (!text.equals(readFileSync(path))) throw new GateError("it isn't valid UTF-8");
+    } catch (e) {
+      return `SKIPPED ${file}: ${e.message}; add ${line} to it by hand.`;
+    }
+  }
+  const sameLine = (l) => l.trim().replace(/^\//, "").split(/\s+/).join(" ") === line;
+  if (splitLines(text.toString("utf8")).some(sameLine)) return `${file} already has ${line}`;
+  atomicWrite(path, withLine(text, line).toString("utf8"));
+  return `added ${line} to ${file}`;
+}
+function isInstallLineEdit(root, path, c, ciGateHas) {
+  const edit = INSTALL_LINES.find((e) => e.file === path);
+  if (!edit || c.mode !== "100644") return false;
+  if (edit.feature && !ciGateHas(edit.feature)) return false;
+  const before = c.base === ZERO_SHA ? Buffer.alloc(0) : c.base_mode === "100644" ? readBlob(root, c.base) : null;
+  const after = readBlob(root, c.blob);
+  if (!before || !after) return false;
+  return after.equals(withLine(before, edit.line));
+}
+
 // src/gate/changes.ts
 var PLUMBING_RE = /^\.learning\/(checks\/[^/]+\.md|decisions\/[^/]+\.md|map\.md|[^/]+\.local\.md)$/;
 function isPlumbing(path, mode = "100644") {
   if (GATE_FILES.includes(path)) return true;
   if (path === REPORT_INPUT) return mode === "100644";
   return PLUMBING_RE.test(path) && (mode === "100644" || mode === "000000");
-}
-function isReportIgnoreEdit(root, path, c) {
-  if (path !== ".gitignore" || c.mode !== "100644") return false;
-  const before = c.base === ZERO_SHA ? Buffer.alloc(0) : c.base_mode === "100644" ? readBlob(root, c.base) : null;
-  const after = readBlob(root, c.blob);
-  if (!before || !after) return false;
-  return after.equals(withIgnoreLine(before));
-}
-function withIgnoreLine(text) {
-  const sep2 = text.length && text[text.length - 1] !== 10 ? "\n" : "";
-  return Buffer.concat([text, Buffer.from(`${sep2}${REPORT_INPUT}
-`)]);
 }
 function collectChanges(root, base, rev) {
   const target = rev || "HEAD";
@@ -536,6 +588,7 @@ function collectChanges(root, base, rev) {
   }
   const fields = splitNul(raw);
   const changes = dict();
+  const ciGateHas = (feature) => ciGateHasFeature(root, base, rev ?? null, feature);
   let i = 0;
   while (i < fields.length - 1) {
     const meta = fields[i].toString("latin1");
@@ -547,19 +600,19 @@ function collectChanges(root, base, rev) {
     const path = decodePath(fields[i + 1]);
     i += 2;
     const change = { mode: newmode, blob: newsha, base: oldsha, base_mode: oldmode };
-    if (!isPlumbing(path, newmode) && !isReportIgnoreEdit(root, path, change)) changes[path] = change;
+    if (!isPlumbing(path, newmode) && !isInstallLineEdit(root, path, change, ciGateHas)) changes[path] = change;
   }
   return [Object.fromEntries(sorted(Object.keys(changes)).map((k) => [k, changes[k]])), untracked, mb];
 }
 function threeWayMerge(ours, base, theirs) {
-  const dir = mkdtempSync2(join4(tmpdir2(), "ownership-gate-merge-"));
+  const dir = mkdtempSync2(join6(tmpdir2(), "ownership-gate-merge-"));
   try {
     const paths = [
       ["ours", ours],
       ["base", base],
       ["theirs", theirs]
     ].map(([name, data]) => {
-      const p = join4(dir, name);
+      const p = join6(dir, name);
       writeFileSync2(p, data);
       return p;
     });
@@ -623,15 +676,6 @@ function needsVerification(changes, st, old, cfg) {
   }
   return out;
 }
-function baseGateHasFeature(root, baseRef, feature) {
-  if (!revHasFile(root, baseRef, GATE_REL)) return false;
-  try {
-    const head = readFileAtRev(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
-    return (FEATURES_RE.exec(head)?.[1] ?? "").trim().split(/\s+/).includes(feature);
-  } catch {
-    return false;
-  }
-}
 function changedLines(root, mb, rev, paths) {
   const args = [
     "diff",
@@ -665,7 +709,7 @@ function smallChange(root, baseRef, mb, rev, changes, cfg) {
   const counted = new Set(entries.filter(([p]) => !matches(p, cfg.ignore)).map(([p]) => p));
   const lines = changedLines(root, mb, rev, counted);
   if (lines === null || lines > cfg.small_change_lines) return no(lines);
-  if (!baseGateHasFeature(root, baseRef, "small-change")) {
+  if (!ciGateHasFeature(root, baseRef, rev, "small-change")) {
     return no(
       lines,
       `This would count as a small change (${changedLinesText(lines)}), but the base branch's gate predates the fast path, so CI would ask for the full check. Upgrade it with \`gate.mjs install --upgrade\` in its own PR.`
@@ -675,7 +719,7 @@ function smallChange(root, baseRef, mb, rev, changes, cfg) {
 }
 
 // src/gate/report.ts
-import { join as join5 } from "node:path";
+import { join as join7 } from "node:path";
 var DATA_MARKER = "<!-- ownership-data: generated by the ownership gate; do not edit by hand -->";
 function sortedKeysJson(value, indent) {
   const sortDeep = (v) => Array.isArray(v) ? v.map(sortDeep) : isRecord(v) ? Object.fromEntries(sorted(Object.keys(v)).map((k) => [k, sortDeep(v[k])])) : v;
@@ -708,7 +752,7 @@ function renderReport(data) {
 }
 function extractDataBlock(text) {
   const after = text.split(DATA_MARKER).slice(1).join(DATA_MARKER);
-  const m = /```json\n([\s\S]*?)\n```/.exec(after);
+  const m = /```json\r?\n([\s\S]*?)\r?\n```/.exec(after);
   return m ? m[1] : null;
 }
 function parseReport(text) {
@@ -742,7 +786,7 @@ function readReport(root, branch, rev) {
     if (!revHasFile(root, rev, rel)) return null;
     return parseReport(readFileAtRev(root, rev, rel, MAX_REPORT_BYTES));
   }
-  const path = join5(root, rel);
+  const path = join7(root, rel);
   return lstat(path) ? parseReport(readRepoFile(path, MAX_REPORT_BYTES)) : null;
 }
 var unusableReport = (e) => [
@@ -769,7 +813,7 @@ function parseReportLeniently(text) {
 }
 function previousReport(root, branch, baseRef) {
   const rel = reportPath(branch);
-  const path = join5(root, rel);
+  const path = join7(root, rel);
   if (lstat(path)) {
     try {
       return parseReportLeniently(readRepoFile(path, MAX_REPORT_BYTES));
@@ -793,7 +837,7 @@ function previousReport(root, branch, baseRef) {
 function uncommittedReport(root) {
   try {
     const rel = reportPath(currentBranch(root));
-    const saved = sortedKeysJson(parseReport(readRepoFile(join5(root, rel), MAX_REPORT_BYTES)));
+    const saved = sortedKeysJson(parseReport(readRepoFile(join7(root, rel), MAX_REPORT_BYTES)));
     if (!revHasFile(root, "HEAD", rel)) return rel;
     let committed = null;
     try {
@@ -872,8 +916,8 @@ function annotate(kind, messages) {
 }
 
 // src/gate/commands.ts
-import { existsSync as existsSync2, realpathSync, unlinkSync as unlinkSync2 } from "node:fs";
-import { basename as basename2, dirname as dirname3, join as join6, resolve as resolve2 } from "node:path";
+import { existsSync as existsSync2, unlinkSync as unlinkSync2 } from "node:fs";
+import { basename as basename2, dirname as dirname3, join as join8, resolve as resolve2 } from "node:path";
 var CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
 var BLANK = "[\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
 var BLANK_ENDS = new RegExp(`^${BLANK}+|${BLANK}+$`, "gu");
@@ -902,27 +946,15 @@ function status(repo, base, branch) {
       "Some verified files were rebased: save the report again (no new questions needed), or CI won't be able to match them."
     );
   }
-  const localGate = join6(root, GATE_REL);
-  if (isFile(localGate) && !isSymlink(localGate)) {
-    let head = "";
-    try {
-      head = readRepoFile(localGate, 8 * 1024 * 1024).slice(0, 4096);
-    } catch {
-    }
-    const v = VERSION_RE.exec(head);
-    if (v && Number(v[1]) !== GATE_VERSION) {
-      notes.push(
-        `This repo's ${GATE_REL} is v${v[1]} but the running gate is v${GATE_VERSION}. CI runs the base branch's copy, so update whichever is older (the plugin, or \`gate.mjs install --upgrade\` in a PR).`
-      );
-    }
+  const localGate = join8(root, GATE_REL);
+  const localVersion = VERSION_RE.exec(gateHeader(root, null));
+  if (localVersion && Number(localVersion[1]) !== GATE_VERSION) {
+    notes.push(
+      `This repo's ${GATE_REL} is v${localVersion[1]} but the running gate is v${GATE_VERSION}. CI runs the base branch's copy, so update whichever is older (the plugin, or \`gate.mjs install --upgrade\` in a PR).`
+    );
   }
-  if (existsSync2(localGate) && revHasFile(root, baseRef, GATE_REL)) {
-    let head = "";
-    try {
-      head = readFileAtRev(root, baseRef, GATE_REL, 8 * 1024 * 1024).slice(0, 4096);
-    } catch {
-    }
-    const v = VERSION_RE.exec(head);
+  if (existsSync2(localGate)) {
+    const v = VERSION_RE.exec(gateHeader(root, baseRef));
     if (v && Number(v[1]) !== GATE_VERSION) {
       notes.push(
         `The base branch runs gate v${v[1]} but this one is v${GATE_VERSION}: merge the base branch first, or CI will reject the report.`
@@ -1012,7 +1044,7 @@ function save(payload, repo, base, branch) {
     throw new GateError("No verified files \u2014 the check needs at least one area the developer explained.");
   const data = { version: GATE_VERSION, branch: br, base: baseRef, date: today(), summary, verified, files: changes };
   const rel = reportPath(br);
-  atomicWrite(join6(root, rel), renderReport(data));
+  atomicWrite(join8(root, rel), renderReport(data));
   const extra = sorted([...untracked].filter((p) => own(changes, p)));
   const note = extra.length ? ` Untracked files included: ${extra.join(", ")} \u2014 commit them too, or they'll show as changed.` : "";
   const n = Object.keys(changes).length;
@@ -1055,8 +1087,8 @@ function verify(repo, base, branch, rev = "HEAD", labels = []) {
 function deleteReportInputFile(input, repo) {
   try {
     const abs = resolve2(input);
-    const root = realpathSync(repoRoot(repo));
-    if (join6(realpathSync(dirname3(abs)), basename2(abs)) !== join6(root, REPORT_INPUT)) return "";
+    const expected = join8(realPath(repoRoot(repo)), REPORT_INPUT);
+    if (!samePath(join8(realPath(dirname3(abs)), basename2(abs)), expected)) return "";
     unlinkSync2(abs);
     return ` Removed ${REPORT_INPUT}.`;
   } catch {
@@ -1066,9 +1098,9 @@ function deleteReportInputFile(input, repo) {
 
 // src/gate/hooks.ts
 import { createHash } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync, realpathSync as realpathSync2, writeFileSync as writeFileSync3 } from "node:fs";
+import { chmodSync as chmodSync2, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync2, realpathSync as realpathSync2, writeFileSync as writeFileSync3 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { isAbsolute as isAbsolute2, join as join7, relative, resolve as resolve3, sep } from "node:path";
+import { isAbsolute as isAbsolute2, join as join9, relative, resolve as resolve3, sep } from "node:path";
 
 // src/gate/push-detect.ts
 var WRAPPERS = /* @__PURE__ */ new Set(["sudo", "doas", "env", "command", "builtin", "exec", "time", "nohup", "nice", "stdbuf"]);
@@ -1191,7 +1223,7 @@ function isPushCommand(command, depth = 0) {
 // src/gate/hooks.ts
 function projectHasGateHook(root) {
   try {
-    const settings = JSON.parse(readRepoFile(join7(root, ".claude", "settings.json"), MAX_CONFIG_BYTES));
+    const settings = JSON.parse(readRepoFile(join9(root, ".claude", "settings.json"), MAX_CONFIG_BYTES));
     const groups = settings?.hooks?.PreToolUse ?? [];
     return groups.some(
       (g) => (g.hooks ?? []).some((h) => (h.command ?? "").includes("gate.mjs") && (h.command ?? "").includes("claude-hook"))
@@ -1207,7 +1239,7 @@ function claudeHook(stdinText, fromPlugin = false) {
     const command = String(payload?.tool_input?.command ?? "");
     if ((payload?.tool_name ?? "Bash") !== "Bash" || !isPushCommand(command)) return 0;
     root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
-    if (!lstat(join7(root, CONFIG_PATH))) return 0;
+    if (!lstat(join9(root, CONFIG_PATH))) return 0;
     if (fromPlugin && projectHasGateHook(root)) return 0;
   } catch {
     return 0;
@@ -1236,6 +1268,17 @@ function claudeHook(stdinText, fromPlugin = false) {
 var MIN_NODE = 20;
 var NODE_NOTE = "Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.";
 var ALWAYS_ON = "Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
+var withLfEndings = (bytes) => Buffer.from(bytes.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
+function gateCopyDifference(repoCopy, pluginCopy) {
+  if (repoCopy.equals(pluginCopy)) return "none";
+  if (!withLfEndings(repoCopy).equals(withLfEndings(pluginCopy))) return "content";
+  return repoCopy.includes("\r\n") ? "repo-crlf" : "plugin-crlf";
+}
+var UNTRUSTED_GATE_NOTE = {
+  content: `This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`,
+  "repo-crlf": `This repo's ${GATE_REL} differs from the plugin's copy only in its line endings: git's core.autocrlf checked it out with CRLF. The local pre-push hook trusts only a byte-identical copy, so it was NOT installed automatically. Tell the user in one line to run \`git -c core.autocrlf=false checkout -- ${GATE_REL}\`, then \`node ${GATE_REL} install\`, which adds \`${GATE_ATTRIBUTES_LINE}\` to .gitattributes so it stays that way.`,
+  "plugin-crlf": `The plugin's own copy of gate.mjs has CRLF line endings (git's core.autocrlf, in an install from before Comprende 0.2.1), so it differs from this repo's ${GATE_REL} only in its line endings, and the local pre-push hook was NOT installed automatically. Tell the user in one line to update the plugin: \`/plugin marketplace update comprende\`.`
+};
 function sessionStart(stdinText) {
   const lines = [];
   const node = process.versions.node;
@@ -1249,19 +1292,17 @@ function gatedRepoContext(stdinText) {
   try {
     const payload = JSON.parse(stdinText || "{}");
     const root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
-    if (!lstat(join7(root, CONFIG_PATH))) return [];
+    if (!lstat(join9(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];
     const lines = [
       `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`
     ];
-    const repoGate = join7(root, GATE_REL);
+    const repoGate = join9(root, GATE_REL);
     if (process.env.OWNERSHIP_GATE_NO_AUTO_HOOK !== "1" && isFile(repoGate) && !isSymlink(repoGate)) {
-      if (!SELF || !readFileSync(repoGate).equals(readFileSync(SELF))) {
-        lines.push(
-          `This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`
-        );
-      } else {
+      const difference = SELF ? gateCopyDifference(readFileSync2(repoGate), readFileSync2(SELF)) : "content";
+      if (difference !== "none") lines.push(UNTRUSTED_GATE_NOTE[difference]);
+      else {
         const result = installHooks(root, true)[0];
         if (result.startsWith("installed") || result.startsWith("re-pinned")) {
           lines.push(
@@ -1336,17 +1377,17 @@ await import("data:text/javascript;base64," + code.toString("base64"));
 `;
 function installHooks(repo, auto = false) {
   const root = repoRoot(repo);
-  const gateFile = join7(root, GATE_REL);
+  const gateFile = join9(root, GATE_REL);
   if (isSymlink(gateFile) || !isFile(gateFile))
     return [`SKIPPED pre-push hook: ${GATE_REL} is missing or not a regular file.`];
-  const pin = createHash("sha256").update(readFileSync(gateFile)).digest("hex");
+  const pin = createHash("sha256").update(readFileSync2(gateFile)).digest("hex");
   let hooksDir = git(root, ["rev-parse", "--git-path", "hooks"]).trim();
-  if (!isAbsolute2(hooksDir)) hooksDir = join7(root, hooksDir);
+  if (!isAbsolute2(hooksDir)) hooksDir = join9(root, hooksDir);
   const manualLine = `node "$(git rev-parse --show-toplevel)/${GATE_REL}" pre-push "$@" || exit 1`;
   const configured = git(root, ["config", "--get", "core.hooksPath"], { check: false }).trim();
   if (configured) {
     const expanded = configured.replace(/^~(?=$|[/\\])/, homedir2());
-    let custom = resolve3(isAbsolute2(expanded) ? expanded : join7(root, expanded));
+    let custom = resolve3(isAbsolute2(expanded) ? expanded : join9(root, expanded));
     try {
       custom = realpathSync2(custom);
     } catch {
@@ -1364,11 +1405,11 @@ function installHooks(repo, auto = false) {
     }
     hooksDir = custom;
   }
-  const hook = join7(hooksDir, "pre-push");
+  const hook = join9(hooksDir, "pre-push");
   if (isSymlink(hook)) return [`SKIPPED pre-push hook: ${hook} is a symlink.`];
   let verb = "installed";
   if (existsSync3(hook)) {
-    const text = readFileSync(hook, "utf8");
+    const text = readFileSync2(hook, "utf8");
     if (!text.includes("comprende ownership gate"))
       return [`SKIPPED pre-push hook: ${hook} already exists. Add this line to it: ${manualLine}`];
     if (text.includes(`pinned-sha256: ${pin}`)) return [`pre-push hook already installed (${hook})`];
@@ -1381,8 +1422,8 @@ function installHooks(repo, auto = false) {
 }
 
 // src/gate/setup.ts
-import { chmodSync as chmodSync3, copyFileSync as copyFileSync2, existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync2 } from "node:fs";
-import { dirname as dirname4, join as join8, resolve as resolve4 } from "node:path";
+import { chmodSync as chmodSync3, copyFileSync as copyFileSync2, existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync3 } from "node:fs";
+import { dirname as dirname4, join as join10, resolve as resolve4 } from "node:path";
 var WORKFLOW = `name: Ownership check
 
 on:
@@ -1563,26 +1604,13 @@ function mergeClaudeSettings(path) {
 `);
   return `merged a Claude Code PreToolUse hook into ${path} (other settings kept)`;
 }
-function ignoreReportInput(root) {
-  const path = join8(root, ".gitignore");
-  const st = lstat(path);
-  if (st && (st.isSymbolicLink() || !st.isFile()))
-    return `SKIPPED .gitignore: not a regular file; add ${REPORT_INPUT} to it by hand.`;
-  let text = Buffer.alloc(0);
-  if (st) {
-    try {
-      text = Buffer.from(readRepoFile(path, MAX_CONFIG_BYTES), "utf8");
-      if (!text.equals(readFileSync2(path))) throw new GateError("it isn't valid UTF-8");
-    } catch (e) {
-      return `SKIPPED .gitignore: ${e.message}; add ${REPORT_INPUT} to it by hand.`;
-    }
-  }
-  if (splitLines(text.toString("utf8")).some((l) => [REPORT_INPUT, `/${REPORT_INPUT}`].includes(l.trim()))) {
-    return `.gitignore already ignores ${REPORT_INPUT}`;
-  }
-  atomicWrite(path, withIgnoreLine(text).toString("utf8"));
-  return `added ${REPORT_INPUT} to .gitignore`;
-}
+var EXISTING_GATE_NOTE = {
+  none: "up to date",
+  "repo-crlf": `differs only in its CRLF line endings (git's core.autocrlf): run \`git -c core.autocrlf=false checkout -- ${GATE_REL}\`, and the .gitattributes line keeps it byte for byte from then on`,
+  // --upgrade would copy those CRLF line endings into the repo.
+  "plugin-crlf": "matches, apart from this gate's own CRLF line endings (git's core.autocrlf): update the plugin instead of using --upgrade",
+  content: "exists (pass --upgrade to replace)"
+};
 function setUpCodeowners(root, owner) {
   const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
   if (!owner) {
@@ -1590,8 +1618,8 @@ function setUpCodeowners(root, owner) {
   }
   if (!/^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/.test(owner))
     throw new GateError(`--owner must be a GitHub @user, @org/team, or an email; got ${JSON.stringify(owner)}.`);
-  const path = join8(root, ".github", "CODEOWNERS");
-  const existing = existsSync4(path) ? readFileSync2(path, "utf8") : "";
+  const path = join10(root, ".github", "CODEOWNERS");
+  const existing = existsSync4(path) ? readFileSync3(path, "utf8") : "";
   const have = new Set(
     splitLines(existing).filter((l) => l.trim() && !l.trimStart().startsWith("#")).map((l) => l.trim().split(/\s+/)[0])
   );
@@ -1610,19 +1638,18 @@ ${fresh.join("\n")}
 function install(repo, upgrade = false, owner) {
   const root = repoRoot(repo);
   const done = [];
-  const target = join8(root, GATE_REL);
+  const target = join10(root, GATE_REL);
   if (!SELF) throw new GateError("Can't locate this gate's own file to install it.");
   if (existsSync4(target) && resolve4(target) === resolve4(SELF)) done.push(`${GATE_REL} is this file`);
   else if (existsSync4(target) && !upgrade) {
-    const same = readFileSync2(target).equals(readFileSync2(SELF));
-    done.push(`${GATE_REL} ${same ? "up to date" : "exists (pass --upgrade to replace)"}`);
+    done.push(`${GATE_REL} ${EXISTING_GATE_NOTE[gateCopyDifference(readFileSync3(target), readFileSync3(SELF))]}`);
   } else {
     mkdirSync3(dirname4(target), { recursive: true });
     copyFileSync2(SELF, target);
     chmodSync3(target, 493);
     done.push(`wrote ${GATE_REL}`);
   }
-  const cfgPath = join8(root, CONFIG_PATH);
+  const cfgPath = join10(root, CONFIG_PATH);
   if (existsSync4(cfgPath)) done.push(`${CONFIG_PATH} exists (kept)`);
   else {
     const cfg = { ...DEFAULT_CONFIG };
@@ -1636,15 +1663,15 @@ function install(repo, upgrade = false, owner) {
 `);
     done.push(`wrote ${CONFIG_PATH} (base: ${cfg.base}, mode: required)`);
   }
-  const wf = join8(root, ".github", "workflows", "ownership-check.yml");
+  const wf = join10(root, ".github", "workflows", "ownership-check.yml");
   const wfRel = ".github/workflows/ownership-check.yml";
   if (existsSync4(wf)) done.push(`${wfRel} exists (kept)`);
   else {
     atomicWrite(wf, WORKFLOW);
     done.push(`wrote ${wfRel}`);
   }
-  done.push(mergeClaudeSettings(join8(root, ".claude", "settings.json")));
-  done.push(ignoreReportInput(root));
+  done.push(mergeClaudeSettings(join10(root, ".claude", "settings.json")));
+  for (const { file, line } of INSTALL_LINES) done.push(addInstallLine(root, file, line));
   done.push(...installHooks(root));
   done.push(
     `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch \u2014 without it CI only warns.`
@@ -1751,6 +1778,8 @@ function testCall(fn, a) {
       return renderReport(a[0]);
     case "parse_report":
       return parseReport(String(a[0]));
+    case "same_path":
+      return samePath(String(a[0]), String(a[1]), String(a[2]));
     default:
       throw new GateError(`unknown test function ${fn}`);
   }
@@ -1786,7 +1815,7 @@ ${HELP}`);
         return 0;
       }
       case "save": {
-        const raw = o("input") ? readFileSync3(o("input"), "utf8") : readStdin();
+        const raw = o("input") ? readFileSync4(o("input"), "utf8") : readStdin();
         let payload;
         try {
           payload = JSON.parse(raw);

@@ -21,6 +21,8 @@ import {
   git,
   gitTry,
   INPUT,
+  NODE,
+  REPO,
   REPO_GATE,
   read,
   setup,
@@ -172,7 +174,7 @@ test("install adds report.local.json to .gitignore once and keeps its lines", (t
   writeFileSync(join(dev, ".gitignore"), "node_modules/\n*.log"); // no trailing newline
   assert.ok(gate.install(dev).includes(`added ${INPUT} to .gitignore`));
   assert.equal(read(dev, ".gitignore"), `node_modules/\n*.log\n${INPUT}\n`);
-  assert.ok(gate.install(dev).includes(`.gitignore already ignores ${INPUT}`));
+  assert.ok(gate.install(dev).includes(`.gitignore already has ${INPUT}`));
   assert.equal(read(dev, ".gitignore"), `node_modules/\n*.log\n${INPUT}\n`);
 });
 
@@ -286,4 +288,73 @@ test("protect without the GitHub CLI says it's needed", (t) => {
   symlinkSync(which("git"), join(onlyGit, "git"));
   // gateCli runs process.execPath directly, so node itself is still found.
   throwsGate(() => gate.protect(dev, { approvals: 1 }, { ...ENV, PATH: onlyGit }), /GitHub CLI/);
+});
+
+test("install keeps .learning/gate.mjs byte for byte with one .gitattributes line, added once", (t) => {
+  const dir = tmp(t);
+  const repo = join(dir, "r");
+  git(dir, "init", "-q", "-b", "main", repo);
+  write(repo, ".gitattributes", "*.png binary\n*.sh text eol=lf"); // no final newline
+  const kept = "*.png binary\n*.sh text eol=lf\n.learning/gate.mjs -text\n";
+  assert.ok(gate.install(repo).includes("added .learning/gate.mjs -text to .gitattributes"));
+  assert.equal(read(repo, ".gitattributes"), kept);
+  assert.ok(gate.install(repo).includes(".gitattributes already has .learning/gate.mjs -text"));
+  assert.equal(read(repo, ".gitattributes"), kept);
+  write(repo, ".gitattributes", "/.learning/gate.mjs   -text\n"); // anchored and spaced differently: the same line
+  assert.ok(gate.install(repo).includes(".gitattributes already has .learning/gate.mjs -text"));
+  assert.equal(read(repo, ".gitattributes"), "/.learning/gate.mjs   -text\n");
+  // -text: git never converts its line endings, whatever core.autocrlf says.
+  assert.equal(git(repo, "check-attr", "text", "--", REPO_GATE).stdout.trim(), `${REPO_GATE}: text: unset`);
+});
+
+test("install's .gitattributes line needs no report only once the gate CI runs knows it", (t) => {
+  const { dev } = setup(t);
+  const olderGate = read(dev, REPO_GATE).replace(
+    /^\/\/ ownership-gate-features: .*$/m,
+    "// ownership-gate-features: small-change",
+  );
+  // main runs an older gate (0.2.0) and has no .gitattributes line yet
+  git(dev, "checkout", "-q", "main");
+  writeFileSync(join(dev, REPO_GATE), olderGate);
+  git(dev, "rm", "-q", "--ignore-unmatch", ".gitattributes");
+  commitAll(dev, "the gate as 0.2.0 installed it");
+  git(dev, "push", "-q", "--no-verify", "origin", "main");
+  git(dev, "checkout", "-q", "-B", "chore/upgrade-gate");
+  gate.install(dev, { upgrade: true });
+  commitAll(dev, "upgrade the gate");
+  // CI runs main's older gate, which counts the line as a change: so does this one.
+  const [passed, problems] = gate.verify(dev);
+  assert.ok(!passed && problems[0].includes("No ownership report"), problems.join("\n"));
+  assert.equal(gate.status(dev).small_change, true); // one line: the fast path, so one question
+
+  // Once main runs this gate, the same one-line edit needs nothing; any other edit does.
+  git(dev, "checkout", "-q", "main");
+  git(dev, "checkout", "-q", "chore/upgrade-gate", "--", REPO_GATE); // the upgraded gate, merged
+  commitAll(dev, "this gate, still without the line");
+  git(dev, "push", "-q", "--no-verify", "origin", "main");
+  git(dev, "checkout", "-q", "-B", "chore/attributes");
+  gate.install(dev);
+  commitAll(dev, "add the line");
+  assert.deepEqual(gate.verify(dev), [true, [], "required"]);
+  write(dev, ".gitattributes", ".learning/gate.mjs -text\n*.sh text eol=lf\n");
+  commitAll(dev, "and another attribute");
+  const [passedToo, problemsToo] = gate.verify(dev);
+  assert.ok(!passedToo && problemsToo[0].includes("No ownership report"), problemsToo.join("\n"));
+});
+
+test("install says when the gate differs only in line endings, and which side has them", (t) => {
+  const { dev, tmp: dir } = setup(t);
+  const lf = readFileSync(join(REPO, "dist/gate.mjs"), "utf8");
+  writeFileSync(join(dev, REPO_GATE), lf.replaceAll("\n", "\r\n")); // as git's core.autocrlf checks it out
+  const repoCrlf = gate.install(dev).find((line) => line.startsWith(REPO_GATE));
+  assert.match(repoCrlf, /differs only in its CRLF line endings/);
+  assert.ok(repoCrlf.includes("git -c core.autocrlf=false checkout -- .learning/gate.mjs"), repoCrlf);
+
+  // A plugin copy with CRLF must not be copied in: install says to update the plugin instead.
+  writeFileSync(join(dev, REPO_GATE), lf);
+  write(dir, "old-plugin/gate.mjs", lf.replaceAll("\n", "\r\n"));
+  const r = sh(dir, NODE, [join(dir, "old-plugin/gate.mjs"), "install", "--repo", dev, "--json"]);
+  const pluginCrlf = JSON.parse(r.stdout).find((line) => line.startsWith(REPO_GATE));
+  assert.match(pluginCrlf, /this gate's own CRLF line endings.*update the plugin/);
+  assert.equal(read(dev, REPO_GATE), lf);
 });

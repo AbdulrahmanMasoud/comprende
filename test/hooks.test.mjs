@@ -21,6 +21,7 @@ import {
   gate,
   git,
   gitTry,
+  NODE,
   out,
   payload,
   plugin,
@@ -360,4 +361,33 @@ test("hook commands are valid in every POSIX shell here and exit 0 without node"
       assert.equal(runHook(command, bin, "{}", shell).status, 0, `${shell}: ${command}`);
     }
   }
+});
+
+test("session start explains a gate copy that differs only in CRLF line endings, and installs no hook", (t) => {
+  const { dev, tmp } = setup(t);
+  const hook = join(dev, ".git/hooks/pre-push");
+  unlinkSync(hook);
+  const ev = JSON.stringify({ cwd: dev });
+  const lf = readFileSync(join(REPO, "dist/gate.mjs"), "utf8");
+  const context = (gateFile) =>
+    JSON.parse(sh(tmp, NODE, [gateFile, "session-start"], { input: ev }).stdout).hookSpecificOutput.additionalContext;
+
+  // The repo's copy, as git's core.autocrlf checks it out on Windows.
+  writeFileSync(join(dev, REPO_GATE), lf.replaceAll("\n", "\r\n"));
+  const repoCrlf = context(join(REPO, "dist/gate.mjs"));
+  assert.match(repoCrlf, /only in its line endings/);
+  assert.ok(repoCrlf.includes("git -c core.autocrlf=false checkout -- .learning/gate.mjs"), repoCrlf);
+  assert.ok(!existsSync(hook));
+
+  // The plugin's own copy, as an install from before 0.2.1 may have it.
+  writeFileSync(join(dev, REPO_GATE), lf);
+  write(tmp, "old-plugin/gate.mjs", lf.replaceAll("\n", "\r\n"));
+  const pluginCrlf = context(join(tmp, "old-plugin/gate.mjs"));
+  assert.match(pluginCrlf, /plugin's own copy .* line endings/);
+  assert.ok(pluginCrlf.includes("/plugin marketplace update comprende"), pluginCrlf);
+  assert.ok(!existsSync(hook));
+
+  // Byte-identical again: the hook goes in, as before.
+  assert.match(context(join(REPO, "dist/gate.mjs")), /just installed/);
+  assert.ok(existsSync(hook));
 });
