@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Contributing:** every change now goes through a branch, a pull request and CI, and `main` is protected. [CONTRIBUTING.md](CONTRIBUTING.md) has the workflow, the commit format, how versions are chosen and the code rules.
+- **CI:**
+  - lint, typecheck and the `dist/` check now run once, in their own job, instead of in each of the six test jobs
+  - a new Consistency job checks that `plugin.json`, `package.json`, `package-lock.json` and this file agree on the version, runs `claude plugin validate` on both manifests, and runs actionlint on the workflows
+  - an experimental Windows job (Node 22, Git Bash) runs the tests but can't fail the run
+- **Releases:** pushing a tag `vX.Y.Z` on `main` checks it against the version files, runs CI, and publishes the GitHub Release with that version's notes from this file.
+- Dependabot, and templates for PRs, bug reports and feature requests.
+
 ## 0.2.0
 
 **Upgrading:** once a repo upgrades its gate (`gate.mjs install --upgrade`, merged into the base branch), the fast path for small changes is on by default, even if `.learning/config.json` doesn't list the new keys yet. To keep the old behaviour, set `"small_change_lines": 0`.
