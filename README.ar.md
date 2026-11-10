@@ -10,10 +10,10 @@
 
 **Comprende?** يعني "فاهم؟". وده بالظبط السؤال اللي الأداة دي بتسأله.
 
-Comprende هو plugin لـ Claude Code، وبيعمل حاجتين:
+Comprende هو plugin لـ **Claude Code** و **Google Antigravity**، وبيعمل حاجتين:
 
-1. **Claude بيشرح الكود اللي بيكتبه**، باختصار وبلغتك، بس في الحتت اللي تستاهل: APIs جديدة، logic مش واضح، أو مخاطر. ده شغال في أي مشروع.
-2. **الـ ownership check** (اختياري، لكل repo لوحده). قبل ما الكود بتاعك يتعمله push، Claude بيسألك كام سؤال عنه، وإنت بتكتب وصف الـ PR بنفسك. ومن غير كده، الـ push والـ merge بيتمنعوا.
+1. **الـ AI بيشرح الكود اللي بيكتبه**، باختصار وبلغتك، بس في الحتت اللي تستاهل: APIs جديدة، logic مش واضح، أو مخاطر. ده شغال في أي مشروع.
+2. **الـ ownership check** (اختياري، لكل repo لوحده). قبل ما الكود بتاعك يتعمله push، الـ AI بيسألك كام سؤال عنه، وإنت بتكتب وصف الـ PR بنفسك. ومن غير كده، الـ push والـ merge بيتمنعوا.
 
 <p align="center">
   <a href="https://youtu.be/KeoRSyM0zu8"><img src="https://img.youtube.com/vi/KeoRSyM0zu8/maxresdefault.jpg" width="640" alt="Video: Stop Merging AI Code You Don't Understand"></a>
@@ -23,7 +23,11 @@ Comprende هو plugin لـ Claude Code، وبيعمل حاجتين:
 
 ## التسطيب
 
-شغّل الأمرين دول في الـ terminal. محتاج [Node.js](https://nodejs.org) 20+.
+محتاج [Node.js](https://nodejs.org) 20+.
+
+### Claude Code
+
+شغّل الأمرين دول في الـ terminal:
 
 ```bash
 claude plugin marketplace add AbdulrahmanMasoud/comprende
@@ -33,6 +37,16 @@ claude plugin install comprende@comprende
 وبعدين اقفل Claude Code وافتحه تاني. وعشان تتأكد إنه اتسطّب، اكتب `/mcp` جوه Claude: لازم تلاقي **comprende** في الليستة.
 
 كده هيشتغل في **كل مشاريعك**. ولو سطّبته من جوه Claude بـ `/plugin`، اختار الـ **user** scope، لأن الـ project scope بيشغّله في repo واحد بس.
+
+### Google Antigravity
+
+في الـ terminal أو بيئة Antigravity:
+
+```bash
+agy plugin install https://github.com/AbdulrahmanMasoud/comprende
+```
+
+أو اربط المستودع محلياً داخل `~/.gemini/config/plugins/comprende`. ويمكنك التأكد من تفعيله عبر صفحة الـ Customizations أو بكتابة `/mcp`.
 
 ## 1. الشرح: استخدم Claude عادي
 
@@ -130,10 +144,27 @@ claude
 2. جاوب على السؤال. جرّب إجابة غلط الأول، عشان تشوف هيحصل إيه.
 3. اكتب ملخص في سطر. Claude هيحفظ الـ report ويعمل commit و push.
 
+## المنصات واللغات المدعومة
+
+### منصات ومساعدي الـ AI
+
+| المنصة | نوع التكامل | القدرات الأساسية |
+|---|---|---|
+| **Google Antigravity** | Native Plugin (`plugin.json`) | قواعد دائمة (`rules/AGENTS.md`)، أدوات ذاكرة MCP كاملة، خطافات دورة حياة (`SessionStart` و `PreToolUse` على `run_command` لمنع الـ push غير المعتمد) |
+| **Claude Code** | Native Plugin (`.claude-plugin/`) | مهارة مخصصة، أدوات ذاكرة MCP كاملة، خطافات (`SessionStart` و `PreToolUse` على `Bash` لمنع الـ push غير المعتمد) |
+
+### اللغات وتنسيق النصوص (BiDi & RTL)
+
+- **الإنجليزية (English)**: شروحات مركزة ومباشرة تركز على "السبب قبل الكيفية" بدون حشو.
+- **العربية (الفصحى والعامية المصرية)**: دعم أصلي كامل.
+  - **اتجاه الكتابة من اليمين لليسار (RTL)**: صياغة الردود والأسئلة لتبدأ وتتدفق طبيعياً من اليمين.
+  - **تنسيق المصطلحات الإنجليزية (BiDi Formatting)**: عزل الكلمات والمصطلحات البرمجية والإنجليزية (مثل `clearTimeout` و `debounce` و `git push`) داخل backticks لمنع تشويه ترتيب الجمل أو انقلاب علامات الترقيم.
+
 ## اعرف أكتر
 
 الصفحات دي بالإنجليزي:
 
+- [**دعم Google Antigravity**](docs/antigravity.md): المعمارية، الخطافات، وإعداد الإضافة
 - [**البوابة للتيمز**](docs/teams.md): التسطيب بالإيد، الإعدادات، التغييرات الصغيرة، الطوارئ
 - [**بيشتغل إزاي**](docs/how-it-works.md): المتطلبات، الـ fingerprints، الطبقات الأربعة، الحدود بصراحة
 - [**المساهمة**](CONTRIBUTING.md): شكل الـ repo، الـ tests، الـ demo، الـ releases

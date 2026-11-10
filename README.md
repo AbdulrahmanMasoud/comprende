@@ -6,10 +6,10 @@
 
 <p align="center"><a href="README.ar.md">Arabic</a></p>
 
-Comprende is a plugin for Claude Code. It does two things:
+Comprende is a plugin for **Claude Code** and **Google Antigravity**. It does two things:
 
-1. **Claude explains the code it writes**, briefly and in your language, but only the parts worth explaining: new APIs, non-obvious logic, risks. This works in every project.
-2. **The ownership check** (optional, per repo). Before your code is pushed, Claude asks you a few questions about it, and you write the PR summary. Without that, the push and the merge are blocked.
+1. **The AI explains the code it writes**, briefly and in your language, but only the parts worth explaining: new APIs, non-obvious logic, risks. This works in every project.
+2. **The ownership check** (optional, per repo). Before your code is pushed, the AI asks you a few questions about it, and you write the PR summary. Without that, the push and the merge are blocked.
 
 <p align="center">
   <a href="https://youtu.be/KeoRSyM0zu8"><img src="https://img.youtube.com/vi/KeoRSyM0zu8/maxresdefault.jpg" width="640" alt="Video: Stop Merging AI Code You Don't Understand"></a>
@@ -19,7 +19,11 @@ Comprende is a plugin for Claude Code. It does two things:
 
 ## Install
 
-Run these two commands in your terminal. You need [Node.js](https://nodejs.org) 20+.
+You need [Node.js](https://nodejs.org) 20+.
+
+### Claude Code
+
+Run these two commands in your terminal:
 
 ```bash
 claude plugin marketplace add AbdulrahmanMasoud/comprende
@@ -29,6 +33,16 @@ claude plugin install comprende@comprende
 Then restart Claude Code. To check it worked, type `/mcp` in Claude: **comprende** should be in the list.
 
 This turns it on for **all your projects**. If you install from inside Claude with `/plugin` instead, pick the **user** scope: the project scope turns it on for one repo only.
+
+### Google Antigravity
+
+In your terminal or Antigravity environment:
+
+```bash
+agy plugin install https://github.com/AbdulrahmanMasoud/comprende
+```
+
+Or symlink the repository directly into `~/.gemini/config/plugins/comprende`. You can verify it via the Customizations page or by typing `/mcp`.
 
 ## 1. Explanations: just use Claude
 
@@ -133,8 +147,25 @@ Then, in Claude:
 2. Answer its question. Try a wrong answer first, to see what happens.
 3. Write a one-line summary. Claude saves the report, commits and pushes.
 
+## Supported Platforms & Languages
+
+### Platforms & AI Agents
+
+| Platform | Integration | Key Capabilities |
+|---|---|---|
+| **Google Antigravity** | Native Plugin (`plugin.json`) | Always-on rules (`rules/AGENTS.md`), full MCP memory suite, lifecycle hooks (`SessionStart`, `PreToolUse` on `run_command` to block unverified pushes) |
+| **Claude Code** | Native Plugin (`.claude-plugin/`) | Skill instructions, MCP memory suite, Claude hooks (`SessionStart`, `PreToolUse` on `Bash` to block unverified pushes) |
+
+### Languages & Formatting
+
+- **English**: Concise, sharp explanations following "why before how", avoiding boilerplate and conversational filler.
+- **Arabic (العربية & Egyptian Arabic)**: Full native support for Modern Standard Arabic and Egyptian Arabic:
+  - **Native RTL Layout**: Explanations and prompts are rendered right-to-left.
+  - **Bidirectional (BiDi) Code Formatting**: Technical English terms, package names, and code identifiers (such as `clearTimeout`, `debounce`, `git push`) are cleanly enclosed in backticks to prevent punctuation flipping and disordered sentence display.
+
 ## Learn more
 
+- [**Google Antigravity**](docs/antigravity.md): architecture, hooks, and native plugin setup
 - [**The gate for teams**](docs/teams.md): setup by hand, settings, small changes, emergencies
 - [**How it works**](docs/how-it-works.md): requirements, fingerprints, the four layers, honest limits
 - [**Contributing**](CONTRIBUTING.md): layout, tests, the demo, releases
