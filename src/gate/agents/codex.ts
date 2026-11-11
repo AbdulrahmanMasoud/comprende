@@ -34,8 +34,11 @@ export const codex: Agent = {
   // trusted again, so an update needs both steps.
   pluginUpdateHint: "`codex plugin marketplace upgrade comprende`, then trust Comprende's hooks again in `/hooks`",
 
-  // A tool call's id, or the session's: a Codex session may run two copies of the
-  // gate's hooks, Comprende's Codex hooks and a Claude Code copy brought over by `/import`.
+  // A tool call's id, or the session's. With two plugin copies in one session (the
+  // Codex plugin, and a Claude Code copy brought over by `/import`), both detect a
+  // tool call as Codex's and claim it, so a push is checked once. A session start
+  // has no turn_id, so that copy reads it as Claude Code's, claims nothing, and the
+  // session lines come twice (docs/agents.md, "Codex: the design").
   eventId: (payload, event) => {
     const { toolUseId, sessionId } = readClaudeFormat(payload);
     return event === "shell" ? toolUseId : sessionId;

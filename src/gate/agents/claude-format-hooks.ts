@@ -21,14 +21,15 @@ export interface ClaudeFormatHookFileSpec {
   readonly path: string;
   readonly agentFlag: AgentId | null;
   readonly feature?: string;
-  /** How install's messages name the hook, e.g. "Claude hook". */
+  /** How install's messages name the hook ("Claude hook"), and the tool ("Claude Code"). */
   readonly label: string;
-  /** The tool's name in install's "merged a … hook" message. */
   readonly tool: string;
+  /** What else the file holds, which install keeps: "settings", "hooks". */
+  readonly keeps: string;
   /** What to do when the file can't be merged: a link to the by-hand steps. */
   readonly byHand: string;
-  /** The PreToolUse group install adds. */
-  readonly group: Record<string, unknown>;
+  /** The shell command the gate's hook runs. */
+  readonly command: string;
   /** The file's text, as install writes it. */
   readonly format: (file: Record<string, unknown>) => string;
 }
@@ -74,10 +75,10 @@ export function claudeFormatHookFile(spec: ClaudeFormatHookFileSpec): ProjectHoo
       hooks.PreToolUse ??= [];
       const groups = hooks.PreToolUse as unknown[];
       if (listsGateHook(groups, "shell")) return { message: `${label} already present (${shownPath})` };
-      groups.push(structuredClone(spec.group));
+      groups.push({ matcher: "Bash", hooks: [{ type: "command", command: spec.command, timeout: 60 }] });
       return {
         content: spec.format(file),
-        message: `merged a ${spec.tool} PreToolUse hook into ${shownPath} (other settings kept)`,
+        message: `merged a ${spec.tool} PreToolUse hook into ${shownPath} (other ${spec.keeps} kept)`,
       };
     },
   };

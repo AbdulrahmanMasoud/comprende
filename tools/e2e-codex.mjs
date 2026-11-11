@@ -6,30 +6,23 @@
 //                            [--out <folder>] [--model <name>] [--only <scenario>,…]
 //
 // --login copies that auth.json into the run's throwaway CODEX_HOME, and deletes the
-// copy when the run ends. Scenarios, each in its own gated demo repo:
-//   main         session start, an ordinary command, an unverified push, "check me"
-//                through to a push that goes through, and the memory server
+// copy when the run ends, Ctrl-C included. Scenarios, each in its own gated demo repo:
+//   main         the plugin alone: session start, an ordinary command, an unverified
+//                push, "check me" through to a push that goes through, the commit's
+//                trailer, and the memory server
 //   explain      explain-as-you-build: only the non-obvious part explained
-//   repo-hook    the plugin and the repo's .codex/hooks.json both trusted: one check
-//   after-update a file changed in the installed plugin: Codex skips its hooks, and
-//                the skill says to trust them again
+//   repo-hook    the plugin and the repo's .codex/hooks.json both trusted: both run,
+//                one checks
+//   after-update a file changed in the installed plugin: Codex skips its hooks, the
+//                repo's trusted hook still checks, and the skill says to trust again
 // This repo is installed as the plugin (`codex plugin marketplace add <this repo>`),
-// and its hooks are trusted the way /hooks does it, through Codex's app server.
-// Every gate.mjs run is logged (a NODE_OPTIONS preload). It prints one line per
-// step, PASS, FAIL or BLOCKED (Codex refused to run, e.g. a usage limit), and saves
+// and hooks are trusted the way /hooks does it, through Codex's app server. Every
+// gate.mjs run is logged (a NODE_OPTIONS preload). It prints one line per step,
+// PASS, FAIL or BLOCKED (Codex refused to run, e.g. a usage limit), and saves
 // transcripts and replies to --out. Nothing is pushed anywhere: remotes are local.
 
 import { spawnSync } from "node:child_process";
-import {
-  appendFileSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -51,7 +44,22 @@ const HOME = join(RUN, "home");
 const CODEX_HOME = join(RUN, "codex-home");
 mkdirSync(HOME, { recursive: true });
 mkdirSync(CODEX_HOME, { recursive: true });
-if (LOGIN) cpSync(LOGIN, join(CODEX_HOME, "auth.json"));
+const AUTH_COPY = join(CODEX_HOME, "auth.json");
+if (LOGIN) cpSync(LOGIN, AUTH_COPY);
+
+/** The copied sign-in goes when the run ends, whatever happened. If Codex refreshed
+ *  it on the way, the original's refresh token may no longer work: say so. */
+function deleteLoginCopy() {
+  if (!existsSync(AUTH_COPY)) return;
+  if (LOGIN && readFileSync(AUTH_COPY, "utf8") !== readFileSync(LOGIN, "utf8"))
+    console.log(`\nNote: Codex refreshed the copied sign-in during the run. If ${LOGIN} stops working, sign in again.`);
+  rmSync(AUTH_COPY, { force: true });
+}
+for (const signal of ["SIGINT", "SIGTERM"])
+  process.on(signal, () => {
+    deleteLoginCopy();
+    process.exit(130);
+  });
 
 /** @type {{ step: string, status: "PASS" | "FAIL" | "BLOCKED", detail?: string | undefined }[]} */
 const results = [];
@@ -103,64 +111,66 @@ const ENV = {
   ...(process.env.CODEX_API_KEY ? { CODEX_API_KEY: process.env.CODEX_API_KEY } : {}),
 };
 
-/** @param {string} cwd @param {string[]} argv @param {string} [input] */
-const codex = (cwd, argv, input) =>
-  spawnSync(CODEX, argv, { cwd, env: ENV, encoding: "utf8", input: input ?? "", timeout: 600_000 });
+/** @param {string} cwd @param {string[]} argv */
+const codex = (cwd, argv) => spawnSync(CODEX, argv, { cwd, env: ENV, encoding: "utf8", input: "", timeout: 600_000 });
 
-/** One request to Codex's app server, the API its own TUI uses. @param {string} cwd @param {{ method: string, params: object }} request */
+/** One request to Codex's app server, the API its own TUI uses.
+ *  @param {string} cwd @param {{ method: string, params: object }} request */
 function appServer(cwd, request) {
   const lines = [
     { method: "initialize", id: 1, params: { clientInfo: { name: "comprende-e2e", version: "1" } } },
     { method: "initialized" },
     { ...request, id: 2 },
   ];
-  // The server answers, then waits for more: end stdin after a moment.
-  const r = spawnSync("/bin/sh", ["-c", `(cat; sleep 8) | "${CODEX}" app-server`], {
+  // The server answers, then waits for more, so stdin stays open a moment after the
+  // requests. The binary's path comes through the environment, not the shell text.
+  const r = spawnSync("/bin/sh", ["-c", '(cat; sleep 8) | "$CODEX_E2E_BIN" app-server'], {
     cwd,
-    env: ENV,
+    env: { ...ENV, CODEX_E2E_BIN: CODEX },
     encoding: "utf8",
     input: `${lines.map((l) => JSON.stringify(l)).join("\n")}\n`,
     timeout: 60_000,
   });
   for (const line of (r.stdout ?? "").split("\n")) {
+    let reply;
     try {
-      const reply = JSON.parse(line);
-      if (reply.id === 2) return reply.result;
+      reply = JSON.parse(line);
     } catch {
-      /* not a reply */
+      continue;
     }
+    if (reply.id !== 2) continue;
+    if (reply.error) throw new Error(`codex app-server ${request.method}: ${JSON.stringify(reply.error)}`);
+    return reply.result;
   }
   throw new Error(`no reply from codex app-server to ${request.method}: ${r.stderr}`);
 }
 
-/** Trust a project and every hook it would run, as Codex's prompts and /hooks do. @param {string} app @returns {string[]} the hooks' keys */
-function trust(app) {
-  appServer(app, {
-    method: "config/batchWrite",
-    params: {
-      edits: [{ keyPath: "projects", value: { [app]: { trust_level: "trusted" } }, mergeStrategy: "upsert" }],
-      filePath: null,
-      expectedVersion: null,
-      reloadUserConfig: true,
-    },
-  });
+/**
+ * Trust a project and the hooks it would run, as Codex's prompts and /hooks do.
+ * @param {string} app @param {{ repoHook?: boolean }} [options] repoHook: false trusts only the plugin's
+ * @returns {string[]} the trusted hooks' keys
+ */
+function trust(app, { repoHook = true } = {}) {
+  /** @param {string} keyPath @param {object} value */
+  const write = (keyPath, value) =>
+    appServer(app, {
+      method: "config/batchWrite",
+      params: {
+        edits: [{ keyPath, value, mergeStrategy: "upsert" }],
+        filePath: null,
+        expectedVersion: null,
+        reloadUserConfig: true,
+      },
+    });
+  write("projects", { [app]: { trust_level: "trusted" } });
+  /** @type {{ key: string, source: string, currentHash: string }[]} */
   const hooks = appServer(app, { method: "hooks/list", params: { cwds: [app] } }).data[0].hooks;
-  /** @type {Record<string, { trusted_hash: string }>} */
-  const value = {};
-  for (const h of hooks) if (h.trustStatus !== "trusted") value[h.key] = { trusted_hash: h.currentHash };
-  appServer(app, {
-    method: "config/batchWrite",
-    params: {
-      edits: [{ keyPath: "hooks.state", value, mergeStrategy: "upsert" }],
-      filePath: null,
-      expectedVersion: null,
-      reloadUserConfig: true,
-    },
-  });
-  return hooks.map((/** @type {{ key: string }} */ h) => h.key);
+  const wanted = hooks.filter((h) => repoHook || h.source === "plugin");
+  write("hooks.state", Object.fromEntries(wanted.map((h) => [h.key, { trusted_hash: h.currentHash }])));
+  return wanted.map((h) => h.key);
 }
 
-/** @typedef {{ reply: string, session: string | undefined, commands: { command: string, exit: number | null, output: string }[], tools: string[] }} Turn */
+/** @typedef {{ reply: string, said: string, session: string | undefined, commands: { command: string, exit: number | null }[], tools: string[] }} Turn */
 
 /**
  * One headless Codex turn: a new session in `app`, or `resume` one. Throws Blocked
@@ -169,8 +179,11 @@ function trust(app) {
  * @returns {Turn}
  */
 function turn(name, app, prompt, { resume } = {}) {
+  // A reply left by an earlier run in the same --out must not pass for this one.
+  for (const ext of [".reply.md", ".jsonl", ".stderr.txt"]) rmSync(join(RUN, `${name}${ext}`), { force: true });
   const lastMessage = join(RUN, `${name}.reply.md`);
-  // The sandbox may write the demo, its .git (to commit) and its local remote (to push).
+  // The sandbox may write the demo, its .git (to commit) and its local remote (to
+  // push). `exec resume` takes no sandbox flags, so both go through -c.
   const sandbox = [
     "-c",
     'sandbox_mode="workspace-write"',
@@ -201,10 +214,15 @@ function turn(name, app, prompt, { resume } = {}) {
   const items = events.filter((e) => e.type === "item.completed").map((e) => e.item);
   return {
     reply: existsSync(lastMessage) ? readFileSync(lastMessage, "utf8") : "",
+    // Everything the agent said this turn: a question can come before its last message.
+    said: items
+      .filter((i) => i.type === "agent_message")
+      .map((i) => i.text)
+      .join("\n\n"),
     session: events.find((e) => e.type === "thread.started")?.thread_id,
     commands: items
       .filter((i) => i.type === "command_execution")
-      .map((i) => ({ command: i.command, exit: i.exit_code ?? null, output: i.aggregated_output ?? "" })),
+      .map((i) => ({ command: i.command, exit: i.exit_code ?? null })),
     tools: items.filter((i) => i.type === "mcp_tool_call").map((i) => `${i.server}:${i.tool}`),
   };
 }
@@ -232,6 +250,7 @@ function installPlugin() {
 /** A repo with the gate on main, and an unverified `sum` on feature/sum. @param {string} name */
 function makeDemo(name) {
   const dir = join(RUN, name);
+  rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   git(dir, "init", "-q", "--bare", "-b", "main", "origin.git");
   git(dir, "init", "-q", "-b", "main", "app");
@@ -243,7 +262,10 @@ function makeDemo(name) {
   git(app, "add", "-A");
   git(app, "commit", "-qm", "init");
   git(app, "push", "-q", "-u", "origin", "main");
-  spawnSync(process.execPath, [join(REPO, "dist", "gate.mjs"), "install", "--repo", app], { encoding: "utf8" });
+  const install = spawnSync(process.execPath, [join(REPO, "dist", "gate.mjs"), "install", "--repo", app], {
+    encoding: "utf8",
+  });
+  if (install.status !== 0) throw new Error(`gate.mjs install: ${install.stderr}`);
   git(app, "add", "-A");
   git(app, "commit", "-qm", "add the ownership gate");
   git(app, "push", "-q", "--no-verify", "origin", "main");
@@ -260,11 +282,18 @@ function makeDemo(name) {
 const remoteHas = (remote, branch) =>
   spawnSync("git", ["rev-parse", "--verify", "-q", branch], { cwd: remote }).status === 0;
 
-/** The checks that blocked a push since `from`: the agents' hook, not git's pre-push. @param {number} from */
-const hookChecks = (from) =>
-  gateRuns()
+/** The agents' hook runs since `from`, split by copy, and the ones that blocked.
+ *  Git's pre-push hook isn't counted: each session start installs it again. @param {number} from */
+function hookRuns(from) {
+  const runs = gateRuns()
     .slice(from)
-    .filter((r) => r.exit === 2 && (r.argv.includes("agent-hook") || r.argv.includes("claude-hook")));
+    .filter((r) => r.argv.includes("agent-hook") || r.argv.includes("claude-hook"));
+  return {
+    plugin: runs.filter((r) => r.argv.includes("--from-plugin")).length,
+    repo: runs.filter((r) => !r.argv.includes("--from-plugin")).length,
+    checks: runs.filter((r) => r.exit === 2).length,
+  };
+}
 
 const PUSH =
   "Run exactly this shell command once, and don't retry or work around it if it's blocked: `git push -u origin feature/sum`.";
@@ -277,48 +306,46 @@ const ANSWER =
 // ---------------------------------------------------------------- the scenarios
 
 function main() {
+  // The plugin alone: the repo's .codex/hooks.json stays untrusted here (see repoHook).
   const demo = makeDemo("demo");
-  const trusted = trust(demo.app);
-  report("the plugin's hooks and the repo's are trusted", trusted.length >= 3, trusted.join(", "));
+  const trusted = trust(demo.app, { repoHook: false });
+  report("the plugin's two hooks are trusted", trusted.length === 2, trusted.join(", "));
   const start = turn(
     "1-session-start",
     demo.app,
     "Without running any tools: quote, word for word, the context you were given at the start of this session about Comprende and about an ownership gate. If there was none, say NONE.",
   );
-  report("session start: the always-on line", /Comprende is installed/.test(start.reply));
-  report("session start: the gate's message", /This repository uses the ownership gate/.test(start.reply));
+  report("session start: the always-on line", /Comprende is installed/.test(start.said));
+  report("session start: the gate's message", /This repository uses the ownership gate/.test(start.said));
   const session = start.session;
 
-  const before = gateRuns().length;
+  const lsFrom = gateRuns().length;
   const ls = turn("2-ls", demo.app, "Run exactly this shell command once: `ls`. Then say what it printed.", {
     resume: session,
   });
-  const lsRuns = gateRuns()
-    .slice(before)
-    .filter((r) => r.argv.includes("agent-hook") || r.argv.includes("claude-hook"));
+  const lsRuns = hookRuns(lsFrom);
   report(
     "an ordinary command runs, and the hook is silent",
-    ls.commands.some((c) => /\bls\b/.test(c.command) && c.exit === 0) &&
-      lsRuns.length > 0 &&
-      lsRuns.every((r) => r.exit === 0 && r.stdout === ""),
-    `${lsRuns.length} hook run(s)`,
+    ls.commands.some((c) => /\bls\b/.test(c.command) && c.exit === 0) && lsRuns.plugin > 0 && lsRuns.checks === 0,
+    `${lsRuns.plugin} plugin hook run(s)`,
   );
 
-  // Codex's hook, not git's: the session start installs the git hook again, so it's counted apart.
   const pushFrom = gateRuns().length;
   const push = turn("3-unverified-push", demo.app, `${PUSH} Quote any block message word for word.`, {
     resume: session,
   });
+  const pushRuns = hookRuns(pushFrom);
   report(
     "an unverified push is blocked by Codex's hook, once, and the agent sees why",
     !remoteHas(demo.remote, "feature/sum") &&
-      hookChecks(pushFrom).length === 1 &&
-      /Ask Codex to run the ownership check/.test(push.reply),
-    `${hookChecks(pushFrom).length} check(s)`,
+      pushRuns.checks === 1 &&
+      /Ask Codex to run the ownership check/.test(push.said),
+    `${pushRuns.checks} check(s)`,
   );
 
   const asked = turn("4-check-me", demo.app, "check me", { resume: session });
-  report("check me: questions asked", /\?/.test(asked.reply));
+  // The agent may start the check right after the blocked push, so its question can come a turn early.
+  report("check me: questions asked", /\?/.test(asked.said) || /\?/.test(push.said));
   const turns = [asked, turn("5-answers", demo.app, ANSWER, { resume: session })];
   for (let i = 0; i < 2 && !remoteHas(demo.remote, "feature/sum"); i++)
     turns.push(
@@ -329,12 +356,12 @@ function main() {
         { resume: session },
       ),
     );
-  const saved = turns.some((t) => t.tools.some((tool) => /save_check_report/.test(tool)))
+  const savedWith = turns.some((t) => t.tools.some((tool) => /save_check_report/.test(tool)))
     ? "the memory server"
     : turns.some((t) => t.commands.some((c) => /gate\.mjs"? save/.test(c.command)))
       ? "save --input"
       : null;
-  report("check me: the report saved", saved !== null, `with ${saved}`);
+  report("check me: the report saved", savedWith !== null, `with ${savedWith}`);
   report("check me: committed, then a separate push goes through", remoteHas(demo.remote, "feature/sum"));
   const trailer = git(demo.app, "log", "-1", "--format=%B").match(/^Co-authored-by: .*/m)?.[0] ?? "none";
   report("the agent's commit: its trailer", true, trailer);
@@ -364,12 +391,13 @@ function explain() {
   report("explain as you build: retry.js written", existsSync(join(app, "retry.js")));
   report(
     "explain as you build: a short explanation of the non-obvious part",
-    /jitter/i.test(t.reply) && t.reply.length < 2500,
-    `${t.reply.length} characters; read 7-explain-as-you-build.reply.md`,
+    /jitter/i.test(t.said) && t.said.length < 2500,
+    `${t.said.length} characters; read 7-explain-as-you-build.reply.md`,
   );
 }
 
-// The plugin and the repo's .codex/hooks.json, both trusted: they claim the push, so one checks.
+// The plugin and the repo's .codex/hooks.json, both trusted: both run, and they
+// claim the push, so one checks.
 function repoHook() {
   const demo = makeDemo("demo-repo-hook");
   const keys = trust(demo.app);
@@ -380,17 +408,16 @@ function repoHook() {
   );
   const from = gateRuns().length;
   turn("8-repo-hook-push", demo.app, PUSH);
-  const runs = gateRuns()
-    .slice(from)
-    .filter((r) => r.argv.includes("agent-hook"));
+  const runs = hookRuns(from);
   report(
-    "the plugin and the repo's hook: one check per push",
-    hookChecks(from).length === 1 && runs.length >= 2 && !remoteHas(demo.remote, "feature/sum"),
-    `${runs.length} run(s), ${hookChecks(from).length} check(s)`,
+    "the plugin and the repo's hook: both run, one checks",
+    runs.plugin === 1 && runs.repo === 1 && runs.checks === 1 && !remoteHas(demo.remote, "feature/sum"),
+    `${runs.plugin} plugin run, ${runs.repo} repo run, ${runs.checks} check(s)`,
   );
 }
 
-// Any change to the installed plugin's files skips its hooks until they're trusted again.
+// Any change to the installed plugin's files skips its hooks until they're trusted
+// again. The repo's .codex/hooks.json is checked against its own command, so it still runs.
 function afterUpdate() {
   const demo = makeDemo("demo-after-update");
   trust(demo.app);
@@ -400,20 +427,21 @@ function afterUpdate() {
   writeFileSync(marker, "a change, as an update makes\n");
   try {
     const from = gateRuns().length;
-    const t = turn("9-after-update", demo.app, "Run exactly this shell command once: `ls`. Then say what it printed.");
-    const pluginRuns = gateRuns()
-      .slice(from)
-      .filter((r) => r.argv.includes("--from-plugin"));
+    turn("9-after-update-push", demo.app, PUSH);
+    const runs = hookRuns(from);
+    report("after an update: Codex skips the plugin's hooks", runs.plugin === 0, `${runs.plugin} plugin hook run(s)`);
     report(
-      "after an update: Codex skips the plugin's hooks",
-      pluginRuns.length === 0,
-      `${pluginRuns.length} plugin hook run(s)`,
+      "after an update: the repo's trusted hook still checks the push",
+      runs.repo === 1 && runs.checks === 1 && !remoteHas(demo.remote, "feature/sum"),
+      `${runs.repo} repo run, ${runs.checks} check(s)`,
     );
-    report(
-      "after an update: the skill says to trust the hooks again",
-      /\/hooks/.test(t.reply),
-      "read 9-after-update.reply.md",
+    // The skill loads for code work, and with no session-start note it says why.
+    const t = turn(
+      "10-after-update-code",
+      demo.app,
+      "Add a function mul(a, b) to math.js that multiplies two numbers. Don't commit.",
     );
+    report("after an update: the skill says to trust the hooks again", /\/hooks/.test(t.said), "read its reply");
   } finally {
     rmSync(marker, { force: true });
   }
@@ -433,9 +461,8 @@ try {
     }
   }
 } finally {
-  // The copied sign-in goes as soon as the run ends, whatever happened.
-  rmSync(join(CODEX_HOME, "auth.json"), { force: true });
-  appendFileSync(join(RUN, "results.json"), `${JSON.stringify(results, null, 2)}\n`);
+  deleteLoginCopy();
+  writeFileSync(join(RUN, "results.json"), `${JSON.stringify(results, null, 2)}\n`);
 }
 console.log(`\nTranscripts and replies: ${RUN}`);
 process.exitCode = results.every((r) => r.status === "PASS") ? 0 : 1;

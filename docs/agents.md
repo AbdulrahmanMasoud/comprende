@@ -603,7 +603,7 @@ So each push is checked once, and each session gets each line once. `test/agents
 **No double runs:**
 - The plugin and `.codex/hooks.json` both run when both are trusted. Neither can count on the other, so both claim the `tool_use_id`, and only the first checks.
 - **Session start comes from the plugin only.** Unlike Cursor's `.cursor/hooks.json`, `.codex/hooks.json` isn't sure to run (`alwaysRuns: false`), so the plugin never steps aside for it, and a plugin's claim and a repo file's claim use different keys. A session start in both would give the gate's message twice. Without the plugin there's no skill either, so the message would have nothing to point to.
-- `/import` from Claude Code can bring over Claude Code's copy of Comprende as a second plugin. Both copies detect Codex from the payload and claim with the same key.
+- **A known limit: two plugin copies in one Codex session.** `/import` from Claude Code can bring over Claude Code's copy of Comprende as a second plugin. For a push, both copies detect Codex from `turn_id` and claim the tool call, so it's checked once. A session start has no `turn_id`, so the Claude Code copy reads it as Claude Code's and claims nothing: the always-on line and the gate's message come twice, one naming Claude Code. Install it in one place. The matrix test asserts both.
 - The matrix test gains a Codex column, trusted and not.
 
 **The user's install steps:**
@@ -614,6 +614,7 @@ So each push is checked once, and each session gets each line once. `test/agents
 **What's weaker than in Claude Code:**
 - **Hooks need trust,** after the install and after every update, and Codex skips them without a word until then. The git hook and CI still check. So does `.codex/hooks.json`, if it's written and trusted.
 - **Codex's `workspace-write` sandbox keeps `.git` read-only,** so the agent asks before it commits.
+- **The repo's `.codex/hooks.json` needs a common shell.** Its `$(git rev-parse …)` works in sh, bash, zsh, fish 3.4+ and PowerShell. With another `$SHELL` (tcsh, nu) that copy fails open, and the plugin's hook still checks.
 - **The commit trailer** depends on an account setting that Codex has no config key for.
 - **Windows is untested.**
 
@@ -621,7 +622,7 @@ So each push is checked once, and each session gets each line once. `test/agents
 - A throwaway `CODEX_HOME` with a copied `auth.json`, or `CODEX_API_KEY`.
 - `codex plugin marketplace add` and `codex plugin add` with this repo.
 - It trusts the hooks the way `/hooks` does: the app server's `hooks/list`, then `config/batchWrite`.
-- Each turn is `codex exec --json -C <demo> -s workspace-write --add-dir <origin.git> --add-dir <demo>/.git`, with stdin closed.
+- Each turn is `codex exec --json -o <reply> "<prompt>"` from the demo's folder, or `codex exec … resume <session>` for the next one, with stdin closed. `exec resume` takes no sandbox flags, so the sandbox goes through config: `-c sandbox_mode="workspace-write"` and `-c sandbox_workspace_write.writable_roots=[<demo>/.git, <origin.git>]`.
 - **The steps:**
   - session start
   - `ls`, with the hook silent

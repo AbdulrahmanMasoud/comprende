@@ -136,10 +136,10 @@ function claudeFormatHookFile(spec) {
       hooks.PreToolUse ??= [];
       const groups = hooks.PreToolUse;
       if (listsGateHook(groups, "shell")) return { message: `${label} already present (${shownPath})` };
-      groups.push(structuredClone(spec.group));
+      groups.push({ matcher: "Bash", hooks: [{ type: "command", command: spec.command, timeout: 60 }] });
       return {
         content: spec.format(file),
-        message: `merged a ${spec.tool} PreToolUse hook into ${shownPath} (other settings kept)`
+        message: `merged a ${spec.tool} PreToolUse hook into ${shownPath} (other ${spec.keeps} kept)`
       };
     }
   };
@@ -154,7 +154,8 @@ var CLAUDE_SETTINGS = claudeFormatHookFile({
   label: "Claude hook",
   tool: "Claude Code",
   byHand: HOOK_BY_HAND,
-  group: { matcher: "Bash", hooks: [{ type: "command", command: HOOK_COMMAND, timeout: 60 }] },
+  keeps: "settings",
+  command: HOOK_COMMAND,
   format: (settings) => `${JSON.stringify(settings, null, 2)}
 `
 });
@@ -202,7 +203,8 @@ var CODEX_HOOKS = claudeFormatHookFile({
   label: "Codex hook",
   tool: "Codex",
   byHand: "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-codex-hook-by-hand",
-  group: { matcher: "Bash", hooks: [{ type: "command", command: HOOK_COMMAND2, timeout: 60 }] },
+  keeps: "hooks",
+  command: HOOK_COMMAND2,
   format: compactHooksJson
 });
 
@@ -226,8 +228,11 @@ var codex = {
   // Codex skips a plugin's hooks after any change to its files, until they're
   // trusted again, so an update needs both steps.
   pluginUpdateHint: "`codex plugin marketplace upgrade comprende`, then trust Comprende's hooks again in `/hooks`",
-  // A tool call's id, or the session's: a Codex session may run two copies of the
-  // gate's hooks, Comprende's Codex hooks and a Claude Code copy brought over by `/import`.
+  // A tool call's id, or the session's. With two plugin copies in one session (the
+  // Codex plugin, and a Claude Code copy brought over by `/import`), both detect a
+  // tool call as Codex's and claim it, so a push is checked once. A session start
+  // has no turn_id, so that copy reads it as Claude Code's, claims nothing, and the
+  // session lines come twice (docs/agents.md, "Codex: the design").
   eventId: (payload, event) => {
     const { toolUseId, sessionId } = readClaudeFormat(payload);
     return event === "shell" ? toolUseId : sessionId;

@@ -20,6 +20,7 @@ export const CLAUDE_SETTINGS = claudeFormatHookFile({
   label: "Claude hook",
   tool: "Claude Code",
   byHand: HOOK_BY_HAND,
-  group: { matcher: "Bash", hooks: [{ type: "command", command: HOOK_COMMAND, timeout: 60 }] },
+  keeps: "settings",
+  command: HOOK_COMMAND,
   format: (settings) => `${JSON.stringify(settings, null, 2)}\n`,
 });

@@ -3,18 +3,19 @@
 // are real captures, in test/fixtures/<tool>/.
 
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   unlinkSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import {
@@ -423,13 +424,13 @@ function runCopies(dev, combo, tool, event, payload, files) {
     CLAUDE_PLUGIN_ROOT: REPO,
     OWNERSHIP_GATE_NO_AUTO_HOOK: "1",
   };
-  // Cursor and Codex replace their plugin-root variables as text before the shell runs.
-  const asRun = (command) =>
-    ["${CURSOR_PLUGIN_ROOT}", "${PLUGIN_ROOT}", "${CLAUDE_PLUGIN_ROOT}"].reduce(
-      (c, variable) =>
-        tool === "claude-code" && variable !== "${CURSOR_PLUGIN_ROOT}" ? c : c.replaceAll(variable, REPO),
-      command,
-    );
+  // Cursor and Codex replace their plugin-root variables as text before the shell
+  // runs. Claude Code leaves ${CLAUDE_PLUGIN_ROOT} to the shell, which reads env.
+  const asRun = (command) => {
+    let text = command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO).replaceAll("${PLUGIN_ROOT}", REPO);
+    if (tool !== "claude-code") text = text.replaceAll("${CLAUDE_PLUGIN_ROOT}", REPO);
+    return text;
+  };
   return commands.map(([command, cwd]) =>
     sh(cwd, "/bin/sh", ["-c", asRun(command)], {
       check: false,
@@ -485,10 +486,6 @@ test("each session starts with the always-on line once, and the gate's context o
   let session = 0;
   for (const tool of ["cursor", "claude-code", "codex"]) {
     for (const combo of combinations(tool)) {
-      // A known limit: two plugin copies in one Codex session. A Codex session start
-      // has no turn_id, so the Claude-format copy is read as Claude Code's and claims
-      // nothing, and each copy speaks. The push is still checked once (above).
-      if (tool === "codex" && runs(tool, combo, "codexPlugin") && runs(tool, combo, "claudePlugin")) continue;
       placeRepoHookFiles(dev, combo, files);
       const payload = payloadFor(tool, "sessionStart", dev, `session-${++session}`);
       const contexts = runCopies(dev, combo, tool, "sessionStart", payload, files).map(
@@ -496,10 +493,20 @@ test("each session starts with the always-on line once, and the gate's context o
       );
       const count = (re) => contexts.filter((c) => re.test(c)).length;
       const plugins = ["claudePlugin", "cursorPlugin", "codexPlugin"].some((copy) => runs(tool, combo, copy));
+      // A known limit (docs/agents.md, "Codex: the design"): two plugin copies in one
+      // Codex session. A Codex session start has no turn_id, so the Claude-format copy
+      // reads it as Claude Code's and claims nothing, and both speak. The push is
+      // still checked once (above).
+      const twoCopies = tool === "codex" && runs(tool, combo, "codexPlugin") && runs(tool, combo, "claudePlugin");
+      const once = twoCopies ? 2 : 1;
       const label = `${tool} ${JSON.stringify(combo)}`;
-      assert.equal(count(/Comprende is installed\./), plugins ? 1 : 0, `always-on: ${label}`);
+      assert.equal(count(/Comprende is installed\./), plugins ? once : 0, `always-on: ${label}`);
       const repoStarts = runs(tool, combo, "cursorHooks");
-      assert.equal(count(/This repository uses the ownership gate/), plugins || repoStarts ? 1 : 0, `gate: ${label}`);
+      assert.equal(
+        count(/This repository uses the ownership gate/),
+        plugins ? once : repoStarts ? 1 : 0,
+        `gate: ${label}`,
+      );
     }
   }
 });
@@ -738,24 +745,28 @@ test("a report from another gate version blocks the git hook, but not the agents
   assert.match(prePush.stderr, /Report was made by gate v999/);
 });
 
+// GitHub's runners have pwsh, so the PowerShell case runs in CI. Locally it's skipped without it.
+const PWSH = spawnSync("/bin/sh", ["-c", "command -v pwsh"], { encoding: "utf8" }).stdout.trim();
+
 test("the repo's .codex/hooks.json blocks an unverified push from a subfolder, and fails open without git or node", {
   skip: process.platform === "win32",
 }, (t) => {
-  const { dev } = unverifiedRepo(t);
+  const { dev: made, tmp } = unverifiedRepo(t);
+  // A path with a space and a literal $HOME: the command's own $(…) must not expand them.
+  const dev = join(tmp, "my repo $HOME", "dev");
+  mkdirSync(dirname(dev));
+  renameSync(made, dev);
   const [{ hooks }] = JSON.parse(readFileSync(join(dev, ".codex/hooks.json"), "utf8")).hooks.PreToolUse;
   const command = hooks[0].command;
   // Codex runs hooks in the session's folder, which may be a subfolder.
   const sub = join(dev, "src");
   let call = 0;
-  const run = (env) =>
-    sh(sub, "/bin/sh", ["-c", command], {
-      check: false,
-      input: JSON.stringify({
-        ...JSON.parse(codexPayload("pre-tool-use.bash.git-push.json", sub)),
-        tool_use_id: `call-${++call}`,
-      }),
-      env,
+  const input = () =>
+    JSON.stringify({
+      ...JSON.parse(codexPayload("pre-tool-use.bash.git-push.json", sub)),
+      tool_use_id: `call-${++call}`,
     });
+  const run = (env) => sh(sub, "/bin/sh", ["-c", command], { check: false, input: input(), env });
   const push = run(ENV);
   assert.equal(push.status, 2, push.stderr);
   assert.match(push.stderr, /Ask Codex to run the ownership check/);
@@ -765,4 +776,14 @@ test("the repo's .codex/hooks.json blocks an unverified push from a subfolder, a
   symlinkSync(NODE, join(nodeOnly, "node"));
   assert.notEqual(run({ ...ENV, PATH: nodeOnly }).status, 2, "without git");
   assert.notEqual(run({ ...ENV, PATH: tmpDir(t) }).status, 2, "without node");
+  // On Windows, Codex runs hooks in PowerShell, which reads the same $(…).
+  if (PWSH) {
+    const ps = spawnSync(PWSH, ["-NoProfile", "-NonInteractive", "-Command", `$input | ${command}`], {
+      cwd: sub,
+      input: input(),
+      encoding: "utf8",
+      env: ENV,
+    });
+    assert.equal(ps.status, 2, `PowerShell: ${ps.stderr}`);
+  }
 });
