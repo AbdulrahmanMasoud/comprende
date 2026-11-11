@@ -498,3 +498,30 @@ test("session start explains a gate copy that differs only in CRLF line endings,
   assert.match(context(join(REPO, "dist/gate.mjs")), /just installed/);
   assert.ok(existsSync(hook));
 });
+
+// AI tools read exit 2 as "block", and git blocks a push on any non-zero exit.
+// So a usage error in a hook must fail open: an older gate that doesn't know an
+// option or a command a newer hook file passes must never block every command.
+test("a usage error in a hook entry point fails open with one short line, never exit 2", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  const AI_TOOL = 1; // a non-blocking hook error in Claude Code and Cursor
+  const GIT = 0; // git blocks the push on anything else
+  const cases = [
+    [["agent-hook", "--bogus"], AI_TOOL],
+    [["claude-hook", "--bogus"], AI_TOOL],
+    [["session-start", "--bogus"], AI_TOOL],
+    [["agent-hook", "--agent"], AI_TOOL], // a missing value
+    [["agent-hook", "--agent", "cursor", "--format", "json"], AI_TOOL], // an option a later version might add
+    [["session-start", "--from-plugin", "--format", "json"], AI_TOOL],
+    [["agent-hook-v2"], AI_TOOL], // a command a later version might add
+    [["pre-push", "--repo"], GIT],
+  ];
+  for (const [args, code] of cases) {
+    const r = runGate(dev, args, { input: pushEvent(dev) });
+    assert.equal(r.status, code, `${args.join(" ")}: ${r.stderr}`);
+    assert.equal(r.stdout, "", args.join(" "));
+    assert.match(r.stderr, /^ownership gate: .+\n$/, args.join(" "));
+  }
+});

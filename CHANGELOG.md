@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **A usage error in a hook no longer blocks every command** ([#30](https://github.com/AbdulrahmanMasoud/comprende/issues/30)). An unknown option, an option missing its value, or an unknown command exited 2, which Claude Code and Cursor read as "block". The hook entry points now fail open with one line on stderr: exit 1 for `agent-hook`, `claude-hook` and `session-start`, and 0 for `pre-push`, since git blocks a push on any non-zero exit. An unknown command exits 1. Other commands keep exit 2 for usage errors.
 - **`agent-hook`:** the gate's hook command now has a name that doesn't depend on the tool, and `--agent <id>` names the tool running it. `claude-hook` is the same command and keeps working, so existing repos need no change. Inside, each AI tool's hook payloads are read by its own adapter, starting with Claude Code and Cursor ([#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18)). GitHub's side (the CI workflow, the reviewer summary, CODEOWNERS and `protect`) sits behind a platform adapter the same way, ready for GitLab ([#4](https://github.com/AbdulrahmanMasoud/comprende/issues/4)).
 - **Contributions:** Comprende isn't accepting outside pull requests for now. Issues, feature requests and feedback are welcome. See [Contributions](CONTRIBUTING.md#contributions).
 - **Docs:** [docs/agents.md](docs/agents.md) has what we tested about Cursor, and a design for Cursor support and agent adapters ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)).
