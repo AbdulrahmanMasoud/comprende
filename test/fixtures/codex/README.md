@@ -15,9 +15,10 @@ Don't write these by hand. To change one, capture it again from a real run.
 Things to know:
 
 - The payloads are Claude Code's shape, plus `turn_id` and `model`, which Claude Code doesn't send. The shell tool is `Bash`, and the command is `tool_input.command`.
-- `cwd` is the command's folder. Hooks ran in the session's folder, here the repo's root.
-- The same payload went to the user's `hooks.json`, the project's `.codex/hooks.json` and the plugin's hooks.
+- `cwd` is the command's folder, per Codex's source. Here it was the repo's root, which is also where the hooks ran.
+- The same payload went to the user's `hooks.json` and the project's `.codex/hooks.json`.
 - `permission_mode` is `bypassPermissions` here because of headless mode.
+- Codex set no `CLAUDE_PROJECT_DIR`, which the Claude Code adapter falls back on.
 
 ## How the captures were cleaned
 
