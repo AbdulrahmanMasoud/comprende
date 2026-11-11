@@ -1,5 +1,5 @@
-// The hook entry points: Claude Code's PreToolUse and SessionStart, and git's pre-push,
-// plus installing the pinned pre-push hook.
+// The hook entry points: Claude Code's PreToolUse and SessionStart (Cursor runs
+// them too), and git's pre-push, plus installing the pinned pre-push hook.
 
 import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
@@ -12,7 +12,16 @@ import { MAX_CONFIG_BYTES, readRepoFile } from "./files.js";
 import { git, repoRoot, resolveBase } from "./git.js";
 import { isPushCommand } from "./push-detect.js";
 import { uncommittedReport } from "./report.js";
-import { CONFIG_PATH, GATE_ATTRIBUTES_LINE, GATE_REL, GateError, SELF, splitLines, ZERO_SHA } from "./shared.js";
+import {
+  CONFIG_PATH,
+  GATE_ATTRIBUTES_LINE,
+  GATE_REL,
+  GateError,
+  SELF,
+  SHELL_TOOL_NAMES,
+  splitLines,
+  ZERO_SHA,
+} from "./shared.js";
 
 function projectHasGateHook(root: string): boolean {
   try {
@@ -26,19 +35,21 @@ function projectHasGateHook(root: string): boolean {
   }
 }
 
-/** PreToolUse hook for Claude Code. Exit 2 blocks the call and shows stderr to
- *  Claude. It checks the current branch; pushes of other branches are checked
- *  by the pre-push hook and CI. Outside a repo with the gate installed, or on
- *  an unexpected crash, it allows the call: this hook is a reminder; CI is the
- *  lock. fromPlugin: stays out of the way when the repo already registers the
- *  same hook, so the check never runs twice. The plugin never executes code
- *  from the repo it's looking at; it applies its own logic to the repo's data. */
+/** PreToolUse hook for Claude Code, and for Cursor, which runs it too. Exit 2
+ *  blocks the call and shows stderr to the agent. Allowing prints nothing:
+ *  Cursor blocks the call when a hook's stdout isn't JSON. It checks the current
+ *  branch; pushes of other branches are checked by the pre-push hook and CI.
+ *  Outside a repo with the gate installed, or on an unexpected crash, it allows
+ *  the call: this hook is a reminder; CI is the lock. fromPlugin: stays out of
+ *  the way when the repo already registers the same hook, so the check never
+ *  runs twice. The plugin never executes code from the repo it's looking at; it
+ *  applies its own logic to the repo's data. */
 export function claudeHook(stdinText: string, fromPlugin = false): number {
   let root: string;
   try {
     const payload = JSON.parse(stdinText || "{}");
     const command = String(payload?.tool_input?.command ?? "");
-    if ((payload?.tool_name ?? "Bash") !== "Bash" || !isPushCommand(command)) return 0;
+    if (!SHELL_TOOL_NAMES.includes(payload?.tool_name ?? "Bash") || !isPushCommand(command)) return 0;
     root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
     if (!lstat(join(root, CONFIG_PATH))) return 0;
     if (fromPlugin && projectHasGateHook(root)) return 0;
