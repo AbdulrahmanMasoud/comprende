@@ -186,6 +186,23 @@ test("install --owner adds to the CODEOWNERS GitHub reads, and never hides one",
       lines.join("\n"),
     );
   }
+  // A second run adds nothing.
+  assert.ok(gate.install(dev, { owner: "@acme/leads" }).some((l) => l.startsWith("CODEOWNERS: 0 entries added")));
+  // A directory named CODEOWNERS is skipped, as GitHub skips it; with nothing else, .github/ is the place.
+  for (const p of ["CODEOWNERS", "docs/CODEOWNERS", ".github/CODEOWNERS"])
+    rmSync(join(dev, p), { force: true, recursive: true });
+  mkdirSync(join(dev, "CODEOWNERS"));
+  gate.install(dev, { owner: "@acme/leads" });
+  assert.ok(read(dev, ".github/CODEOWNERS").includes("/.github/CODEOWNERS @acme/leads"));
+  // A symlinked CODEOWNERS isn't written through: install prints the lines instead.
+  for (const p of ["CODEOWNERS", ".github/CODEOWNERS"]) rmSync(join(dev, p), { force: true, recursive: true });
+  write(dev, "elsewhere", theirs);
+  symlinkSync(join(dev, "elsewhere"), join(dev, "CODEOWNERS"));
+  const skipped = gate.install(dev, { owner: "@acme/leads" }).find((l) => l.startsWith("SKIPPED CODEOWNERS"));
+  assert.match(skipped ?? "", /\(CODEOWNERS\)\. Add these lines to it by hand/);
+  assert.equal(read(dev, "elsewhere"), theirs);
+  assert.equal(existsSync(join(dev, ".github/CODEOWNERS")), false);
+  rmSync(join(dev, "CODEOWNERS"));
   // Without --owner, the manual step names the file GitHub reads.
   for (const p of ["CODEOWNERS", "docs/CODEOWNERS", ".github/CODEOWNERS"]) rmSync(join(dev, p), { force: true });
   write(dev, "docs/CODEOWNERS", theirs);

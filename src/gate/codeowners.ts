@@ -2,18 +2,32 @@
 // files need the lead's review. The platform says where the file goes and which
 // owners it accepts.
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { atomicWrite } from "./files.js";
+import { readdirSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { lstat } from "../util.js";
+import { atomicWrite, MAX_CONFIG_BYTES, readExisting } from "./files.js";
 import { GATE_FILES } from "./gate-files.js";
 import { REPO_PLATFORM } from "./platforms/index.js";
 import { GateError, splitLines } from "./shared.js";
 
 /** The CODEOWNERS the platform reads: the first that exists in its search order,
  *  else the first place, which hides nothing. Adding anywhere else would either
- *  be ignored or hide the repo's own file, whose rules would then stop applying. */
+ *  be ignored or hide the repo's own file, whose rules would then stop applying.
+ *  The name must match exactly, since GitHub is case-sensitive and a macOS disk
+ *  isn't, and a directory is skipped, as GitHub skips it. */
 function codeownersInUse(root: string, paths: readonly string[]): string {
-  return paths.find((p) => existsSync(join(root, p))) ?? paths[0];
+  return (
+    paths.find((p) => {
+      const abs = join(root, p);
+      const st = lstat(abs);
+      if (!st || st.isDirectory()) return false;
+      try {
+        return readdirSync(dirname(abs)).includes(basename(abs));
+      } catch {
+        return false;
+      }
+    }) ?? paths[0]
+  );
 }
 
 export function setUpCodeowners(root: string, owner?: string | null): string {
@@ -29,7 +43,10 @@ export function setUpCodeowners(root: string, owner?: string | null): string {
   }
   if (!ownerPattern.test(owner)) throw new GateError(`--owner must be ${ownerHint}; got ${JSON.stringify(owner)}.`);
   const path = join(root, rel);
-  const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
+  const found = lstat(path) ? readExisting(path, MAX_CONFIG_BYTES) : null;
+  if (found && "unreadable" in found)
+    return `SKIPPED CODEOWNERS: ${found.unreadable} (${rel}). Add these lines to it by hand:\n  ${lines.join("\n  ")}`;
+  const existing = found?.text ?? "";
   const have = new Set(
     splitLines(existing)
       .filter((l) => l.trim() && !l.trimStart().startsWith("#"))

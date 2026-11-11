@@ -27,7 +27,8 @@ node <plugin>/dist/gate.mjs install --repo . --owner @your-org/leads
 - `.gitattributes`: one line, `.learning/gate.mjs -text`, so git never rewrites the gate's line endings (on Windows, `core.autocrlf` would)
 - CODEOWNERS (with `--owner`): the gate's files need the lead's review.
   - GitHub reads only the first CODEOWNERS it finds: `.github/CODEOWNERS`, then `CODEOWNERS` at the root, then `docs/CODEOWNERS`. `install` adds its lines to that one, keeping its other lines, and creates `.github/CODEOWNERS` only when there's none. So it never hides your own file.
-  - When your owners live in the root or `docs/` file, the install PR counts that edit as a small change: one question. Only `.github/CODEOWNERS` is one of the gate's own files.
+  - When your owners live in the root or `docs/` file, the install PR counts that edit as a change, usually a small one: one question. Only `.github/CODEOWNERS` is one of the gate's own files.
+  - A symlinked CODEOWNERS is left alone, and `install` prints the lines to add by hand.
 - the local git `pre-push` hook
 
 **Teammates** with the plugin don't need to do anything: their first session in the repo installs their git hook. Teammates without the plugin run `node .learning/gate.mjs install-hooks` once per clone.
