@@ -1,0 +1,3 @@
+I'll run the ownership check — reading the Comprende skill and ownership-check instructions first.Small change on `math.js` — one question, then your summary. Checking the diff so the question lands on what actually changed.Ownership check for `feature/sum` — small change (`sum` in `math.js`).
+
+One question: `sum` uses `reduce` with an initial value of `0`. What does `sum([])` return, and what would go wrong if that `0` were left out?

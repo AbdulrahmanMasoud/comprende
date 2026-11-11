@@ -246,7 +246,8 @@ dist/                 the built, dependency-free files the plugin runs (committe
 test/                 node:test suites against real git repos, one file per topic
 tools/release.mjs     the version check and the release notes, for CI and releases
 tools/e2e-cursor.mjs  the end-to-end run in the real Cursor CLI (by hand, not in CI)
-docs/                 the longer docs, and the terminal demo (demo.tape, demo.gif)
+docs/                 the longer docs, the terminal demo (demo.tape, demo.gif), and recordings/cursor/:
+                      real Cursor replies, which the READMEs quote
 .github/              CI and release workflows, Dependabot, PR and issue templates
 .gitattributes        keeps dist/ and the skill's scripts byte for byte (no CRLF on Windows)
 CLAUDE.md             notes for Claude Code when working on this repo (incl. an end-to-end test plan)
@@ -282,7 +283,7 @@ node tools/e2e-cursor.mjs --out /tmp/e2e-2 --only explain,both-plugins   # some 
   - `both-plugins`: the Claude Code plugin imported as well. Each session line comes once, and each push is checked once
 - **Output:** one line per step: PASS, FAIL, or BLOCKED when Cursor refuses to run the agent (the account's usage limit, or a model not on its plan). Transcripts, replies, stderr and a log of every `gate.mjs` run are saved to `--out`.
 - **Isolation:** a throwaway `HOME` with a copy of your `~/.cursor/cli-config.json`, so none of your plugins or settings load, and a `COMPRENDE_HOME` inside `--out`. On macOS the login is in the keychain, which the throwaway `HOME` links to. Elsewhere, set `CURSOR_API_KEY`. Each demo's remote is a local folder, so nothing is pushed anywhere.
-- Delete the `--out` folder afterwards: it holds a copy of your CLI config.
+- Delete the `--out` folder afterwards: it holds a copy of your CLI config. If the READMEs will quote a new reply, copy its `.reply.md` into [`docs/recordings/cursor/`](docs/recordings/cursor/) first, checked for anything personal, and add its run and prompt to that folder's README.
 
 ## The demo
 

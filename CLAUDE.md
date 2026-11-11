@@ -46,7 +46,7 @@ actionlint                        # the GitHub workflows
 - `src/util.ts`: helpers the gate and the store share, including the prototype-free `dict`/`own`/`get`
 - `dist/`: built output, **committed on purpose**, because that's what the plugin runs
 - `test/`: `node:test` suites against real git repos, one file per topic (install, config, fingerprints, checks, report, small-changes, push-detection, hooks, agents, platforms, security, ci, store, mcp, consistency, release). `helpers.mjs` has the fixtures, and `fixtures/<tool>/` the payloads captured from each AI tool.
-- `docs/`: `teams.md` (setting up the gate), `how-it-works.md` (requirements, internals, limits), `agents.md` (other AI tools: Cursor research and the adapter design), `demo.tape` → `demo.gif` (VHS)
+- `docs/`: `teams.md` (setting up the gate), `how-it-works.md` (requirements, internals, limits), `agents.md` (other AI tools: Cursor research and the adapter design), `demo.tape` → `demo.gif` (VHS), `recordings/cursor/` (real Cursor replies, which the READMEs quote)
 - `.github/`:
   - `workflows/ci.yml`: the PR checks
   - `workflows/release.yml`: publishes a GitHub Release when a `v*` tag is pushed
@@ -70,7 +70,7 @@ actionlint                        # the GitHub workflows
 - **Every bug fix gets a regression test.** It must fail before the fix. Put it in the test file for that topic, and name the test after the behavior.
 - **Keep docs in sync.** A user-visible change updates:
   - `README.md` and `README.ar.md` (Egyptian Arabic, technical terms in English). Keep both short: details go in `docs/`
-    - their example conversations are real Claude replies, shortened with "…". If the skill's behavior changes, record new ones (`claude -p` in a scratch repo); never write them by hand
+    - their example conversations are real Claude replies, shortened with "…". If the skill's behavior changes, record new ones (`claude -p` in a scratch repo); never write them by hand. Cursor's come from `tools/e2e-cursor.mjs`, kept in `docs/recordings/cursor/`
   - `docs/teams.md` or `docs/how-it-works.md`, wherever the detail lives
   - `docs/demo.gif`, re-rendered with `vhs docs/demo.tape`, if the gate's output in the demo changes
   - `SECURITY.md`, if it touches the threat model

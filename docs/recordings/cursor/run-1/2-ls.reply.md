@@ -1,0 +1,5 @@
+It printed:
+
+```
+math.js
+```

@@ -1,0 +1,1 @@
+Running that exact push once — no retries if it's blocked.The push was blocked by the ownership gate: there’s no ownership report for `feature/sum` (expected at `.learning/checks/feature%2Fsum.md`). Ask me to run the ownership check (“check me”), then commit the report, before pushing again.
