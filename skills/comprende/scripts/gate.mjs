@@ -4,7 +4,7 @@
 // ownership-gate-features: small-change gitattributes
 
 // src/gate/cli.ts
-import { appendFileSync, readFileSync as readFileSync4, readSync as readSync2 } from "node:fs";
+import { appendFileSync, readFileSync as readFileSync5, readSync as readSync2 } from "node:fs";
 
 // src/util.ts
 import { lstatSync, statSync } from "node:fs";
@@ -916,6 +916,97 @@ function annotate(kind, messages) {
 `);
 }
 
+// src/gate/ci-workflow.ts
+var WORKFLOW = `name: Ownership check
+
+on:
+  pull_request:
+    # 'edited' re-runs the check when a PR is retargeted to another base branch.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    name: Ownership check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Check the PR's own commit (not GitHub's merge commit) with full history,
+          # so fingerprints match what the developer verified.
+          ref: \${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          # The gate needs no dependencies; a restored cache is only a way in.
+          package-manager-cache: false
+
+      - name: Verify ownership report
+        env:
+          BASE_REF: \${{ github.base_ref }}
+          HEAD_REF: \${{ github.head_ref }}
+          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
+          NODE_OPTIONS: ""
+        run: |
+          # Run the gate as it exists on the base branch, so a PR can't weaken it
+          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
+          # doesn't have the gate yet (the PR that installs it); the rules then
+          # are the strict defaults, not the PR's own config.
+          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
+            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
+          else
+            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
+          fi
+          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
+            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
+`;
+var CHECK_NAME = "Ownership check";
+
+// src/gate/claude-settings.ts
+var CLAUDE_HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
+var HOOK_BY_HAND = "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-claude-hook-by-hand";
+function mergeClaudeSettings(path) {
+  let settings = {};
+  if (lstat(path)) {
+    let raw;
+    try {
+      raw = readRepoFile(path, MAX_CONFIG_BYTES);
+    } catch (e) {
+      return `SKIPPED Claude hook: ${e.message}`;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(raw || "{}");
+    } catch {
+      return `SKIPPED Claude hook: ${path} is not valid JSON; ${HOOK_BY_HAND}`;
+    }
+    if (!isRecord(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; ${HOOK_BY_HAND}`;
+    settings = parsed;
+  }
+  if (settings.hooks !== void 0 && !isRecord(settings.hooks))
+    return `SKIPPED Claude hook: "hooks" in ${path} is not an object; ${HOOK_BY_HAND}`;
+  settings.hooks ??= {};
+  const hooks = settings.hooks;
+  if (hooks.PreToolUse !== void 0 && !Array.isArray(hooks.PreToolUse))
+    return `SKIPPED Claude hook: "hooks.PreToolUse" in ${path} is not a list; ${HOOK_BY_HAND}`;
+  hooks.PreToolUse ??= [];
+  const groups = hooks.PreToolUse;
+  for (const g of groups) {
+    for (const h of g?.hooks ?? []) {
+      if ((h?.command ?? "").includes("gate.mjs") && (h?.command ?? "").includes("claude-hook"))
+        return `Claude hook already present (${path})`;
+    }
+  }
+  groups.push({ matcher: "Bash", hooks: [{ type: "command", command: CLAUDE_HOOK_COMMAND, timeout: 60 }] });
+  atomicWrite(path, `${JSON.stringify(settings, null, 2)}
+`);
+  return `merged a Claude Code PreToolUse hook into ${path} (other settings kept)`;
+}
+
 // src/gate/commands.ts
 import { existsSync as existsSync2, unlinkSync as unlinkSync2 } from "node:fs";
 import { basename as basename2, dirname as dirname3, join as join8, resolve as resolve2 } from "node:path";
@@ -1422,61 +1513,94 @@ function installHooks(repo, auto = false) {
   return [`${verb} pre-push hook (${hook}) for gate.mjs sha256 ${pin.slice(0, 12)}`];
 }
 
-// src/gate/setup.ts
-import { chmodSync as chmodSync3, copyFileSync as copyFileSync2, existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync3 } from "node:fs";
-import { dirname as dirname4, join as join10, resolve as resolve4 } from "node:path";
-var WORKFLOW = `name: Ownership check
+// src/gate/install.ts
+import { chmodSync as chmodSync3, copyFileSync as copyFileSync2, existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync4 } from "node:fs";
+import { dirname as dirname4, join as join11, resolve as resolve4 } from "node:path";
 
-on:
-  pull_request:
-    # 'edited' re-runs the check when a PR is retargeted to another base branch.
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+// src/gate/codeowners.ts
+import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:fs";
+import { join as join10 } from "node:path";
+function setUpCodeowners(root, owner) {
+  const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
+  if (!owner) {
+    return "MANUAL STEP 2: add to .github/CODEOWNERS (or rerun install with --owner @handle) and turn on 'Require review from Code Owners' \u2014 otherwise a PR could edit the workflow to skip the check:\n  " + lines.join("\n  ");
+  }
+  if (!/^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/.test(owner))
+    throw new GateError(`--owner must be a GitHub @user, @org/team, or an email; got ${JSON.stringify(owner)}.`);
+  const path = join10(root, ".github", "CODEOWNERS");
+  const existing = existsSync4(path) ? readFileSync3(path, "utf8") : "";
+  const have = new Set(
+    splitLines(existing).filter((l) => l.trim() && !l.trimStart().startsWith("#")).map((l) => l.trim().split(/\s+/)[0])
+  );
+  const fresh = lines.filter((l) => !have.has(l.split(/\s+/)[0]));
+  if (fresh.length) {
+    const prefix = !existing || existing.endsWith("\n") ? "" : "\n";
+    atomicWrite(
+      path,
+      `${existing + prefix}# Ownership gate: changes to the gate need lead review
+${fresh.join("\n")}
+`
+    );
+  }
+  return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on 'Require review from Code Owners' in branch protection.`;
+}
 
-permissions:
-  contents: read
+// src/gate/install.ts
+var EXISTING_GATE_NOTE = {
+  none: "up to date",
+  "repo-crlf": `differs only in its CRLF line endings (git's core.autocrlf): run \`git -c core.autocrlf=false checkout -- ${GATE_REL}\`, and the .gitattributes line keeps it byte for byte from then on`,
+  // --upgrade would copy those CRLF line endings into the repo.
+  "plugin-crlf": "matches, apart from this gate's own CRLF line endings (git's core.autocrlf): update the plugin instead of using --upgrade",
+  content: "exists (pass --upgrade to replace)"
+};
+function install(repo, upgrade = false, owner) {
+  const root = repoRoot(repo);
+  const done = [];
+  const target = join11(root, GATE_REL);
+  if (!SELF) throw new GateError("Can't locate this gate's own file to install it.");
+  if (existsSync5(target) && resolve4(target) === resolve4(SELF)) done.push(`${GATE_REL} is this file`);
+  else if (existsSync5(target) && !upgrade) {
+    done.push(`${GATE_REL} ${EXISTING_GATE_NOTE[gateCopyDifference(readFileSync4(target), readFileSync4(SELF))]}`);
+  } else {
+    mkdirSync3(dirname4(target), { recursive: true });
+    copyFileSync2(SELF, target);
+    chmodSync3(target, 493);
+    done.push(`wrote ${GATE_REL}`);
+  }
+  const cfgPath = join11(root, CONFIG_PATH);
+  if (existsSync5(cfgPath)) done.push(`${CONFIG_PATH} exists (kept)`);
+  else {
+    const cfg = { ...DEFAULT_CONFIG };
+    try {
+      const b = resolveBase(root, { base: "" }, null);
+      cfg.base = b.includes("/") ? b.slice(b.indexOf("/") + 1) : b;
+    } catch {
+      cfg.base = "main";
+    }
+    atomicWrite(cfgPath, `${JSON.stringify({ ownership_check: cfg }, null, 2)}
+`);
+    done.push(`wrote ${CONFIG_PATH} (base: ${cfg.base}, mode: required)`);
+  }
+  const wf = join11(root, ".github", "workflows", "ownership-check.yml");
+  const wfRel = ".github/workflows/ownership-check.yml";
+  if (existsSync5(wf)) done.push(`${wfRel} exists (kept)`);
+  else {
+    atomicWrite(wf, WORKFLOW);
+    done.push(`wrote ${wfRel}`);
+  }
+  done.push(mergeClaudeSettings(join11(root, ".claude", "settings.json")));
+  for (const { file, line } of INSTALL_LINES) done.push(addInstallLine(root, file, line));
+  done.push(...installHooks(root));
+  done.push(
+    `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch \u2014 without it CI only warns.`
+  );
+  done.push(setUpCodeowners(root, owner));
+  return done;
+}
 
-jobs:
-  ownership:
-    name: Ownership check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          # Check the PR's own commit (not GitHub's merge commit) with full history,
-          # so fingerprints match what the developer verified.
-          ref: \${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          # The gate needs no dependencies; a restored cache is only a way in.
-          package-manager-cache: false
-
-      - name: Verify ownership report
-        env:
-          BASE_REF: \${{ github.base_ref }}
-          HEAD_REF: \${{ github.head_ref }}
-          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
-          NODE_OPTIONS: ""
-        run: |
-          # Run the gate as it exists on the base branch, so a PR can't weaken it
-          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
-          # doesn't have the gate yet (the PR that installs it); the rules then
-          # are the strict defaults, not the PR's own config.
-          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
-            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
-          else
-            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
-          fi
-          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
-            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
-`;
-var CLAUDE_HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
+// src/gate/protect.ts
 var RULESET_NAME = "Ownership gate";
 var REQUIRE_BY_HAND = "https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#make-the-check-required";
-var HOOK_BY_HAND = "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-claude-hook-by-hand";
-var CHECK_NAME = "Ownership check";
 function rulesetBody(approvals = 1, codeOwners = true) {
   return {
     name: RULESET_NAME,
@@ -1567,118 +1691,6 @@ function protect(repo, apply = false, approvals = 1, codeOwners = true) {
     if (e instanceof GateError) throw e;
   }
   return [...plan, `Created: https://github.com/${nwo}/rules/${String(isRecord(created) ? created.id : void 0)}`];
-}
-function mergeClaudeSettings(path) {
-  let settings = {};
-  if (lstat(path)) {
-    let raw;
-    try {
-      raw = readRepoFile(path, MAX_CONFIG_BYTES);
-    } catch (e) {
-      return `SKIPPED Claude hook: ${e.message}`;
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(raw || "{}");
-    } catch {
-      return `SKIPPED Claude hook: ${path} is not valid JSON; ${HOOK_BY_HAND}`;
-    }
-    if (!isRecord(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; ${HOOK_BY_HAND}`;
-    settings = parsed;
-  }
-  if (settings.hooks !== void 0 && !isRecord(settings.hooks))
-    return `SKIPPED Claude hook: "hooks" in ${path} is not an object; ${HOOK_BY_HAND}`;
-  settings.hooks ??= {};
-  const hooks = settings.hooks;
-  if (hooks.PreToolUse !== void 0 && !Array.isArray(hooks.PreToolUse))
-    return `SKIPPED Claude hook: "hooks.PreToolUse" in ${path} is not a list; ${HOOK_BY_HAND}`;
-  hooks.PreToolUse ??= [];
-  const groups = hooks.PreToolUse;
-  for (const g of groups) {
-    for (const h of g?.hooks ?? []) {
-      if ((h?.command ?? "").includes("gate.mjs") && (h?.command ?? "").includes("claude-hook"))
-        return `Claude hook already present (${path})`;
-    }
-  }
-  groups.push({ matcher: "Bash", hooks: [{ type: "command", command: CLAUDE_HOOK_COMMAND, timeout: 60 }] });
-  atomicWrite(path, `${JSON.stringify(settings, null, 2)}
-`);
-  return `merged a Claude Code PreToolUse hook into ${path} (other settings kept)`;
-}
-var EXISTING_GATE_NOTE = {
-  none: "up to date",
-  "repo-crlf": `differs only in its CRLF line endings (git's core.autocrlf): run \`git -c core.autocrlf=false checkout -- ${GATE_REL}\`, and the .gitattributes line keeps it byte for byte from then on`,
-  // --upgrade would copy those CRLF line endings into the repo.
-  "plugin-crlf": "matches, apart from this gate's own CRLF line endings (git's core.autocrlf): update the plugin instead of using --upgrade",
-  content: "exists (pass --upgrade to replace)"
-};
-function setUpCodeowners(root, owner) {
-  const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
-  if (!owner) {
-    return "MANUAL STEP 2: add to .github/CODEOWNERS (or rerun install with --owner @handle) and turn on 'Require review from Code Owners' \u2014 otherwise a PR could edit the workflow to skip the check:\n  " + lines.join("\n  ");
-  }
-  if (!/^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/.test(owner))
-    throw new GateError(`--owner must be a GitHub @user, @org/team, or an email; got ${JSON.stringify(owner)}.`);
-  const path = join10(root, ".github", "CODEOWNERS");
-  const existing = existsSync4(path) ? readFileSync3(path, "utf8") : "";
-  const have = new Set(
-    splitLines(existing).filter((l) => l.trim() && !l.trimStart().startsWith("#")).map((l) => l.trim().split(/\s+/)[0])
-  );
-  const fresh = lines.filter((l) => !have.has(l.split(/\s+/)[0]));
-  if (fresh.length) {
-    const prefix = !existing || existing.endsWith("\n") ? "" : "\n";
-    atomicWrite(
-      path,
-      `${existing + prefix}# Ownership gate: changes to the gate need lead review
-${fresh.join("\n")}
-`
-    );
-  }
-  return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on 'Require review from Code Owners' in branch protection.`;
-}
-function install(repo, upgrade = false, owner) {
-  const root = repoRoot(repo);
-  const done = [];
-  const target = join10(root, GATE_REL);
-  if (!SELF) throw new GateError("Can't locate this gate's own file to install it.");
-  if (existsSync4(target) && resolve4(target) === resolve4(SELF)) done.push(`${GATE_REL} is this file`);
-  else if (existsSync4(target) && !upgrade) {
-    done.push(`${GATE_REL} ${EXISTING_GATE_NOTE[gateCopyDifference(readFileSync3(target), readFileSync3(SELF))]}`);
-  } else {
-    mkdirSync3(dirname4(target), { recursive: true });
-    copyFileSync2(SELF, target);
-    chmodSync3(target, 493);
-    done.push(`wrote ${GATE_REL}`);
-  }
-  const cfgPath = join10(root, CONFIG_PATH);
-  if (existsSync4(cfgPath)) done.push(`${CONFIG_PATH} exists (kept)`);
-  else {
-    const cfg = { ...DEFAULT_CONFIG };
-    try {
-      const b = resolveBase(root, { base: "" }, null);
-      cfg.base = b.includes("/") ? b.slice(b.indexOf("/") + 1) : b;
-    } catch {
-      cfg.base = "main";
-    }
-    atomicWrite(cfgPath, `${JSON.stringify({ ownership_check: cfg }, null, 2)}
-`);
-    done.push(`wrote ${CONFIG_PATH} (base: ${cfg.base}, mode: required)`);
-  }
-  const wf = join10(root, ".github", "workflows", "ownership-check.yml");
-  const wfRel = ".github/workflows/ownership-check.yml";
-  if (existsSync4(wf)) done.push(`${wfRel} exists (kept)`);
-  else {
-    atomicWrite(wf, WORKFLOW);
-    done.push(`wrote ${wfRel}`);
-  }
-  done.push(mergeClaudeSettings(join10(root, ".claude", "settings.json")));
-  for (const { file, line } of INSTALL_LINES) done.push(addInstallLine(root, file, line));
-  done.push(...installHooks(root));
-  done.push(
-    `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch \u2014 without it CI only warns.`
-  );
-  done.push(setUpCodeowners(root, owner));
-  return done;
 }
 
 // src/gate/cli.ts
@@ -1816,7 +1828,7 @@ ${HELP}`);
         return 0;
       }
       case "save": {
-        const raw = o("input") ? readFileSync4(o("input"), "utf8") : readStdin();
+        const raw = o("input") ? readFileSync5(o("input"), "utf8") : readStdin();
         let payload;
         try {
           payload = JSON.parse(raw);
