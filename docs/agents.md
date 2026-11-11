@@ -291,7 +291,15 @@ In Cursor, up to four copies of Comprende's hook can run on the same command:
 | The native Cursor plugin (`hooks/cursor-hooks.json`) | Cursor | the plugin's gate | any repo hook file runs the gate |
 | The imported Claude Code plugin (`hooks/hooks.json`) | Claude | the plugin's gate | any repo hook file runs the gate |
 
-In a gated repo, exactly one copy checks. In a repo whose hook files were removed, both plugin copies check. That's harmless: each denies with the same reason, and Cursor joins the two messages.
+In a gated repo, exactly one copy checks.
+
+**With no repo hook file and both plugins present,** the plugins can't see each other. Each claims the tool call's id: an empty file named after it, in a private folder under the system temp folder. Only the first to claim it checks (`src/gate/hook-claims.ts`), and session start works the same way, by the session's id.
+
+**Session start:**
+- The repo's `.cursor/hooks.json` gives only the gate's context.
+- A plugin gives the always-on line, and the gate's context unless the repo's file already gives it.
+
+So each session gets each line once. `test/agents.test.mjs` checks all 16 combinations of the four copies, in Cursor and in Claude Code.
 
 ### Files to add for Cursor
 

@@ -3,7 +3,7 @@
 // are real captures, in test/fixtures/<tool>/.
 
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
@@ -279,4 +279,120 @@ test("the Cursor plugin's hooks, run as Cursor runs them, block an unverified pu
   const context = JSON.parse(start.stdout).hookSpecificOutput.additionalContext;
   assert.match(context, /^Comprende is installed\./);
   assert.match(context, /This repository uses the ownership gate/);
+});
+
+// The four places a copy of the gate's hook can come from, and which tool runs
+// each: Cursor runs all four (it imports Claude Code's settings and plugins, on
+// by default), Claude Code runs the two in its own format.
+const COPIES = ["settings", "cursorHooks", "claudePlugin", "cursorPlugin"];
+const combinations = () =>
+  Array.from({ length: 16 }, (_, n) => Object.fromEntries(COPIES.map((c, i) => [c, Boolean(n & (1 << i))])));
+
+/** Runs every copy present in `combo`, for `event`, as `tool` runs it. Returns their results. */
+function runCopies(dev, combo, tool, event, payload, files) {
+  const PLUGIN_HOOKS = JSON.parse(readFileSync(join(REPO, "hooks/hooks.json"), "utf8")).hooks;
+  const CURSOR_PLUGIN_HOOKS = JSON.parse(readFileSync(join(REPO, "hooks/cursor-hooks.json"), "utf8")).hooks;
+  const claude = event === "shell" ? "PreToolUse" : "SessionStart";
+  const cursor = event === "shell" ? "preToolUse" : "sessionStart";
+  const commands = [];
+  const repoSettings = files.settings && JSON.parse(files.settings).hooks[claude]?.[0].hooks[0].command;
+  const repoCursor = files.cursorHooks && JSON.parse(files.cursorHooks).hooks[cursor]?.[0].command;
+  if (combo.settings && repoSettings) commands.push([repoSettings, dev]);
+  if (combo.claudePlugin) commands.push([PLUGIN_HOOKS[claude][0].hooks[0].command, tool === "cursor" ? REPO : dev]);
+  if (tool === "cursor") {
+    if (combo.cursorHooks && repoCursor) commands.push([repoCursor, dev]);
+    if (combo.cursorPlugin) commands.push([CURSOR_PLUGIN_HOOKS[cursor][0].command, REPO]);
+  }
+  const env = {
+    ...ENV,
+    ...(tool === "cursor" ? envOf("cursor") : {}),
+    CLAUDE_PROJECT_DIR: dev,
+    CURSOR_PROJECT_DIR: tool === "cursor" ? dev : "",
+    CLAUDE_PLUGIN_ROOT: REPO,
+    OWNERSHIP_GATE_NO_AUTO_HOOK: "1",
+  };
+  return commands.map(([command, cwd]) =>
+    sh(cwd, "/bin/sh", ["-c", command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO)], {
+      check: false,
+      input: payload,
+      env,
+    }),
+  );
+}
+
+test("exactly one copy of the gate checks each push, whatever hook files and plugins are present", (t) => {
+  const { dev } = unverifiedRepo(t);
+  const files = {
+    settings: readFileSync(join(dev, ".claude/settings.json"), "utf8"),
+    cursorHooks: readFileSync(join(dev, ".cursor/hooks.json"), "utf8"),
+  };
+  let call = 0;
+  for (const tool of ["cursor", "claude-code"]) {
+    for (const combo of combinations()) {
+      for (const [copy, path] of [
+        ["settings", ".claude/settings.json"],
+        ["cursorHooks", ".cursor/hooks.json"],
+      ]) {
+        if (combo[copy]) writeFileSync(join(dev, path), files[copy]);
+        else rmSync(join(dev, path), { force: true });
+      }
+      // A fresh tool call each time, as each real push is.
+      const id = `call-${++call}`;
+      const payload =
+        tool === "cursor"
+          ? JSON.stringify({
+              ...JSON.parse(fixture("cursor", "pre-tool-use.shell.git-push.json")),
+              workspace_roots: [dev],
+              tool_use_id: id,
+            })
+          : JSON.stringify({
+              ...JSON.parse(claudeCodePayload("pre-tool-use.bash.git-push.json", dev)),
+              tool_use_id: id,
+            });
+      const results = runCopies(dev, combo, tool, "shell", payload, files);
+      const checked = results.filter((r) => r.status === 2).length;
+      const present = tool === "cursor" ? Object.values(combo).some(Boolean) : combo.settings || combo.claudePlugin;
+      const label = `${tool} ${JSON.stringify(combo)}`;
+      assert.equal(checked, present ? 1 : 0, label);
+      for (const r of results.filter((r) => r.status !== 2)) assert.deepEqual([r.status, r.stdout], [0, ""], label);
+    }
+  }
+});
+
+test("each session starts with the always-on line once, and the gate's context once", (t) => {
+  const { dev } = setup(t);
+  const files = {
+    settings: readFileSync(join(dev, ".claude/settings.json"), "utf8"),
+    cursorHooks: readFileSync(join(dev, ".cursor/hooks.json"), "utf8"),
+  };
+  let session = 0;
+  for (const tool of ["cursor", "claude-code"]) {
+    for (const combo of combinations()) {
+      for (const [copy, path] of [
+        ["settings", ".claude/settings.json"],
+        ["cursorHooks", ".cursor/hooks.json"],
+      ]) {
+        if (combo[copy]) writeFileSync(join(dev, path), files[copy]);
+        else rmSync(join(dev, path), { force: true });
+      }
+      const id = `session-${++session}`;
+      const payload =
+        tool === "cursor"
+          ? JSON.stringify({
+              ...JSON.parse(fixture("cursor", "session-start.json")),
+              workspace_roots: [dev],
+              session_id: id,
+            })
+          : JSON.stringify({ ...JSON.parse(claudeCodePayload("session-start.json", dev)), session_id: id });
+      const contexts = runCopies(dev, combo, tool, "sessionStart", payload, files).map(
+        (r) => JSON.parse(r.stdout).hookSpecificOutput?.additionalContext ?? "",
+      );
+      const count = (re) => contexts.filter((c) => re.test(c)).length;
+      const plugins = tool === "cursor" ? combo.claudePlugin || combo.cursorPlugin : combo.claudePlugin;
+      const label = `${tool} ${JSON.stringify(combo)}`;
+      assert.equal(count(/Comprende is installed\./), plugins ? 1 : 0, `always-on: ${label}`);
+      const repoStarts = tool === "cursor" && combo.cursorHooks;
+      assert.equal(count(/This repository uses the ownership gate/), plugins || repoStarts ? 1 : 0, `gate: ${label}`);
+    }
+  }
 });

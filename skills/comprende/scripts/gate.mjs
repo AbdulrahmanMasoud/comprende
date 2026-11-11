@@ -179,6 +179,18 @@ var runsGateFor = (hooks, event) => {
     (h) => isRecord(h) && typeof h.command === "string" && h.command.includes("gate.mjs") && (event === "shell" ? /\b(agent|claude)-hook\b/.test(h.command) : h.command.includes("session-start"))
   );
 };
+function formatHooksFile(file) {
+  const line = (key, value) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`;
+  const top = Object.entries(file).map(
+    ([key, value]) => key === "hooks" && isRecord(value) ? `  "hooks": {
+${Object.entries(value).map(([event, list]) => `    ${line(event, list)}`).join(",\n")}
+  }` : `  ${line(key, value)}`
+  );
+  return `{
+${top.join(",\n")}
+}
+`;
+}
 var CURSOR_HOOKS = {
   path: ".cursor/hooks.json",
   agentFlag: "cursor",
@@ -221,8 +233,7 @@ var CURSOR_HOOKS = {
     }
     if (!added) return { message: `${LABEL2} already present (${shownPath})` };
     return {
-      content: `${JSON.stringify(file, null, 2)}
-`,
+      content: formatHooksFile(file),
       message: `merged the gate's Cursor hooks into ${shownPath} (other hooks kept)`
     };
   }

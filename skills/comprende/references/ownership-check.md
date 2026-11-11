@@ -111,7 +111,7 @@ When the user asks to set it up ("enable the ownership gate here", in any langua
 2. **Install on a branch.** Create `chore/ownership-gate`, then run `node <skill-dir>/scripts/gate.mjs install --repo . --owner <handle>`. It adds:
    - `.learning/gate.mjs` and `.learning/config.json`
    - the CI workflow
-   - a Claude Code hook (`.claude/settings.json`, which Cursor runs too)
+   - the agents' hooks: `.claude/settings.json` for Claude Code, and `.cursor/hooks.json` for Cursor
    - a local pre-push hook
    - CODEOWNERS entries
 
