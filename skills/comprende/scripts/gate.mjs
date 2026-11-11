@@ -154,11 +154,16 @@ var claudeCode = {
 };
 
 // src/gate/agents/cursor.ts
-function firstWorkspaceRoot(payload) {
-  const roots = isRecord(payload) && Array.isArray(payload.workspace_roots) ? payload.workspace_roots : [];
-  const root = roots.find((r) => typeof r === "string" && r !== "");
-  if (!root) return null;
-  return process.platform === "win32" && /^\/[A-Za-z]:[\\/]/.test(root) ? root.slice(1) : root;
+function cursorProjectDir(payload, env, platform = process.platform) {
+  const cwd = readClaudeFormat(payload).cwd;
+  if (cwd) return cwd;
+  const roots = (isRecord(payload) && Array.isArray(payload.workspace_roots) ? payload.workspace_roots : []).filter(
+    (r) => typeof r === "string" && r !== ""
+  );
+  if (roots.length > 1) return null;
+  if (roots.length === 1)
+    return platform === "win32" && /^\/[A-Za-z]:[\\/]/.test(roots[0]) ? roots[0].slice(1) : roots[0];
+  return env.CURSOR_PROJECT_DIR || env.CLAUDE_PROJECT_DIR || null;
 }
 var cursor = {
   id: "cursor",
@@ -172,9 +177,10 @@ var cursor = {
   // From the payload first: its workspace, since cwd is always "". Then Cursor's
   // project variables. Never the process's own folder: Cursor runs a plugin's
   // hooks from the plugin's folder, which may sit inside some other repo.
-  projectDir: (payload, env) => readClaudeFormat(payload).cwd ?? firstWorkspaceRoot(payload) ?? (env.CURSOR_PROJECT_DIR || env.CLAUDE_PROJECT_DIR || null),
+  projectDir: (payload, env) => cursorProjectDir(payload, env),
   names: { assistant: "Cursor", app: "Cursor" },
-  pluginUpdateHint: "`agent plugin marketplace update comprende` in the Cursor CLI, or Customize \u2192 Plugins in the IDE",
+  // Cursor may be running the Claude Code plugin it imported, so name both.
+  pluginUpdateHint: "`/plugin marketplace update comprende` in Claude Code if it's installed there, or `agent plugin marketplace update comprende` in Cursor's CLI",
   projectHookFiles: [CLAUDE_SETTINGS]
 };
 
@@ -184,6 +190,7 @@ function resolveAgent(payload, env, requested) {
   if (requested) return AGENTS.find((a) => a.id === requested) ?? null;
   return AGENTS.find((a) => a.detects(payload, env)) ?? null;
 }
+var UNKNOWN_AGENT_NAMES = { assistant: "your AI assistant", app: "your AI tool" };
 var PROJECT_HOOK_FILES = [...new Set(AGENTS.flatMap((a) => a.projectHookFiles))];
 
 // src/gate/config.ts
@@ -1367,7 +1374,13 @@ function save(payload, repo, base, branch) {
   const n = Object.keys(changes).length;
   return `Saved ${rel}: ${n} file${n === 1 ? "" : "s"} fingerprinted, ${Object.keys(verified).length} verified. Commit it together with the code.${note}`;
 }
-function verify(repo, base, branch, rev = "HEAD", labels = [], assistant = "your AI assistant") {
+function verify(repo, {
+  base = null,
+  branch = null,
+  rev = "HEAD",
+  labels = [],
+  assistant = UNKNOWN_AGENT_NAMES.assistant
+} = {}) {
   const root = repoRoot(repo);
   const baseRef = resolveBase(root, loadConfig(root, rev), base);
   const cfg = rulesFromBase(root, baseRef);
@@ -1599,7 +1612,7 @@ function agentHook(stdinText, fromPlugin, requested) {
   }
   let passed, problems, mode;
   try {
-    [passed, problems, mode] = verify(root, null, null, "HEAD", [], agent.names.assistant);
+    [passed, problems, mode] = verify(root, { assistant: agent.names.assistant });
   } catch (e) {
     if (!(e instanceof GateError)) return allow;
     [passed, problems, mode] = [false, [e.message], "required"];
@@ -1635,7 +1648,7 @@ function sessionStart(stdinText, requested) {
   const node = process.versions.node;
   if (Number.parseInt(node, 10) < MIN_NODE)
     lines.push(
-      `Comprende is running on Node.js ${node}, which is too old. ${nodeNote(agent?.names.app ?? "the AI tool")}`
+      `Comprende is running on Node.js ${node}, which is too old. ${nodeNote((agent?.names ?? UNKNOWN_AGENT_NAMES).app)}`
     );
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
   if (agent) lines.push(...gatedRepoContext(agent, payload));
@@ -1689,7 +1702,7 @@ function prePush(stdinText, repo) {
     if (branch === baseBranch) continue;
     let passed, problems, mode;
     try {
-      [passed, problems, mode] = verify(root, null, branch, localSha);
+      [passed, problems, mode] = verify(root, { branch, rev: localSha });
     } catch (e) {
       if (!(e instanceof GateError) && e.code) {
         process.stderr.write(`ownership gate: skipped (${e.message})
@@ -1905,6 +1918,8 @@ function testCall(fn, a) {
       const p = ciPlatform(env);
       return { id: p.id, context: p.ciContext(env), summaryFile: p.reviewerSummaryFile(env) };
     }
+    case "cursor_project_dir":
+      return cursorProjectDir(a[0], a[1] ?? {}, String(a[2]));
     case "resolve_agent": {
       const env = a[1] ?? {};
       let payload;
@@ -2075,7 +2090,7 @@ ${HELP}`);
         }
         const rev = o("rev") ?? "HEAD";
         const base = o("base") ?? ci.baseRef;
-        const [passed, messages, mode] = verify(o("repo"), base, o("branch"), rev, labels);
+        const [passed, messages, mode] = verify(o("repo"), { base, branch: o("branch"), rev, labels });
         if (opts.json) {
           out(JSON.stringify({ passed, messages, mode }));
           return 0;

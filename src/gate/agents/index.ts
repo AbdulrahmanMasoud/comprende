@@ -16,6 +16,10 @@ export function resolveAgent(payload: unknown, env: HookEnv, requested?: string 
   return AGENTS.find((a) => a.detects(payload, env)) ?? null;
 }
 
+/** How messages name the tool when no adapter is known: CI, the git hook, or a
+ *  payload no adapter reads. */
+export const UNKNOWN_AGENT_NAMES: Agent["names"] = { assistant: "your AI assistant", app: "your AI tool" };
+
 /** Every repo-level hook file, once each, for install and for GATE_FILES. */
 export const PROJECT_HOOK_FILES: readonly ProjectHookFile[] = [...new Set(AGENTS.flatMap((a) => a.projectHookFiles))];
 

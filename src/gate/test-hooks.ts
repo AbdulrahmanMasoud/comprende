@@ -2,6 +2,7 @@
 // JSON in and JSON out, for the black-box test suite (test/helpers.mjs). Not a
 // public interface.
 
+import { cursorProjectDir } from "./agents/cursor.js";
 import { PROJECT_HOOK_FILES, resolveAgent } from "./agents/index.js";
 import { collectChanges, isPlumbing } from "./changes.js";
 import { escapeMarkdown } from "./ci-summary.js";
@@ -47,6 +48,9 @@ export function testCall(fn: string, a: unknown[]): unknown {
       const p = ciPlatform(env);
       return { id: p.id, context: p.ciContext(env), summaryFile: p.reviewerSummaryFile(env) };
     }
+    case "cursor_project_dir":
+      // [payload, env, platform]
+      return cursorProjectDir(a[0], (a[1] ?? {}) as Record<string, string>, String(a[2]));
     case "resolve_agent": {
       // [payload JSON text, env, --agent]: which adapter runs, and what it reads.
       const env = (a[1] ?? {}) as Record<string, string>;

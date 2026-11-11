@@ -6,7 +6,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFile
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isFile, isSymlink, lstat } from "../util.js";
-import { type Agent, type HookEnv, type HookReply, resolveAgent } from "./agents/index.js";
+import { type Agent, type HookEnv, type HookReply, resolveAgent, UNKNOWN_AGENT_NAMES } from "./agents/index.js";
 import { verify } from "./commands.js";
 import { loadConfig } from "./config.js";
 import { git, repoRoot, resolveBase } from "./git.js";
@@ -55,7 +55,7 @@ export function agentHook(stdinText: string, fromPlugin: boolean, requested: str
   }
   let passed: boolean, problems: string[], mode: string;
   try {
-    [passed, problems, mode] = verify(root, null, null, "HEAD", [], agent.names.assistant);
+    [passed, problems, mode] = verify(root, { assistant: agent.names.assistant });
   } catch (e) {
     if (!(e instanceof GateError)) return allow;
     [passed, problems, mode] = [false, [e.message], "required"]; // e.g. a broken report
@@ -77,7 +77,8 @@ export function agentHook(stdinText: string, fromPlugin: boolean, requested: str
 
 const MIN_NODE = 20;
 
-// hooks/hooks.json carries the same note for a missing or unusable node.
+// hooks/hooks.json carries the same note, naming no app, for a missing or unusable
+// node: Claude Code and Cursor (which imports Claude Code plugins) both run it.
 const nodeNote = (app: string) =>
   `Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of ${app}.`;
 
@@ -116,7 +117,7 @@ export function sessionStart(stdinText: string, requested: string | null): strin
   const node = process.versions.node;
   if (Number.parseInt(node, 10) < MIN_NODE)
     lines.push(
-      `Comprende is running on Node.js ${node}, which is too old. ${nodeNote(agent?.names.app ?? "the AI tool")}`,
+      `Comprende is running on Node.js ${node}, which is too old. ${nodeNote((agent?.names ?? UNKNOWN_AGENT_NAMES).app)}`,
     );
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
   if (agent) lines.push(...gatedRepoContext(agent, payload));
@@ -179,7 +180,7 @@ export function prePush(stdinText: string, repo?: string | null): number {
     if (branch === baseBranch) continue; // reports are per feature branch; the base is guarded by PRs + rules
     let passed: boolean, problems: string[], mode: string;
     try {
-      [passed, problems, mode] = verify(root, null, branch, localSha);
+      [passed, problems, mode] = verify(root, { branch, rev: localSha });
     } catch (e) {
       if (!(e instanceof GateError) && (e as NodeJS.ErrnoException).code) {
         process.stderr.write(`ownership gate: skipped (${(e as Error).message})\n`);

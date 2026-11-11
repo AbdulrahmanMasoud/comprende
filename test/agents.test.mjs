@@ -234,3 +234,14 @@ test("GATE_FILES lists the gate's own files, in a fixed order", () => {
     ".github/CODEOWNERS",
   ]);
 });
+
+test("Cursor's repo: one workspace root, or none; several roots or none at all step aside", () => {
+  const dir = (payload, env = {}, platform = "linux") => gate.cursorProjectDir(payload, env, platform);
+  assert.equal(dir({ cwd: "", workspace_roots: ["/w/app"] }), "/w/app");
+  assert.equal(dir({ cwd: "", workspace_roots: ["/w/app", "/w/lib"] }, { CURSOR_PROJECT_DIR: "/w/app" }), null);
+  assert.equal(dir({ cwd: "", workspace_roots: [] }, { CURSOR_PROJECT_DIR: "/w/app" }), "/w/app");
+  assert.equal(dir({ cwd: "" }), null);
+  // Windows: Cursor sends "/c:/…", and the slash before the drive goes. Elsewhere it's a path like any other.
+  assert.equal(dir({ cwd: "", workspace_roots: ["/c:/Users/dev/app"] }, {}, "win32"), "c:/Users/dev/app");
+  assert.equal(dir({ cwd: "", workspace_roots: ["/c:/Users/dev/app"] }, {}, "linux"), "/c:/Users/dev/app");
+});

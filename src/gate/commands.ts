@@ -4,6 +4,7 @@
 import { existsSync, unlinkSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { dict, get, isRecord, own, today } from "../util.js";
+import { UNKNOWN_AGENT_NAMES } from "./agents/index.js";
 import {
   changedLinesText,
   collectChanges,
@@ -192,13 +193,25 @@ export function save(
   return `Saved ${rel}: ${n} file${n === 1 ? "" : "s"} fingerprinted, ${Object.keys(verified).length} verified. Commit it together with the code.${note}`;
 }
 
+export interface VerifyOptions {
+  base?: string | null;
+  branch?: string | null;
+  rev?: string;
+  /** The PR's labels, for the skip label. */
+  labels?: string[];
+  /** Who the "check me" hint tells the developer to ask. */
+  assistant?: string;
+}
+
 export function verify(
   repo?: string | null,
-  base?: string | null,
-  branch?: string | null,
-  rev = "HEAD",
-  labels: string[] = [],
-  assistant = "your AI assistant",
+  {
+    base = null,
+    branch = null,
+    rev = "HEAD",
+    labels = [],
+    assistant = UNKNOWN_AGENT_NAMES.assistant,
+  }: VerifyOptions = {},
 ): [boolean, string[], string] {
   const root = repoRoot(repo);
   const baseRef = resolveBase(root, loadConfig(root, rev), base);

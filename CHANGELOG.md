@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- **Cursor: the gate's hook reads the repo from the payload** (part of [#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)). In Cursor it uses `workspace_roots`, then Cursor's project variables, and steps aside when neither says, instead of guessing from its own folder, since Cursor runs a plugin's hooks from the plugin's folder.
-- **Messages name the tool you're in:** "Ask Claude to run the ownership check" in Claude Code, "Ask Cursor …" in Cursor, and "Ask your AI assistant …" in CI and the git hook. The Node.js note and the plugin-update hint name the right app too.
+- **Cursor: the gate's hook reads the repo from the payload** (part of [#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)). In Cursor it uses the workspace's one root, then Cursor's project variables, and steps aside when it can't tell, instead of guessing from its own folder, since Cursor runs a plugin's hooks from the plugin's folder. With several workspace roots it steps aside too, because the command may run in any of them. The git hook and CI still check.
+- **Messages name the tool you're in:** "Ask Claude to run the ownership check" in Claude Code, "Ask Cursor …" in Cursor, and "Ask your AI assistant …" in CI and the git hook. The Node.js note at session start names the app to restart, the plugin-update hint covers both tools, and `hooks/hooks.json`'s own note for a missing `node` names both apps, since Cursor runs it too.
 
 ## 0.2.3
 
