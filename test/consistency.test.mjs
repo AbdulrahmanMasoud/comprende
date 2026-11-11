@@ -1,8 +1,9 @@
 // The plugin's files agree with each other: manifests, built copies, docs and the demo.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { test } from "node:test";
 import { parse as parseYaml } from "yaml";
 import { ENV, git, NODE, REPO, SUMMARY, setup, sh, tmp } from "./helpers.mjs";
@@ -243,6 +244,28 @@ test("the Cursor plugin shares the skill and the MCP server, and its manifest's 
   assert.equal(cursor.mcpServers, "./.mcp.json");
   for (const rel of [cursor.skills, cursor.hooks, cursor.mcpServers, cursor.logo, "skills/comprende/SKILL.md"])
     assert.ok(existsSync(join(REPO, rel)), rel);
+  // Only the fields Cursor documents (cursor.com/docs/reference/plugins), plus
+  // displayName from Cursor's own plugin template, which Cursor shows by name.
+  const documented = [
+    "name",
+    "displayName",
+    "description",
+    "version",
+    "author",
+    "homepage",
+    "repository",
+    "license",
+    "keywords",
+    "logo",
+    "rules",
+    "agents",
+    "skills",
+    "commands",
+    "hooks",
+    "mcpServers",
+    "variables",
+  ];
+  for (const key of Object.keys(cursor)) assert.ok(documented.includes(key), `${key} isn't a Cursor manifest field`);
   const market = json(".cursor-plugin/marketplace.json");
   assert.deepEqual(
     market.plugins.map((p) => [p.name, p.source]),
@@ -275,5 +298,30 @@ test("without node, the Cursor plugin's hooks fail open", (t) => {
     const r = sh(REPO, "/bin/sh", ["-c", command], { check: false, input: "{}", env: { PATH: emptyPath } });
     assert.notEqual(r.status, 2, `${event}: ${r.stderr}`);
     assert.equal(r.stdout, "", event);
+  }
+});
+
+// On Windows, Cursor runs hook commands in PowerShell, piping the payload in.
+// GitHub's runners have pwsh, so this runs in CI. Locally it's skipped without it.
+const PWSH = spawnSync("/bin/sh", ["-c", "command -v pwsh"], { encoding: "utf8" }).stdout.trim();
+
+test("the Cursor plugin's hook commands run in PowerShell, and fail open there without node", { skip: !PWSH }, (t) => {
+  const { hooks } = json(json(".cursor-plugin/plugin.json").hooks);
+  const emptyPath = tmp(t);
+  const nodeDir = dirname(NODE);
+  for (const [event, [h]] of Object.entries(hooks)) {
+    const command = `$input | ${h.command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO)}`;
+    const run = (path) =>
+      spawnSync(PWSH, ["-NoProfile", "-NonInteractive", "-Command", command], {
+        cwd: REPO,
+        input: "{}",
+        encoding: "utf8",
+        env: { ...ENV, PATH: path },
+      });
+    const ok = run(`${nodeDir}${delimiter}${process.env.PATH}`);
+    assert.equal(ok.status, 0, `${event}: ${ok.stderr}`);
+    const noNode = run(emptyPath);
+    assert.notEqual(noNode.status, 2, `${event}: ${noNode.stderr}`);
+    assert.notEqual(noNode.status, 0, `${event} should report that node is missing`);
   }
 });

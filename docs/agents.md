@@ -83,7 +83,7 @@ Terms used below:
 | Hooks inside a plugin | Cursor's format. A manifest `"hooks"` path pointing to a Cursor-format file worked | Tested. Docs: [plugins reference](https://cursor.com/docs/reference/plugins) |
 | `.claude-plugin/` next to `.cursor-plugin/` | Both can live in one folder. Cursor loaded the plugin through `.cursor-plugin/plugin.json` and didn't run the Claude-format `hooks/hooks.json` | Tested (`--plugin-dir`) |
 | The plugin root in hook commands | Cursor replaces `${CURSOR_PLUGIN_ROOT}` with the plugin's folder as text, before the shell runs: it worked inside single quotes. `${CLAUDE_PLUGIN_ROOT}` expands in Claude Code plugins too. Plugin hooks get both `CURSOR_PLUGIN_ROOT` and `CLAUDE_PLUGIN_ROOT` in the environment | Tested |
-| The plugin root in MCP config | Both `${CURSOR_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_ROOT}` expand | Docs: [plugins reference](https://cursor.com/docs/reference/plugins). Not tested |
+| The plugin root in MCP config | Both `${CURSOR_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_ROOT}` expand. Our `.mcp.json` uses `${CLAUDE_PLUGIN_ROOT}`, and the server started | Tested (`${CLAUDE_PLUGIN_ROOT}`). Docs: [plugins reference](https://cursor.com/docs/reference/plugins) |
 | `--plugin-dir` with a Claude Code plugin | It works. `--plugin-dir` on this repo loaded Comprende 0.2.1, and its SessionStart and PreToolUse ran | Tested |
 | Installing | In the IDE: Customize → Install. In the CLI: `agent plugin marketplace add <git-url>`, which needs `.cursor-plugin/marketplace.json` | Docs: [plugins](https://cursor.com/docs/plugins), [CLI changelog](https://cursor.com/docs/cli/changelog). Not tested |
 | Team marketplaces | Dashboard → Plugins & MCPs → Add Marketplace, from a Git repo. One for Teams plans, unlimited for Enterprise. Install modes: Default Off, Default On, Required | Docs: [plugins](https://cursor.com/docs/plugins) |
@@ -97,7 +97,7 @@ Terms used below:
 | Loading by description | Yes, for all three project folders. A question matching a skill's description made the agent read that `SKILL.md` and answer from it | Tested |
 | Always-on instructions | A rule with `alwaysApply: true` (`.mdc`) | Docs: [rules](https://cursor.com/docs/rules) |
 | MCP config | `.cursor/mcp.json` and `~/.cursor/mcp.json`, as `{"mcpServers": {…}}`. A plugin's own file is `mcp.json`, and the manifest's `mcpServers` can point elsewhere | Docs: [MCP](https://cursor.com/docs/mcp), [plugins reference](https://cursor.com/docs/reference/plugins) |
-| A plugin's `.mcp.json` | Unknown: not documented, and not tested. It matters for sharing ours as is. To test in the Cursor adapter PR | Unknown |
+| A plugin's `.mcp.json` | Read when the manifest's `mcpServers` points at it. The memory server started and listed its 10 tools, and `learning_context` answered | Tested (`--plugin-dir`) |
 | Hooks in the CLI | `sessionStart`, `preToolUse` and `beforeShellExecution` all ran in `-p` mode | Tested |
 | Headless flags | `-p`, `--output-format stream-json`, `--trust`, `--force`, `--resume <chat>`, `--workspace` and `--plugin-dir`. `CURSOR_API_KEY` can stand in for a login | Tested (all but `CURSOR_API_KEY`). Docs: [parameters](https://cursor.com/docs/cli/reference/parameters) |
 | Shell commands in `-p` without `--force` | Unknown: we always passed `--force`. It matters only for the end-to-end script | Unknown |
@@ -308,21 +308,21 @@ In a gated repo, exactly one copy checks. In a repo whose hook files were remove
     "version": 1,
     "hooks": {
       "sessionStart": [
-        { "command": "node dist/gate.mjs session-start --agent cursor", "timeout": 30, "failClosed": false }
+        { "command": "node \"${CURSOR_PLUGIN_ROOT}/dist/gate.mjs\" session-start --from-plugin --agent cursor", "timeout": 30, "failClosed": false }
       ],
       "preToolUse": [
-        { "matcher": "Shell", "command": "node dist/gate.mjs agent-hook --from-plugin --agent cursor", "timeout": 60, "failClosed": false }
+        { "matcher": "Shell", "command": "node \"${CURSOR_PLUGIN_ROOT}/dist/gate.mjs\" agent-hook --from-plugin --agent cursor", "timeout": 60, "failClosed": false }
       ]
     }
   }
   ```
 
-  - **Relative paths:** plugin hooks run from the plugin's folder (tested), so there's no variable for PowerShell to misread.
+  - **`${CURSOR_PLUGIN_ROOT}`:** Cursor replaces it with the plugin's folder as text, before any shell runs. That's tested on macOS, where it worked even inside single quotes, and it's in the CLI's own code. So PowerShell never sees a variable. One exception: PowerShell would expand a `$` in the install path itself, inside the double quotes.
   - **`failClosed: false`:** written out, because a hook may block only on a deliberate exit 2.
   - **Without `node`:** the shell exits with a code other than 2, so the hook fails open.
 - **Shared as is:**
   - `skills/`, since Cursor reads `SKILL.md` and loads it by description.
-  - The MCP server (`dist/server.mjs`, through `.mcp.json`). Whether Cursor reads `.mcp.json` through the manifest still needs a test.
+  - The MCP server (`dist/server.mjs`, through `.mcp.json`). Tested with `cursor-agent --plugin-dir`: Cursor read `.mcp.json` through the manifest, expanded `${CLAUDE_PLUGIN_ROOT}`, and listed all 10 tools under `plugin-Comprende-comprende`.
 - **No rule file.** The always-on line keeps coming from `sessionStart` (decision 4).
 
 ### What `gate.mjs install` writes for teammates on Cursor
