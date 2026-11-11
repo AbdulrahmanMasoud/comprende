@@ -372,13 +372,14 @@ So each push is checked once, and each session gets each line once. `test/agents
 
 **Upgrading:** a gate that predates this doesn't know `.cursor/hooks.json` is a gate file. So the exemption gets a feature in the gate's header (`cursor-hooks`), like the `.gitattributes` line in 0.2.1. Until the base branch runs a gate that lists it, the upgrade PR counts the new file as a change: one small-change question, or the skip label.
 
-### Install steps for a Cursor user (after 0.3.0)
+### Install steps for a Cursor user (0.3.0)
 
 1. Install Node.js 20 or newer.
-2. Install the plugin.
-   - In the Cursor CLI, use `/plugin`. In the IDE, use Customize → Install, from the marketplace.
-   - Without the marketplace, run `agent plugin marketplace add https://github.com/AbdulrahmanMasoud/comprende`.
-   - If Comprende is already in Claude Code, Cursor imports it, so you can skip this step.
+2. Install the plugin into Cursor's folder for local plugins: `git clone https://github.com/AbdulrahmanMasoud/comprende.git ~/.cursor/plugins/local/comprende`, then **Developer: Reload Window**.
+   - Cursor loads a plugin from `~/.cursor/plugins/local/<name>` after a reload, unless local plugin imports are off (Enterprise: **Allow Local Plugin Imports**). A symlink there is skipped. Docs: [plugins](https://cursor.com/docs/plugins). The CLI loads it too (tested).
+   - To update: `git -C ~/.cursor/plugins/local/comprende pull`, then reload.
+   - If Comprende is already in Claude Code, Cursor imports it, so skip this step.
+   - The Cursor Marketplace comes later (decision 2). `agent plugin marketplace add` would register this repo on your Cursor account, through Cursor's server, so it isn't the documented route.
 3. Open a repo that uses the gate, and trust the workspace. The repo's `.cursor/hooks.json` does the rest.
 
 ### Test plan

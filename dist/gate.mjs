@@ -268,8 +268,8 @@ var cursor = {
   names: { assistant: "Cursor", app: "Cursor" },
   // Cursor may be running the Claude Code plugin it imported, so name both. Its
   // own copy is a clone in its local plugins folder until it's in Cursor's
-  // marketplace (docs/agents.md, "Decisions").
-  pluginUpdateHint: "`/plugin marketplace update comprende` in Claude Code if it's installed there, or, for Cursor's own copy, `git -C ~/.cursor/plugins/local/comprende pull` and a reload",
+  // marketplace (docs/agents.md, "Install steps for a Cursor user").
+  pluginUpdateHint: "`/plugin marketplace update comprende` in Claude Code if it's installed there, or, for Cursor's own copy, `git -C ~/.cursor/plugins/local/comprende pull` then Developer: Reload Window",
   // Cursor runs sessionStart once per chat, not again on --resume.
   eventId: (payload, event) => {
     const { toolUseId, sessionId } = readClaudeFormat(payload);
