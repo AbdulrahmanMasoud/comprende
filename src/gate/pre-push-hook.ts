@@ -11,6 +11,9 @@ import { loadConfig } from "./config.js";
 import { git, repoRoot, resolveBase } from "./git.js";
 import { GATE_REL, splitLines, ZERO_SHA } from "./shared.js";
 
+/** git's pre-push hook: checks each pushed branch against its report, and returns
+ *  the exit code. 1 only when a required check fails: a check that can't run skips
+ *  the branch, and a repo or config it can't read skips the whole push. */
 export function prePush(stdinText: string, repo?: string | null): number {
   let root: string, baseBranch: string;
   try {

@@ -1,13 +1,14 @@
 // The AI tools' SessionStart hook: what the agent is told when a session starts.
-// The always-on line, and in a gated repo the gate's context, the note for a plugin
-// that isn't running, and setting up git's pre-push hook from the plugin's copy.
+// A note when Node.js is older than 20, the always-on line, and in a gated repo the
+// gate's context, the note for a plugin that isn't running, and setting up git's
+// pre-push hook from the plugin's copy.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isFile, isSymlink, lstat } from "../util.js";
 import { type Agent, UNKNOWN_AGENT_NAMES } from "./agents/index.js";
 import { loadConfig } from "./config.js";
-import { type GateCopyDifference, gateCopyDifference } from "./gate-copy.js";
+import { type GateCopyDifference, gateCopyDifference } from "./gate-copy-difference.js";
 import { repoRoot } from "./git.js";
 import { claimed, claimedGateContext, type HookRun, type HookSource, stepsAside } from "./hook-copies.js";
 import { readHookInput } from "./hook-input.js";

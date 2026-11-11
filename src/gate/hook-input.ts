@@ -1,5 +1,6 @@
 // An AI tool's hook input: the JSON payload on stdin, and the adapter (agents/)
-// that reads it. Both hook entry points, agent-hook.ts and session-start.ts, start here.
+// that reads it. The AI tools' two hook entry points, agent-hook.ts and session-start.ts,
+// start here.
 
 import { type Agent, resolveAgent } from "./agents/index.js";
 import { withoutBom } from "./shared.js";

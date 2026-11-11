@@ -8,7 +8,7 @@ import { PROJECT_HOOK_FILES } from "./agents/index.js";
 import { setUpCodeowners } from "./codeowners.js";
 import { DEFAULT_CONFIG } from "./config.js";
 import { atomicWrite, readExisting } from "./files.js";
-import { type GateCopyDifference, gateCopyDifference } from "./gate-copy.js";
+import { type GateCopyDifference, gateCopyDifference } from "./gate-copy-difference.js";
 import { repoRoot, resolveBase } from "./git.js";
 import { addInstallLine, INSTALL_LINES } from "./install-lines.js";
 import { REPO_PLATFORM } from "./platforms/index.js";

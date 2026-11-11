@@ -1960,7 +1960,7 @@ ${fresh.join("\n")}
   return `CODEOWNERS: ${fresh.length} entries added to ${rel} for ${owner}. MANUAL STEP 2: turn on ${reviewSetting} in branch protection.`;
 }
 
-// src/gate/gate-copy.ts
+// src/gate/gate-copy-difference.ts
 var withLfEndings = (bytes) => Buffer.from(bytes.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
 function gateCopyDifference(repoCopy, pluginCopy) {
   if (repoCopy.equals(pluginCopy)) return "none";
