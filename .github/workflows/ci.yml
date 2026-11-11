@@ -63,7 +63,7 @@ jobs:
     env:
       # Pinned so that a new Claude Code release can't turn every PR red overnight.
       # Dependabot can't bump it: see "Pinned tools" in CONTRIBUTING.md.
-      CLAUDE_CODE_VERSION: 2.1.319
+      CLAUDE_CODE_VERSION: 2.1.322
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1
     steps:
       - uses: actions/checkout@v7
