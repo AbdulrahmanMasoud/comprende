@@ -1,0 +1,3 @@
+Added `mul(a, b)` to [math.js](/work/demo-no-plugin/app/math.js:6). The ownership report is saved at `.learning/checks/feature%2Fsum.md`, and the final check shows `math.js` verified. I didn’t commit.
+
+Comprende isn’t running in this Codex session. Install it with `codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`; if it’s already installed, trust its hooks in `/hooks` (Codex skips them until trusted and after every update).
