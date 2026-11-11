@@ -1,0 +1,9 @@
+{
+  "CLAUDE_PLUGIN_DATA": "/home/user/.codex/plugins/data/comprende-comprende",
+  "CLAUDE_PLUGIN_ROOT": "/home/user/.codex/plugins/cache/comprende/comprende/0.3.0",
+  "CODEX_HOME": "/home/user/.codex",
+  "CODEX_MANAGED_BY_NPM": "1",
+  "CODEX_MANAGED_PACKAGE_ROOT": "/usr/local/lib/node_modules/@openai/codex",
+  "PLUGIN_DATA": "/home/user/.codex/plugins/data/comprende-comprende",
+  "PLUGIN_ROOT": "/home/user/.codex/plugins/cache/comprende/comprende/0.3.0"
+}

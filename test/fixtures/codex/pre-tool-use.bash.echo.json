@@ -1,0 +1,14 @@
+{
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "turn_id": "00000000-0000-4000-8000-000000000002",
+  "transcript_path": "/home/user/.codex/sessions/2026/11/11/rollout-2026-11-11T11-10-40-00000000-0000-4000-8000-000000000001.jsonl",
+  "cwd": "/work/probe-app",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-6-luna",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "echo probe-silent"
+  },
+  "tool_use_id": "exec-00000000-0000-4000-8000-000000000005"
+}
