@@ -175,7 +175,7 @@ export function main(argv: string[]): number {
         }
         const rev = o("rev") ?? "HEAD";
         const base = o("base") ?? ci.baseRef;
-        const [passed, messages, mode] = verify(o("repo"), base, o("branch"), rev, labels);
+        const [passed, messages, mode] = verify(o("repo"), { base, branch: o("branch"), rev, labels });
         if (opts.json) {
           out(JSON.stringify({ passed, messages, mode }));
           return 0;

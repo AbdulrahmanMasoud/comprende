@@ -99,7 +99,8 @@ const CURSOR_FIXTURES = join(REPO, "test/fixtures/cursor");
 function fromCursor(fixture, dev) {
   const env = JSON.parse(readFileSync(join(CURSOR_FIXTURES, "hook-env.json"), "utf8"));
   return {
-    input: readFileSync(join(CURSOR_FIXTURES, fixture), "utf8"),
+    // Cursor's workspace_roots name the repo, as in a real run.
+    input: readFileSync(join(CURSOR_FIXTURES, fixture), "utf8").replaceAll("/work/probe-app", dev),
     env: { ...ENV, ...env, CLAUDE_PROJECT_DIR: dev, CURSOR_PROJECT_DIR: dev },
   };
 }
@@ -492,6 +493,11 @@ test("session start explains a gate copy that differs only in CRLF line endings,
   const pluginCrlf = context(join(tmp, "old-plugin/gate.mjs"));
   assert.match(pluginCrlf, /plugin's own copy .* line endings/);
   assert.ok(pluginCrlf.includes("/plugin marketplace update comprende"), pluginCrlf);
+  // In Cursor the plugin may be Claude Code's, imported, or Cursor's own: the note names both ways.
+  const inCursor = JSON.parse(
+    sh(tmp, NODE, [join(tmp, "old-plugin/gate.mjs"), "session-start", "--agent", "cursor"], { input: ev }).stdout,
+  ).hookSpecificOutput.additionalContext;
+  assert.ok(inCursor.includes("`agent plugin marketplace update comprende` in Cursor's CLI"), inCursor);
   assert.ok(!existsSync(hook));
 
   // Byte-identical again: the hook goes in, as before.

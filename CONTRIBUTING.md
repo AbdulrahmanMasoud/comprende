@@ -109,7 +109,8 @@ The interface, with a comment on each member, is in `src/gate/agents/types.ts`. 
    - `id`: add it to `AgentId` in `types.ts`.
    - `detects`: only if the tool runs another tool's hook command, the way Cursor runs Claude Code's. Detect from a field only that tool sends. Prefer `--agent <id>` in the tool's own hook files.
    - `shellCommand`: the command, only for the tool's shell tool.
-   - `projectDir`: the repo, from the payload or the tool's project variable.
+   - `projectDir`: the repo, from the payload or the tool's project variable. Return null when the run can't tell, and the hook steps aside. Never guess from the process's folder unless the tool always runs hooks from the project.
+   - `names` and `pluginUpdateHint`: how messages name the tool, and how its users update the plugin. The core's own text never names a tool.
    - `projectHookFiles`: the repo-level files that register the gate's hook, most specific first.
    - `formatDecision` and `formatSessionContext`: only if the tool doesn't accept the defaults (exit 0 or exit 2 with stderr, and `hookSpecificOutput.additionalContext`).
 3. **Register it in `src/gate/agents/index.ts`.** In `AGENTS`, a tool that runs another tool's hook commands goes before that tool. `PROJECT_HOOK_FILES`, and from it `GATE_FILES`, pick up its files.

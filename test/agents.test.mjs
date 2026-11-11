@@ -3,9 +3,10 @@
 // are real captures, in test/fixtures/<tool>/.
 
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { commitAll, ENV, gate, plugin, REPO, REPO_GATE, runGate, setup, sh, tmp as tmpDir, write } from "./helpers.mjs";
 
 const FIXTURES = join(REPO, "test/fixtures");
@@ -40,14 +41,78 @@ test("each adapter reads the command from its own shell tool only", () => {
   assert.equal(read("claude-code", "pre-tool-use.read.json"), null);
 });
 
-test("the repo comes from the payload's cwd, else the tool's project variable", () => {
-  const dirOf = (tool, name, env) => gate.resolveAgent(fixture(tool, name), env)?.projectDir;
+test("the repo comes from the payload first: Claude Code's cwd, Cursor's workspace_roots", () => {
+  const dirOf = (tool, name, env, edit = (p) => p) =>
+    gate.resolveAgent(JSON.stringify(edit(JSON.parse(fixture(tool, name)))), env)?.projectDir;
   assert.equal(dirOf("claude-code", "pre-tool-use.bash.ls.json", {}), "/work/probe-app");
-  // Cursor's cwd is always "". It sets both variables to the same path; CLAUDE_PROJECT_DIR comes first.
+  // Cursor's cwd is always "", so its workspace decides, then its project variables.
   const push = "pre-tool-use.shell.git-push.json";
-  assert.equal(dirOf("cursor", push, { CLAUDE_PROJECT_DIR: "/b", CURSOR_PROJECT_DIR: "/a" }), "/b");
-  assert.equal(dirOf("cursor", push, { CURSOR_PROJECT_DIR: "/a" }), "/a");
-  assert.equal(dirOf("cursor", push, {}), null);
+  assert.equal(dirOf("cursor", push, { CURSOR_PROJECT_DIR: "/a" }), "/work/probe-app");
+  const noWorkspace = (p) => ({ ...p, workspace_roots: [] });
+  assert.equal(dirOf("cursor", push, { CURSOR_PROJECT_DIR: "/a", CLAUDE_PROJECT_DIR: "/b" }, noWorkspace), "/a");
+  assert.equal(dirOf("cursor", push, { CLAUDE_PROJECT_DIR: "/b" }, noWorkspace), "/b");
+  assert.equal(dirOf("cursor", push, {}, noWorkspace), null);
+});
+
+test("Cursor's plugin hook never takes its own folder for the repo: without a workspace it steps aside", (t) => {
+  const { dev } = unverifiedRepo(t);
+  unlinkSync(join(dev, ".claude/settings.json")); // so the plugin's hook doesn't step aside for the repo's
+  const push = JSON.parse(fixture("cursor", "pre-tool-use.shell.git-push.json"));
+  const env = { ...ENV, CURSOR_PROJECT_DIR: "", CLAUDE_PROJECT_DIR: "" };
+  // Run from inside the unverified repo, as if the plugin's folder were there.
+  const withRoot = sh(
+    dev,
+    process.execPath,
+    [join(REPO, "dist/gate.mjs"), "agent-hook", "--from-plugin", "--agent", "cursor"],
+    {
+      check: false,
+      input: JSON.stringify({ ...push, workspace_roots: [dev] }),
+      env,
+    },
+  );
+  assert.equal(withRoot.status, 2, withRoot.stderr);
+  const without = sh(
+    dev,
+    process.execPath,
+    [join(REPO, "dist/gate.mjs"), "agent-hook", "--from-plugin", "--agent", "cursor"],
+    {
+      check: false,
+      input: JSON.stringify({ ...push, workspace_roots: [] }),
+      env,
+    },
+  );
+  assert.deepEqual([without.status, without.stdout, without.stderr], [0, "", ""]);
+});
+
+test("each tool's messages name that tool, and CI's name none", (t) => {
+  const { dev } = unverifiedRepo(t);
+  const cursorPush = fixture("cursor", "pre-tool-use.shell.git-push.json").replaceAll("/work/probe-app", dev);
+  assert.match(runGate(dev, ["agent-hook"], { input: cursorPush }).stderr, /Ask Cursor to run the ownership check/);
+  const claudePush = claudeCodePayload("pre-tool-use.bash.git-push.json", dev);
+  assert.match(runGate(dev, ["agent-hook"], { input: claudePush }).stderr, /Ask Claude to run the ownership check/);
+  const ci = runGate(dev, ["verify"]);
+  assert.match(ci.stderr, /Ask your AI assistant to run the ownership check/);
+  assert.doesNotMatch(ci.stderr, /Claude|Cursor/);
+});
+
+test("on a Node.js that's too old, session start names the app to restart", (t) => {
+  const { dev } = setup(t);
+  const preload = join(tmpDir(t), "old-node.mjs");
+  writeFileSync(preload, 'Object.defineProperty(process.versions, "node", { value: "18.20.4" });\n');
+  const start = (agent) =>
+    JSON.parse(
+      sh(
+        dev,
+        process.execPath,
+        ["--import", pathToFileURL(preload).href, join(REPO, "dist/gate.mjs"), "session-start", "--agent", agent],
+        {
+          input: claudeCodePayload("session-start.json", dev),
+          env: { ...ENV, OWNERSHIP_GATE_NO_AUTO_HOOK: "1" },
+        },
+      ).stdout,
+    ).hookSpecificOutput.additionalContext;
+  assert.match(start("cursor"), /Node\.js 20 or newer.*then a restart of Cursor\./);
+  assert.match(start("claude-code"), /then a restart of Claude Code\./);
 });
 
 test("--agent wins over detection, and an unknown --agent resolves to no adapter", () => {
@@ -115,8 +180,7 @@ test("a Shell payload is Cursor's even without cursor_version: only Cursor calls
 test("agent-hook --agent cursor blocks an unverified push from a Cursor payload", (t) => {
   const { dev } = unverifiedRepo(t);
   const r = runGate(dev, ["agent-hook", "--agent", "cursor"], {
-    input: fixture("cursor", "pre-tool-use.shell.git-push.json"),
-    env: { ...ENV, CURSOR_PROJECT_DIR: dev },
+    input: fixture("cursor", "pre-tool-use.shell.git-push.json").replaceAll("/work/probe-app", dev),
   });
   assert.equal(r.status, 2, r.stderr);
   assert.match(r.stderr, /^Blocked by the ownership gate:/);
@@ -125,7 +189,7 @@ test("agent-hook --agent cursor blocks an unverified push from a Cursor payload"
 test("from Cursor, session start finds the repo with only CURSOR_PROJECT_DIR set", (t) => {
   const { dev } = setup(t);
   const r = plugin(REPO, ["session-start"], {
-    input: fixture("cursor", "session-start.json"),
+    input: JSON.stringify({ ...JSON.parse(fixture("cursor", "session-start.json")), workspace_roots: [] }),
     env: { ...ENV, CURSOR_PROJECT_DIR: dev, OWNERSHIP_GATE_NO_AUTO_HOOK: "1" },
   });
   assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /This repository uses the ownership gate/);
@@ -169,4 +233,15 @@ test("GATE_FILES lists the gate's own files, in a fixed order", () => {
     ".claude/settings.json",
     ".github/CODEOWNERS",
   ]);
+});
+
+test("Cursor's repo: one workspace root, or none; several roots or none at all step aside", () => {
+  const dir = (payload, env = {}, platform = "linux") => gate.cursorProjectDir(payload, env, platform);
+  assert.equal(dir({ cwd: "", workspace_roots: ["/w/app"] }), "/w/app");
+  assert.equal(dir({ cwd: "", workspace_roots: ["/w/app", "/w/lib"] }, { CURSOR_PROJECT_DIR: "/w/app" }), null);
+  assert.equal(dir({ cwd: "", workspace_roots: [] }, { CURSOR_PROJECT_DIR: "/w/app" }), "/w/app");
+  assert.equal(dir({ cwd: "" }), null);
+  // Windows: Cursor sends "/c:/…", and the slash before the drive goes. Elsewhere it's a path like any other.
+  assert.equal(dir({ cwd: "", workspace_roots: ["/c:/Users/dev/app"] }, {}, "win32"), "c:/Users/dev/app");
+  assert.equal(dir({ cwd: "", workspace_roots: ["/c:/Users/dev/app"] }, {}, "linux"), "/c:/Users/dev/app");
 });

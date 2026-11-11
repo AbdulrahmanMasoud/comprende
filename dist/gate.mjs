@@ -146,11 +146,25 @@ var claudeCode = {
     const { toolName, command } = readClaudeFormat(payload);
     return (toolName ?? "Bash") === "Bash" ? command : null;
   },
-  projectDir: (payload, env) => readClaudeFormat(payload).cwd ?? (env.CLAUDE_PROJECT_DIR || null),
+  // Claude Code runs every hook from the project, so its own folder is a fair last guess.
+  projectDir: (payload, env) => readClaudeFormat(payload).cwd ?? (env.CLAUDE_PROJECT_DIR || process.cwd()),
+  names: { assistant: "Claude", app: "Claude Code" },
+  pluginUpdateHint: "`/plugin marketplace update comprende`",
   projectHookFiles: [CLAUDE_SETTINGS]
 };
 
 // src/gate/agents/cursor.ts
+function cursorProjectDir(payload, env, platform = process.platform) {
+  const cwd = readClaudeFormat(payload).cwd;
+  if (cwd) return cwd;
+  const roots = (isRecord(payload) && Array.isArray(payload.workspace_roots) ? payload.workspace_roots : []).filter(
+    (r) => typeof r === "string" && r !== ""
+  );
+  if (roots.length > 1) return null;
+  if (roots.length === 1)
+    return platform === "win32" && /^\/[A-Za-z]:[\\/]/.test(roots[0]) ? roots[0].slice(1) : roots[0];
+  return env.CURSOR_PROJECT_DIR || env.CLAUDE_PROJECT_DIR || null;
+}
 var cursor = {
   id: "cursor",
   // Only Cursor sends cursor_version, or calls its shell tool "Shell". Not the
@@ -160,9 +174,13 @@ var cursor = {
     const { toolName, command } = readClaudeFormat(payload);
     return (toolName ?? "Shell") === "Shell" ? command : null;
   },
-  // Cursor sets both variables to the same path. CLAUDE_PROJECT_DIR comes first,
-  // as it did before this adapter existed.
-  projectDir: (payload, env) => readClaudeFormat(payload).cwd ?? (env.CLAUDE_PROJECT_DIR || env.CURSOR_PROJECT_DIR || null),
+  // From the payload first: its workspace, since cwd is always "". Then Cursor's
+  // project variables. Never the process's own folder: Cursor runs a plugin's
+  // hooks from the plugin's folder, which may sit inside some other repo.
+  projectDir: (payload, env) => cursorProjectDir(payload, env),
+  names: { assistant: "Cursor", app: "Cursor" },
+  // Cursor may be running the Claude Code plugin it imported, so name both.
+  pluginUpdateHint: "`/plugin marketplace update comprende` in Claude Code if it's installed there, or `agent plugin marketplace update comprende` in Cursor's CLI",
   projectHookFiles: [CLAUDE_SETTINGS]
 };
 
@@ -172,6 +190,7 @@ function resolveAgent(payload, env, requested) {
   if (requested) return AGENTS.find((a) => a.id === requested) ?? null;
   return AGENTS.find((a) => a.detects(payload, env)) ?? null;
 }
+var UNKNOWN_AGENT_NAMES = { assistant: "your AI assistant", app: "your AI tool" };
 var PROJECT_HOOK_FILES = [...new Set(AGENTS.flatMap((a) => a.projectHookFiles))];
 
 // src/gate/config.ts
@@ -1222,7 +1241,7 @@ function smallChange(root, baseRef, mb, rev, changes, cfg) {
 }
 
 // src/gate/commands.ts
-var CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
+var checkMeHint = (assistant) => `Ask ${assistant} to run the ownership check ("check me"), then commit the report.`;
 var listPaths = (paths) => paths.map(oneLine).join(", ");
 var BLANK = "[\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
 var BLANK_ENDS = new RegExp(`^${BLANK}+|${BLANK}+$`, "gu");
@@ -1355,7 +1374,13 @@ function save(payload, repo, base, branch) {
   const n = Object.keys(changes).length;
   return `Saved ${rel}: ${n} file${n === 1 ? "" : "s"} fingerprinted, ${Object.keys(verified).length} verified. Commit it together with the code.${note}`;
 }
-function verify(repo, base, branch, rev = "HEAD", labels = []) {
+function verify(repo, {
+  base = null,
+  branch = null,
+  rev = "HEAD",
+  labels = [],
+  assistant = UNKNOWN_AGENT_NAMES.assistant
+} = {}) {
   const root = repoRoot(repo);
   const baseRef = resolveBase(root, loadConfig(root, rev), base);
   const cfg = rulesFromBase(root, baseRef);
@@ -1368,7 +1393,11 @@ function verify(repo, base, branch, rev = "HEAD", labels = []) {
   if (report === null) {
     if (Object.entries(changes).every(([p, c]) => needsNoQuestions(p, c.mode, cfg)))
       return [true, ["Only ignored files changed (e.g. lockfiles) \u2014 no report needed."], cfg.mode];
-    return [false, [`No ownership report for branch '${oneLine(br)}' (${reportPath(br)}). ${CHECK_ME_HINT}`], cfg.mode];
+    return [
+      false,
+      [`No ownership report for branch '${oneLine(br)}' (${reportPath(br)}). ${checkMeHint(assistant)}`],
+      cfg.mode
+    ];
   }
   const st = fileStates(root, changes, report, rev, mb);
   const by = (s) => Object.keys(changes).filter((p) => st[p] === s);
@@ -1386,7 +1415,7 @@ function verify(repo, base, branch, rev = "HEAD", labels = []) {
   const len = charCount(trimSummary(report.summary));
   const shortOk = () => len >= cfg.small_summary_chars && smallChange(root, baseRef, mb, rev, changes, cfg).small;
   if (len < cfg.min_summary_chars && !shortOk()) problems.push("The developer's summary is missing or too short.");
-  if (problems.length && !(by("rebased").length && problems.length === 1)) problems.push(CHECK_ME_HINT);
+  if (problems.length && !(by("rebased").length && problems.length === 1)) problems.push(checkMeHint(assistant));
   return [problems.length === 0, problems, cfg.mode];
 }
 function deleteReportInputFile(input, repo) {
@@ -1573,7 +1602,9 @@ function agentHook(stdinText, fromPlugin, requested) {
   try {
     const command = agent.shellCommand(payload);
     if (command === null || !isPushCommand(command)) return allow;
-    root = repoRoot(agent.projectDir(payload, env) ?? process.cwd());
+    const dir = agent.projectDir(payload, env);
+    if (dir === null) return allow;
+    root = repoRoot(dir);
     if (!lstat(join9(root, CONFIG_PATH))) return allow;
     if (fromPlugin && agent.projectHookFiles.some((f) => projectHookRunsGate(join9(root, f.path), f))) return allow;
   } catch {
@@ -1581,7 +1612,7 @@ function agentHook(stdinText, fromPlugin, requested) {
   }
   let passed, problems, mode;
   try {
-    [passed, problems, mode] = verify(root);
+    [passed, problems, mode] = verify(root, { assistant: agent.names.assistant });
   } catch (e) {
     if (!(e instanceof GateError)) return allow;
     [passed, problems, mode] = [false, [e.message], "required"];
@@ -1598,7 +1629,7 @@ function agentHook(stdinText, fromPlugin, requested) {
 - ${problems.join("\n- ")}` });
 }
 var MIN_NODE = 20;
-var NODE_NOTE = "Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.";
+var nodeNote = (app) => `Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of ${app}.`;
 var ALWAYS_ON = "Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
 var withLfEndings = (bytes) => Buffer.from(bytes.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
 function gateCopyDifference(repoCopy, pluginCopy) {
@@ -1606,24 +1637,28 @@ function gateCopyDifference(repoCopy, pluginCopy) {
   if (!withLfEndings(repoCopy).equals(withLfEndings(pluginCopy))) return "content";
   return repoCopy.includes("\r\n") ? "repo-crlf" : "plugin-crlf";
 }
-var UNTRUSTED_GATE_NOTE = {
+var untrustedGateNote = (agent) => ({
   content: `This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`,
   "repo-crlf": `This repo's ${GATE_REL} differs from the plugin's copy only in its line endings: git's core.autocrlf checked it out with CRLF. The local pre-push hook trusts only a byte-identical copy, so it was NOT installed automatically. Tell the user in one line to run \`git -c core.autocrlf=false checkout -- ${GATE_REL}\`, then \`node ${GATE_REL} install\`, which adds \`${GATE_ATTRIBUTES_LINE}\` to .gitattributes so it stays that way.`,
-  "plugin-crlf": `The plugin's own copy of gate.mjs has CRLF line endings (git's core.autocrlf, in an install from before Comprende 0.2.1), so it differs from this repo's ${GATE_REL} only in its line endings, and the local pre-push hook was NOT installed automatically. Tell the user in one line to update the plugin: \`/plugin marketplace update comprende\`.`
-};
+  "plugin-crlf": `The plugin's own copy of gate.mjs has CRLF line endings (git's core.autocrlf, in an install from before Comprende 0.2.1), so it differs from this repo's ${GATE_REL} only in its line endings, and the local pre-push hook was NOT installed automatically. Tell the user in one line to update the plugin: ${agent.pluginUpdateHint}.`
+});
 function sessionStart(stdinText, requested) {
   const { payload, agent } = readHookInput(stdinText, requested);
   const lines = [];
   const node = process.versions.node;
   if (Number.parseInt(node, 10) < MIN_NODE)
-    lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
+    lines.push(
+      `Comprende is running on Node.js ${node}, which is too old. ${nodeNote((agent?.names ?? UNKNOWN_AGENT_NAMES).app)}`
+    );
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
   if (agent) lines.push(...gatedRepoContext(agent, payload));
   return sessionContextReply(agent, lines);
 }
 function gatedRepoContext(agent, payload) {
   try {
-    const root = repoRoot(agent.projectDir(payload, process.env) ?? process.cwd());
+    const dir = agent.projectDir(payload, process.env);
+    if (dir === null) return [];
+    const root = repoRoot(dir);
     if (!lstat(join9(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];
@@ -1633,7 +1668,7 @@ function gatedRepoContext(agent, payload) {
     const repoGate = join9(root, GATE_REL);
     if (process.env.OWNERSHIP_GATE_NO_AUTO_HOOK !== "1" && isFile(repoGate) && !isSymlink(repoGate)) {
       const difference = SELF ? gateCopyDifference(readFileSync2(repoGate), readFileSync2(SELF)) : "content";
-      if (difference !== "none") lines.push(UNTRUSTED_GATE_NOTE[difference]);
+      if (difference !== "none") lines.push(untrustedGateNote(agent)[difference]);
       else {
         const result = installHooks(root, true)[0];
         if (result.startsWith("installed") || result.startsWith("re-pinned")) {
@@ -1667,7 +1702,7 @@ function prePush(stdinText, repo) {
     if (branch === baseBranch) continue;
     let passed, problems, mode;
     try {
-      [passed, problems, mode] = verify(root, null, branch, localSha);
+      [passed, problems, mode] = verify(root, { branch, rev: localSha });
     } catch (e) {
       if (!(e instanceof GateError) && e.code) {
         process.stderr.write(`ownership gate: skipped (${e.message})
@@ -1883,6 +1918,8 @@ function testCall(fn, a) {
       const p = ciPlatform(env);
       return { id: p.id, context: p.ciContext(env), summaryFile: p.reviewerSummaryFile(env) };
     }
+    case "cursor_project_dir":
+      return cursorProjectDir(a[0], a[1] ?? {}, String(a[2]));
     case "resolve_agent": {
       const env = a[1] ?? {};
       let payload;
@@ -2053,7 +2090,7 @@ ${HELP}`);
         }
         const rev = o("rev") ?? "HEAD";
         const base = o("base") ?? ci.baseRef;
-        const [passed, messages, mode] = verify(o("repo"), base, o("branch"), rev, labels);
+        const [passed, messages, mode] = verify(o("repo"), { base, branch: o("branch"), rev, labels });
         if (opts.json) {
           out(JSON.stringify({ passed, messages, mode }));
           return 0;

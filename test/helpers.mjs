@@ -135,6 +135,9 @@ export const gate = {
   mergeClaudeSettings: (path) => testFn("merge_claude_settings", path),
   /** The platform whose CI this environment is, and what it reads from it. */
   ciPlatform: (env = {}) => testFn("ci_platform", env),
+  /** The repo the Cursor adapter reads from this payload object, as on `platform`. */
+  cursorProjectDir: (payload, env = {}, platform = process.platform) =>
+    testFn("cursor_project_dir", payload, env, platform),
   /** Which adapter the hook resolves to for this payload text, and what it reads. */
   resolveAgent: (payloadText, env = {}, agent = null) => testFn("resolve_agent", payloadText, env, agent),
   mdSafe: (text) => testFn("md_safe", text),
