@@ -26,6 +26,7 @@ actionlint                        # the GitHub workflows
 
 - `.claude-plugin/`: `plugin.json`, `marketplace.json` (`source: "."`), `icon.png`
 - `hooks/hooks.json`: SessionStart (`gate.mjs session-start`), PreToolUse on Bash (`gate.mjs claude-hook --from-plugin`)
+- `.cursor-plugin/`: `plugin.json` (the same skill and MCP server, `hooks/cursor-hooks.json`) and `marketplace.json`. `hooks/cursor-hooks.json`: Cursor's format, plain `node "${CURSOR_PLUGIN_ROOT}/dist/gate.mjs" … --agent cursor` lines with no shell syntax, since Cursor runs hooks in PowerShell on Windows
 - `.mcp.json`: the `comprende` MCP server (`dist/server.mjs`)
 - `skills/comprende/SKILL.md` plus `references/` (signals, formats, examples, memory, ownership-check)
 - `src/gate/`: the ownership gate, bundled into `dist/gate.mjs` from `cli.ts`. One module per concern, each with a header saying what it owns:
@@ -88,8 +89,8 @@ Every change goes through a branch, a pull request and CI. That includes one-lin
 - **Wait for green.** Every required check must pass (`gh pr checks --watch`), and the branch must be up to date with `main`. If a check fails, fix it on the same branch. Windows isn't on PRs: it runs in its own workflow, which isn't required (see CONTRIBUTING.md).
 - **Don't merge.** Report the PR link and stop. Merge only when the maintainer says so.
 - **SemVer.** While we're on 0.x, a new feature bumps the minor (0.2.0 → 0.3.0) and a fix bumps the patch (0.2.0 → 0.2.1). Separately, bump `GATE_VERSION` in `src/gate/shared.ts` only when the report format or the gate's behavior changes in a way that old copies can't handle.
-- **A release.** Users only get an update when `plugin.json`'s version changes.
-  1. On a `chore/release-X.Y.Z` branch, bump `version` in `.claude-plugin/plugin.json` and `package.json`. `npm version X.Y.Z --no-git-tag-version` updates `package.json` and `package-lock.json` together. Before you start, check the pinned CI tools ("Pinned tools" in CONTRIBUTING.md), and bump any that are behind in their own `chore/` PR first.
+- **A release.** Users only get an update when the plugins' version changes.
+  1. On a `chore/release-X.Y.Z` branch, bump `version` in `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json` and `package.json`. `npm version X.Y.Z --no-git-tag-version` updates `package.json` and `package-lock.json` together. Before you start, check the pinned CI tools ("Pinned tools" in CONTRIBUTING.md), and bump any that are behind in their own `chore/` PR first.
   2. Add the CHANGELOG entry: rename `## Unreleased` to `## X.Y.Z`, and put a new empty `## Unreleased` above it.
   3. Open the PR, wait for green, and merge it once the maintainer says so.
   4. Tag the merge commit on `main`: `git switch main && git pull --ff-only && git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.

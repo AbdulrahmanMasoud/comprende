@@ -21,6 +21,7 @@ const UNRELEASED = "Unreleased";
 /** Every field that states the plugin's version. They must all agree. */
 const VERSION_FIELDS = [
   { label: ".claude-plugin/plugin.json", file: ".claude-plugin/plugin.json", path: ["version"] },
+  { label: ".cursor-plugin/plugin.json", file: ".cursor-plugin/plugin.json", path: ["version"] },
   { label: "package.json", file: "package.json", path: ["version"] },
   { label: "package-lock.json", file: "package-lock.json", path: ["version"] },
   { label: 'package-lock.json (packages[""])', file: "package-lock.json", path: ["packages", "", "version"] },

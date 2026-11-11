@@ -1,8 +1,9 @@
 // The plugin's files agree with each other: manifests, built copies, docs and the demo.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { test } from "node:test";
 import { parse as parseYaml } from "yaml";
 import { ENV, git, NODE, REPO, SUMMARY, setup, sh, tmp } from "./helpers.mjs";
@@ -234,4 +235,100 @@ test("dist/ and the skill's scripts are checked out byte for byte, whatever core
   assert.ok(built.includes("dist/gate.mjs") && built.includes("skills/comprende/scripts/gate.mjs"), built.join(", "));
   const attrs = git(REPO, "check-attr", "text", "--", ...built).stdout;
   for (const file of built) assert.ok(attrs.includes(`${file}: text: unset`), attrs);
+});
+
+test("the Cursor plugin shares the skill and the MCP server, and its manifest's paths exist", () => {
+  const cursor = json(".cursor-plugin/plugin.json");
+  assert.equal(cursor.name, json(".claude-plugin/plugin.json").name);
+  assert.equal(cursor.skills, "./skills/");
+  assert.equal(cursor.mcpServers, "./.mcp.json");
+  for (const rel of [cursor.skills, cursor.hooks, cursor.mcpServers, cursor.logo, "skills/comprende/SKILL.md"])
+    assert.ok(existsSync(join(REPO, rel)), rel);
+  // Only the fields Cursor documents (cursor.com/docs/reference/plugins), plus
+  // displayName from Cursor's own plugin template, which Cursor shows by name.
+  const documented = [
+    "name",
+    "displayName",
+    "description",
+    "version",
+    "author",
+    "homepage",
+    "repository",
+    "license",
+    "keywords",
+    "logo",
+    "rules",
+    "agents",
+    "skills",
+    "commands",
+    "hooks",
+    "mcpServers",
+    "variables",
+  ];
+  for (const key of Object.keys(cursor)) assert.ok(documented.includes(key), `${key} isn't a Cursor manifest field`);
+  const market = json(".cursor-plugin/marketplace.json");
+  assert.deepEqual(
+    market.plugins.map((p) => [p.name, p.source]),
+    [["comprende", "./"]],
+  );
+});
+
+test("the Cursor plugin's hook commands are plain node lines that PowerShell can run too", () => {
+  const { hooks } = json(json(".cursor-plugin/plugin.json").hooks);
+  const entries = Object.entries(hooks).flatMap(([event, list]) => list.map((h) => ({ event, ...h })));
+  assert.deepEqual(entries.map((h) => h.event).sort(), ["preToolUse", "sessionStart"]);
+  for (const h of entries) {
+    // One program and its arguments: no ;, |, &, $(…), backticks, redirects or "command -v".
+    assert.match(
+      h.command,
+      /^node "\$\{CURSOR_PLUGIN_ROOT\}\/dist\/gate\.mjs" (session-start|agent-hook) --from-plugin --agent cursor$/,
+    );
+    assert.equal(h.failClosed, false, "a hook blocks only on a deliberate exit 2");
+    assert.ok(h.timeout > 0);
+  }
+  assert.equal(entries.find((h) => h.event === "preToolUse").matcher, "Shell");
+});
+
+test("without node, the Cursor plugin's hooks fail open", (t) => {
+  const { hooks } = json(json(".cursor-plugin/plugin.json").hooks);
+  const emptyPath = tmp(t);
+  for (const [event, [h]] of Object.entries(hooks)) {
+    // Cursor puts the plugin's folder in place of the variable before the shell runs.
+    const command = h.command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO);
+    // No input: without node the shell exits before reading it, and writing it would race (EPIPE).
+    const r = spawnSync("/bin/sh", ["-c", command], {
+      cwd: REPO,
+      stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf8",
+      env: { PATH: emptyPath },
+    });
+    assert.notEqual(r.status, 2, `${event}: ${r.stderr}`);
+    assert.equal(r.stdout, "", event);
+  }
+});
+
+// On Windows, Cursor runs hook commands in PowerShell, piping the payload in.
+// GitHub's runners have pwsh, so this runs in CI. Locally it's skipped without it.
+const PWSH = spawnSync("/bin/sh", ["-c", "command -v pwsh"], { encoding: "utf8" }).stdout.trim();
+
+test("the Cursor plugin's hook commands run in PowerShell, and fail open there without node", { skip: !PWSH }, (t) => {
+  const { hooks } = json(json(".cursor-plugin/plugin.json").hooks);
+  const emptyPath = tmp(t);
+  const nodeDir = dirname(NODE);
+  for (const [event, [h]] of Object.entries(hooks)) {
+    const command = `$input | ${h.command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO)}`;
+    const run = (path, input) =>
+      spawnSync(PWSH, ["-NoProfile", "-NonInteractive", "-Command", command], {
+        cwd: REPO,
+        // Without node there's nothing to read the input, and writing it would race (EPIPE).
+        ...(input === undefined ? { stdio: ["ignore", "pipe", "pipe"] } : { input }),
+        encoding: "utf8",
+        env: { ...ENV, PATH: path },
+      });
+    const ok = run(`${nodeDir}${delimiter}${process.env.PATH}`, "{}");
+    assert.equal(ok.status, 0, `${event}: ${ok.stderr}`);
+    const noNode = run(emptyPath);
+    assert.notEqual(noNode.status, 2, `${event}: ${noNode.stderr}`);
+    assert.notEqual(noNode.status, 0, `${event} should report that node is missing`);
+  }
 });

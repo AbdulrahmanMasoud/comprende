@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **A Cursor plugin** (part of [#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)): `.cursor-plugin/plugin.json`, next to Claude Code's, with the same skill and the same memory server (all 10 tools). Its hooks, in `hooks/cursor-hooks.json`, are plain `node` lines with no shell syntax, so they also run in PowerShell, and a missing `node` fails open. `tools/release.mjs` keeps its version in step.
+- **The skill reads the same in both tools:** where it said "Claude" but meant the agent, it now says so.
 - **Cursor: the gate's hook reads the repo from the payload** (part of [#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)). In Cursor it uses the workspace's one root, then Cursor's project variables, and steps aside when it can't tell, instead of guessing from its own folder, since Cursor runs a plugin's hooks from the plugin's folder. With several workspace roots it steps aside too, because the command may run in any of them. The git hook and CI still check.
 - **Messages name the tool you're in:** "Ask Claude to run the ownership check" in Claude Code, "Ask Cursor …" in Cursor, and "Ask your AI assistant …" in CI and the git hook. The Node.js note at session start names the app to restart, the plugin-update hint covers both tools, and `hooks/hooks.json`'s own note for a missing `node` names both apps, since Cursor runs it too.
 

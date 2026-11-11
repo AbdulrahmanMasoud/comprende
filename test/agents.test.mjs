@@ -245,3 +245,28 @@ test("Cursor's repo: one workspace root, or none; several roots or none at all s
   assert.equal(dir({ cwd: "", workspace_roots: ["/c:/Users/dev/app"] }, {}, "win32"), "c:/Users/dev/app");
   assert.equal(dir({ cwd: "", workspace_roots: ["/c:/Users/dev/app"] }, {}, "linux"), "/c:/Users/dev/app");
 });
+
+test("the Cursor plugin's hooks, run as Cursor runs them, block an unverified push and stay silent otherwise", (t) => {
+  const { dev } = unverifiedRepo(t);
+  unlinkSync(join(dev, ".claude/settings.json")); // no repo hook, so the plugin's checks
+  const { hooks } = JSON.parse(readFileSync(join(REPO, "hooks/cursor-hooks.json"), "utf8"));
+  // Cursor puts the plugin's folder in place of the variable, and runs the command from that folder.
+  const run = (command, payload) =>
+    sh(REPO, "/bin/sh", ["-c", command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO)], {
+      check: false,
+      input: payload.replaceAll("/work/probe-app", dev),
+      env: { ...ENV, ...envOf("cursor"), CURSOR_PROJECT_DIR: dev, CLAUDE_PROJECT_DIR: dev },
+    });
+  const shell = hooks.preToolUse[0].command;
+  const push = run(shell, fixture("cursor", "pre-tool-use.shell.git-push.json"));
+  assert.equal(push.status, 2, push.stderr);
+  assert.match(push.stderr, /Ask Cursor to run the ownership check/);
+  for (const name of ["pre-tool-use.shell.ls.json", "pre-tool-use.shell.git-status.json"]) {
+    const r = run(shell, fixture("cursor", name));
+    assert.deepEqual([r.status, r.stdout, r.stderr], [0, "", ""], name);
+  }
+  const start = run(hooks.sessionStart[0].command, fixture("cursor", "session-start.json"));
+  const context = JSON.parse(start.stdout).hookSpecificOutput.additionalContext;
+  assert.match(context, /^Comprende is installed\./);
+  assert.match(context, /This repository uses the ownership gate/);
+});

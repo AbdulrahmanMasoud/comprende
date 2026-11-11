@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/dist/gate.mjs\" session-start --from-plugin --agent cursor",
+        "timeout": 30,
+        "failClosed": false
+      }
+    ],
+    "preToolUse": [
+      {
+        "matcher": "Shell",
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/dist/gate.mjs\" agent-hook --from-plugin --agent cursor",
+        "timeout": 60,
+        "failClosed": false
+      }
+    ]
+  }
+}
