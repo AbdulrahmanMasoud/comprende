@@ -14,7 +14,7 @@
 
 ## 0.2.1
 
-**Upgrading:** run `node .learning/gate.mjs install --upgrade` in its own PR.
+**Upgrading:** in its own PR, run the plugin's copy of the gate: `node <plugin>/dist/gate.mjs install --upgrade --repo .` (see [Upgrading the gate](docs/teams.md#upgrading-the-gate)). The repo's own copy can't replace itself: `node .learning/gate.mjs install --upgrade` only reports `.learning/gate.mjs is this file`.
 - It replaces the gate and adds one line, `.learning/gate.mjs -text`, to `.gitattributes`.
 - While the base branch still runs the older gate, CI counts that line as a change, so the upgrade PR needs one check: a small change, so one question. Or use the skip label.
 - Once the upgrade is merged, the line needs no report.
