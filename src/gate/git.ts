@@ -7,6 +7,8 @@ import { devNull, homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { isFile } from "../util.js";
 import type { Config } from "./config.js";
+import { ciPlatform } from "./platforms/index.js";
+import { type RunResult, run } from "./run.js";
 import { GateError, sorted, splitLines } from "./shared.js";
 
 /** Environment for every git call. core.fsmonitor can name a command in the
@@ -21,33 +23,6 @@ export function gitEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
   env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
   env[`GIT_CONFIG_VALUE_${n}`] = "false";
   return { ...env, ...(extra ?? {}) };
-}
-
-export interface RunResult {
-  status: number;
-  stdout: Buffer;
-  stderr: Buffer;
-}
-
-export function run(
-  cmd: string,
-  args: string[],
-  opts: { cwd?: string; env?: NodeJS.ProcessEnv; input?: string | Buffer | undefined; timeout?: number } = {},
-): RunResult {
-  const r = spawnSync(cmd, args, {
-    cwd: opts.cwd,
-    env: opts.env,
-    input: opts.input,
-    maxBuffer: 1 << 30,
-    timeout: opts.timeout,
-    windowsHide: true,
-  });
-  if (r.error) {
-    const err = r.error as NodeJS.ErrnoException;
-    if (err.code === "ENOENT") throw Object.assign(new Error(`${cmd}: not found`), { code: "ENOENT" });
-    throw err;
-  }
-  return { status: r.status ?? 1, stdout: r.stdout ?? Buffer.alloc(0), stderr: r.stderr ?? Buffer.alloc(0) };
 }
 
 export function gitBytes(
@@ -139,7 +114,8 @@ export function resolveBase(root: string, cfg: Pick<Config, "base">, base?: stri
 
 export function currentBranch(root: string, branch?: string | null): string {
   if (branch) return branch;
-  if (process.env.GITHUB_HEAD_REF) return process.env.GITHUB_HEAD_REF;
+  const fromCi = ciPlatform(process.env).ciContext(process.env).headBranch;
+  if (fromCi) return fromCi;
   const name = git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], { check: false }).trim();
   if (!name) throw new GateError("Detached HEAD: pass --branch <name>.");
   return name;
