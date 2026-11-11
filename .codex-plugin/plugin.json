@@ -1,0 +1,25 @@
+{
+  "name": "comprende",
+  "version": "0.3.0",
+  "description": "Proof of understanding for AI-written code. The agent explains the code it writes, briefly and only where it matters, and an optional ownership gate makes sure the developer who ships a change actually understands it.",
+  "keywords": [
+    "proof-of-understanding",
+    "ai-code",
+    "learning",
+    "code-explanation",
+    "onboarding",
+    "code-review",
+    "ownership",
+    "teams"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/codex-hooks.json",
+  "mcpServers": "./.codex-plugin/mcp.json",
+  "interface": {
+    "displayName": "Comprende",
+    "shortDescription": "Understand the code AI writes for you, and prove it before you merge.",
+    "developerName": "Abdulrahman Masoud",
+    "websiteURL": "https://github.com/AbdulrahmanMasoud/comprende",
+    "logo": "./.claude-plugin/icon.png"
+  }
+}

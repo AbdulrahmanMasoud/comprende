@@ -120,7 +120,11 @@ The interface, with a comment on each member, is in `src/gate/agents/types.ts`. 
    - `eventId`: the id the tool gives a tool call or a session, the same for every hook on it. Copies of the gate that can't step aside for each other claim it, so only one speaks. Return null when one session can't run two copies.
    - `formatDecision` and `formatSessionContext`: only if the tool doesn't accept the defaults (exit 0 or exit 2 with stderr, and `hookSpecificOutput.additionalContext`).
 3. **Register it in `src/gate/agents/index.ts`.** In `AGENTS`, a tool that runs another tool's hook commands goes before that tool. `PROJECT_HOOK_FILES`, and from it `GATE_FILES`, pick up its files.
-4. **Hook commands for its plugin or settings file.** Run `node <gate.mjs> agent-hook --agent <id>` and `session-start --agent <id>`, with `--from-plugin` in the plugin's file, and `session-start --from-repo` in the repo's. Use no shell syntax, so they run in PowerShell too. Make sure a missing `node` fails open: any exit code but 2.
+4. **Its plugin files,** if it has plugins:
+   - a manifest in `.<tool>-plugin/plugin.json`, never at the root, where several tools would read it, plus its version in `VERSION_FIELDS` (`tools/release.mjs`)
+   - its own hooks file, `hooks/<tool>-hooks.json`, named in the manifest. The commands run `node <gate.mjs> agent-hook --agent <id>` and `session-start --agent <id>`, with `--from-plugin` in the plugin's file, and `session-start --from-repo` in the repo's. Use no shell syntax, so they run in PowerShell too. Make sure a missing `node` fails open: any exit code but 2
+   - an MCP config with only the variables the tool expands
+   - a row in the consistency test "each tool picks up only its own manifest, hooks and MCP config"
 5. **Tests from the fixtures,** in `test/agents.test.mjs`:
    - its payloads resolve to it
    - it reads the command and the repo
@@ -185,7 +189,7 @@ The end of "Clean code" in [CLAUDE.md](CLAUDE.md) lists where today's code doesn
 | --- | --- |
 | `Lint, typecheck and build` | `npm run typecheck`, `npm run lint`, and that `dist/` matches a fresh build |
 | `Tests (ubuntu-latest, Node 20)` … `Tests (macos-latest, Node 24)` | `npm test` on Ubuntu and macOS, Node 20, 22 and 24 |
-| `Consistency` | the versions agree (`node tools/release.mjs check`, including `.cursor-plugin/plugin.json`), `claude plugin validate` on both Claude Code manifests, `actionlint` on the workflows. Cursor has no validator, so the tests in `consistency.test.mjs` check its manifests |
+| `Consistency` | the versions agree (`node tools/release.mjs check`, including `.cursor-plugin/plugin.json` and `.codex-plugin/plugin.json`), `claude plugin validate` on both Claude Code manifests, `actionlint` on the workflows. Cursor and Codex have no validator we can run in CI, so the tests in `consistency.test.mjs` check their manifests, and that each tool finds only its own |
 
 Branch protection requires every one of these jobs, by name. If you rename one, update the ruleset in the repo settings in the same PR.
 
@@ -237,7 +241,9 @@ skills/comprende/
   scripts/            gate.mjs and learning.mjs (copies of the built files, for the skill on its own)
 hooks/hooks.json      SessionStart (auto-setup) and PreToolUse (block unverified pushes)
 .cursor-plugin/       the Cursor plugin and marketplace manifests (same skill, same MCP server)
+.codex-plugin/        the Codex plugin manifest and its MCP config (same skill, same MCP server)
 hooks/cursor-hooks.json  the Cursor plugin's hooks, in Cursor's format
+hooks/codex-hooks.json   the Codex plugin's hooks, in Codex's format (Claude Code's)
 .mcp.json             the memory server
 src/gate/             the ownership gate, one module per concern (bundled into dist/gate.mjs)
 src/store/            the memory store: learner profile and project notes
@@ -299,7 +305,7 @@ The consistency test runs the same commands, so the demo can't drift from what t
 
 `plugin.json` sets `version`, so people who installed the plugin only get an update when it changes. Users update with `/plugin marketplace update comprende`, or by turning on auto-update for this marketplace in `/plugin`.
 
-1. **Bump the version** on a `chore/release-X.Y.Z` branch, in `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json` and `package.json`. `npm version X.Y.Z --no-git-tag-version` updates `package.json` and `package-lock.json` together. Before you start, check the [pinned CI tools](#pinned-tools), and bump any that are behind in their own `chore/` PR first.
+1. **Bump the version** on a `chore/release-X.Y.Z` branch, in `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.codex-plugin/plugin.json` and `package.json`. `npm version X.Y.Z --no-git-tag-version` updates `package.json` and `package-lock.json` together. Before you start, check the [pinned CI tools](#pinned-tools), and bump any that are behind in their own `chore/` PR first.
 2. **Add the CHANGELOG entry:** rename `## Unreleased` to `## X.Y.Z`, and put a new empty `## Unreleased` above it.
 3. **Open the PR.** The maintainer merges it once CI is green. The Consistency job runs `node tools/release.mjs check`, so a missed version file fails there.
 4. **Tag the merge commit on `main`:**
