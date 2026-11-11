@@ -290,7 +290,7 @@ How each tool fills it in:
 | Shell tool | `Bash` | `Shell` | `Bash` | `run_command`, command in `toolCall.args.CommandLine` |
 | `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR`, else its own folder (Claude Code runs hooks from the project) | the one entry in `workspace_roots` (`cwd` is `""`), else `CURSOR_PROJECT_DIR` or `CLAUDE_PROJECT_DIR`, else step aside: Cursor runs plugin hooks from the plugin's folder. With several roots it steps aside, since it can't tell which one the command runs in | `cwd` | `workspacePaths[0]` |
 | `names` | Claude, Claude Code | Cursor, Cursor | Codex, Codex | Antigravity, Antigravity |
-| `pluginUpdateHint` | `/plugin marketplace update comprende` | the same, or `agent plugin marketplace update comprende` in Cursor's CLI: Cursor may be running the Claude Code plugin it imported | to be found | to be found |
+| `pluginUpdateHint` | `/plugin marketplace update comprende` | the same, since Cursor may be running the Claude Code plugin it imported, or `git -C ~/.cursor/plugins/local/comprende pull` for its own copy | to be found | to be found |
 | `projectHookFiles` | `.claude/settings.json`, always run | `.cursor/hooks.json`, always run, then `.claude/settings.json`, run only while Third-Party Imports is on | `.codex/hooks.json` | the plugin's `hooks.json` only |
 | `eventId` | the tool call's id; none for a session, since one session runs one plugin copy | the tool call's id, or the session's | to be found | to be found |
 | `formatDecision` | the default | the default | the default | `{"decision": …}` |
@@ -372,13 +372,14 @@ So each push is checked once, and each session gets each line once. `test/agents
 
 **Upgrading:** a gate that predates this doesn't know `.cursor/hooks.json` is a gate file. So the exemption gets a feature in the gate's header (`cursor-hooks`), like the `.gitattributes` line in 0.2.1. Until the base branch runs a gate that lists it, the upgrade PR counts the new file as a change: one small-change question, or the skip label.
 
-### Install steps for a Cursor user (after 0.3.0)
+### Install steps for a Cursor user (0.3.0)
 
 1. Install Node.js 20 or newer.
-2. Install the plugin.
-   - In the Cursor CLI, use `/plugin`. In the IDE, use Customize → Install, from the marketplace.
-   - Without the marketplace, run `agent plugin marketplace add https://github.com/AbdulrahmanMasoud/comprende`.
-   - If Comprende is already in Claude Code, Cursor imports it, so you can skip this step.
+2. Install the plugin into Cursor's folder for local plugins: `git clone https://github.com/AbdulrahmanMasoud/comprende.git ~/.cursor/plugins/local/comprende`, then **Developer: Reload Window**.
+   - Cursor loads a plugin from `~/.cursor/plugins/local/<name>` after a reload, unless local plugin imports are off (Enterprise: **Allow Local Plugin Imports**). A symlink there is skipped. Docs: [plugins](https://cursor.com/docs/plugins). The CLI loads it too (tested).
+   - To update: `git -C ~/.cursor/plugins/local/comprende pull`, then reload.
+   - If Comprende is already in Claude Code, Cursor imports it, so skip this step.
+   - The Cursor Marketplace comes later (decision 2). `agent plugin marketplace add` would register this repo on your Cursor account, through Cursor's server, so it isn't the documented route.
 3. Open a repo that uses the gate, and trust the workspace. The repo's `.cursor/hooks.json` does the rest.
 
 ### Test plan
