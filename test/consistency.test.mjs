@@ -141,12 +141,12 @@ test("both READMEs open with the install commands, then cover both parts", () =>
 test("the README's 'try it' script makes a gated repo where an unchecked push is blocked", (t) => {
   const en = read("README.md").toString("utf8");
   const [script] = bashBlocks(en.slice(en.indexOf("\n## Try it in 5 minutes\n")));
-  // The test can't use /tmp, the network or Claude, so it swaps those three
-  // lines and runs the rest exactly as written.
+  // The test can't use /tmp, the network or the AI tool, so it swaps those
+  // three lines and runs the rest exactly as written.
   const swaps = new Map([
     ["mkdir -p /tmp/comprende-try && cd /tmp/comprende-try", 'cd "$TRY"'],
     ["git clone -q https://github.com/AbdulrahmanMasoud/comprende.git", 'ln -s "$COMPRENDE" comprende'],
-    ["claude", ""],
+    ["claude   # or open this folder in Cursor", ""],
   ]);
   const lines = script.trim().split("\n");
   for (const line of swaps.keys()) assert.ok(lines.includes(line), `the script no longer has: ${line}`);

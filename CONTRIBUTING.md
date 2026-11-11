@@ -53,7 +53,7 @@ refactor: move the GitHub summary behind the platform interface
 
 No AI attribution (`Co-Authored-By`, "Generated with", session links) in commits, PRs, tags or releases.
 
-Cursor's agent adds a `Co-authored-by: Cursor <cursoragent@cursor.com>` trailer to the commits it makes. If you work in Cursor, turn that off in its settings, or remove the line before you push.
+Cursor's agent adds a `Co-authored-by: Cursor <cursoragent@cursor.com>` trailer to the commits it makes. If you work in Cursor, turn off `attribution.attributeCommitsToAgent`, or remove the line before you push.
 
 ### Versions
 
@@ -175,7 +175,7 @@ The CI methods may be called outside the platform's CI, because `ciPlatform` fal
 5. **Check it end to end** on a real merge request: an unverified change fails the pipeline, the skip label passes, a verified one passes, and the summary is there for reviewers.
 6. **Docs:** `docs/teams.md`, and both READMEs.
 
-Some user-facing text in the core still names Claude Code (the "check me" hint, the Node.js note). It changes with Cursor support (#2), since changing it is a behavior change. The end of "Clean code" in [CLAUDE.md](CLAUDE.md) lists where today's code doesn't follow the rules yet.
+The end of "Clean code" in [CLAUDE.md](CLAUDE.md) lists where today's code doesn't follow the rules yet.
 
 ## CI
 

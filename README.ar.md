@@ -23,7 +23,7 @@ Comprende هو plugin لـ Claude Code و Cursor، وبيعمل حاجتين:
 
 ## التسطيب
 
-محتاج [Node.js](https://nodejs.org) 20+. سطّب Comprende في مكان واحد بس: Claude Code أو Cursor، مش الاتنين.
+محتاج [Node.js](https://nodejs.org) 20+. سطّب Comprende في مكان واحد بس: Claude Code أو Cursor، مش الاتنين (Cursor بيشغّل الـ plugins بتاعة Claude Code أصلاً).
 
 ### Claude Code
 
@@ -46,9 +46,9 @@ claude plugin install comprende@comprende
 git clone https://github.com/AbdulrahmanMasoud/comprende.git ~/.cursor/plugins/local/comprende
 ```
 
-وبعدين اقفل Cursor وافتحه تاني، أو شغّل **Developer: Reload Window**. ولو Cursor سألك، وافق على الـ MCP server اللي اسمه **comprende**: ده اللي بيفتكر إنت عارف إيه. وعشان تعمل update: `git -C ~/.cursor/plugins/local/comprende pull`، وبعدين reload.
+وبعدين اقفل Cursor وافتحه تاني، أو شغّل **Developer: Reload Window**. ولو Cursor سألك، وافق على الـ MCP server اللي اسمه **comprende**: ده اللي بيفتكر إنت عارف إيه. وعشان تعمل update: `git -C ~/.cursor/plugins/local/comprende pull`، وبعدين اعمل reload.
 
-مسطّبه في Claude Code أصلاً؟ يبقى مش محتاج الخطوة دي. Cursor بيشغّل الـ plugins بتاعة Claude Code كمان (إعداد Third-Party Imports، وهو شغّال من الأول)، فلو سطّبته تاني الـ skill هيتحمّل مرتين. التفاصيل في [Comprende في Cursor](docs/agents.md#what-works-where-030) (بالإنجليزي).
+مسطّبه في Claude Code أصلاً؟ يبقى مش محتاج الخطوة دي. Cursor بيشغّل الـ plugins بتاعة Claude Code كمان (إعداد Third-Party Imports، وهو شغّال من الأول)، فلو سطّبته تاني الـ skill هيتحمّل مرتين. ولو الإعداد ده مقفول، سطّبه في Cursor كمان. التفاصيل في [Comprende في Cursor](docs/agents.md#what-works-where-030) (بالإنجليزي).
 
 على Windows، Comprende لسه experimental في الأداتين ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 
@@ -117,25 +117,20 @@ Claude بيفتكر إنت عارف إيه في `~/.comprende/`، على جها�
 
 **وفي Cursor** نفس الـ check بالظبط. ده run حقيقي، مختصر، واتسجّل بالإنجليزي:
 
-> **إنت:** run `git push -u origin feature/sum` …
+> **إنت:** Run exactly this shell command once … `git push -u origin feature/sum`. Quote any block message word for word.
 >
 > **Cursor:** Blocked by the ownership gate:
 > - No ownership report for branch 'feature/sum' (.learning/checks/feature%2Fsum.md). Ask Cursor to run the ownership check ("check me"), then commit the report.
 >
 > **إنت:** check me
 >
-> **Cursor:** … Ownership check for `feature/sum` — small change (`math.js`: new `sum`).
+> **Cursor:** … One question: why does `sum` pass `0` as the second argument to `reduce`, and what would `sum([])` return if that `0` were left out? …
 >
-> One question: why does `sum` pass `0` as the second argument to `reduce`, and what would `sum([])` return if that `0` were left out?
->
-> Answer that, then write a short PR summary in your own words (what changed, why, what could break) …
->
-> **إنت:** sum totals the list with reduce. The 0 is the starting value, so an empty list gives 0 instead of throwing a TypeError. My summary for the PR, in my own words: Added sum(xs), which adds up a list of numbers with reduce, starting from 0 so an empty list returns 0. …
+> **إنت:** … The 0 is the starting value, so an empty list gives 0 instead of throwing a TypeError. My summary for the PR, in my own words: Added sum(xs), … starting from 0 so an empty list returns 0. …
 >
 > **Cursor:** … Your answer checked out on the empty-list / initial-value point.
->
 > - Report saved: `.learning/checks/feature%2Fsum.md`
-> - Committed: `91e3afe` — Add ownership check report for feature/sum.
+> - Committed: `91e3afe` …
 > - Pushed: `feature/sum` → `origin/feature/sum`
 
 **ولو حاولت تتخطّى الـ check**، الـ agent مش هيعمل push، والـ git hook هيمنع `git push`، والـ CI هيوقّف الـ PR. وده اللي بيبان في الـ terminal:
@@ -162,7 +157,7 @@ git add -A && git commit -qm init
 node ../comprende/dist/gate.mjs install --repo . > /dev/null
 git add -A && git commit -qm "add ownership gate" && git push -q -u origin main
 git checkout -q -b feature/sum
-claude
+claude   # or open this folder in Cursor
 ```
 
 وبعدين جوه Claude (أو افتح `/tmp/comprende-try/app` في Cursor، والـ plugin متسطّب):

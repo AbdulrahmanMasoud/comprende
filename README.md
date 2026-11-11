@@ -19,7 +19,7 @@ Comprende is a plugin for Claude Code and Cursor. It does two things:
 
 ## Install
 
-You need [Node.js](https://nodejs.org) 20+. Install Comprende in one place, Claude Code or Cursor, not both.
+You need [Node.js](https://nodejs.org) 20+. Install Comprende in one place, Claude Code or Cursor, not both (Cursor already runs your Claude Code plugins).
 
 ### Claude Code
 
@@ -44,7 +44,7 @@ git clone https://github.com/AbdulrahmanMasoud/comprende.git ~/.cursor/plugins/l
 
 Then restart Cursor, or run **Developer: Reload Window**. If Cursor asks, approve the **comprende** MCP server: it remembers what you already know. To update: `git -C ~/.cursor/plugins/local/comprende pull`, then reload.
 
-Already have it in Claude Code? Skip this. Cursor runs your Claude Code plugins too (its Third-Party Imports setting, on by default), so a second copy would load the skill twice. More in [Comprende in Cursor](docs/agents.md#what-works-where-030).
+Already have it in Claude Code? Skip this. Cursor runs your Claude Code plugins too (its Third-Party Imports setting, on by default), so a second copy would load the skill twice. If that setting is off, install it in Cursor too. More in [Comprende in Cursor](docs/agents.md#what-works-where-030).
 
 On Windows, Comprende is experimental in both tools ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 
@@ -111,25 +111,20 @@ A real session, shortened:
 
 **In Cursor**, it's the same check. A real run, shortened:
 
-> **You:** run `git push -u origin feature/sum` …
+> **You:** Run exactly this shell command once … `git push -u origin feature/sum`. Quote any block message word for word.
 >
 > **Cursor:** Blocked by the ownership gate:
 > - No ownership report for branch 'feature/sum' (.learning/checks/feature%2Fsum.md). Ask Cursor to run the ownership check ("check me"), then commit the report.
 >
 > **You:** check me
 >
-> **Cursor:** … Ownership check for `feature/sum` — small change (`math.js`: new `sum`).
+> **Cursor:** … One question: why does `sum` pass `0` as the second argument to `reduce`, and what would `sum([])` return if that `0` were left out? …
 >
-> One question: why does `sum` pass `0` as the second argument to `reduce`, and what would `sum([])` return if that `0` were left out?
->
-> Answer that, then write a short PR summary in your own words (what changed, why, what could break) …
->
-> **You:** sum totals the list with reduce. The 0 is the starting value, so an empty list gives 0 instead of throwing a TypeError. My summary for the PR, in my own words: Added sum(xs), which adds up a list of numbers with reduce, starting from 0 so an empty list returns 0. …
+> **You:** … The 0 is the starting value, so an empty list gives 0 instead of throwing a TypeError. My summary for the PR, in my own words: Added sum(xs), … starting from 0 so an empty list returns 0. …
 >
 > **Cursor:** … Your answer checked out on the empty-list / initial-value point.
->
 > - Report saved: `.learning/checks/feature%2Fsum.md`
-> - Committed: `91e3afe` — Add ownership check report for feature/sum.
+> - Committed: `91e3afe` …
 > - Pushed: `feature/sum` → `origin/feature/sum`
 
 **If you skip the check**, the agent won't push, `git push` is blocked by a git hook, and CI fails the PR. This is what you see in a terminal:
@@ -165,7 +160,7 @@ git add -A && git commit -qm init
 node ../comprende/dist/gate.mjs install --repo . > /dev/null
 git add -A && git commit -qm "add ownership gate" && git push -q -u origin main
 git checkout -q -b feature/sum
-claude
+claude   # or open this folder in Cursor
 ```
 
 Then, in Claude (or open `/tmp/comprende-try/app` in Cursor, with the plugin installed):

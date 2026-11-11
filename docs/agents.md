@@ -26,7 +26,7 @@ Terms used below:
 - **The session-start message reaches the agent, and so does the reason for a block.** That's true in both hook formats.
 - **Skills load** from `.cursor/skills`, `.claude/skills` and `.agents/skills`. They load automatically when a request matches the description.
 - **Any stdout that isn't JSON blocks the command, even on exit 0.** Empty stdout is fine.
-- **On Windows, Cursor runs hooks in PowerShell, where our POSIX `sh` hook commands don't work.** See [Windows](#windows).
+- **On Windows, Cursor runs hooks in PowerShell.** Claude Code's `sh` hook commands fail open there. Since 0.3.0, Cursor's own hooks are plain `node` lines. See [Windows](#windows).
 
 ## Cursor: what we found
 
@@ -101,7 +101,7 @@ Terms used below:
 | Hooks in the CLI | `sessionStart`, `preToolUse` and `beforeShellExecution` all ran in `-p` mode | Tested |
 | Headless flags | `-p`, `--output-format stream-json`, `--trust`, `--force`, `--resume <chat>`, `--workspace` and `--plugin-dir`. `CURSOR_API_KEY` can stand in for a login | Tested (all but `CURSOR_API_KEY`). Docs: [parameters](https://cursor.com/docs/cli/reference/parameters) |
 | Shell commands in `-p` without `--force` | Unknown: we always passed `--force`. It matters only for the end-to-end script | Unknown |
-| Commit attribution | The CLI adds a "Made with Cursor" trailer by default (`attribution.attributeCommitsToAgent`). Contributors who use it must turn it off, because of our no-attribution rule | Docs: [CLI configuration](https://cursor.com/docs/cli/reference/configuration) |
+| Commit attribution | The agent adds `Co-authored-by: Cursor <cursoragent@cursor.com>` to the commits it makes. The setting is `attribution.attributeCommitsToAgent`, on by default. Contributors who use it must turn it off, because of our no-attribution rule | Tested (the trailer, in the end-to-end run). Docs: [CLI configuration](https://cursor.com/docs/cli/reference/configuration) (the setting) |
 | `sessionStart` in the Agents window | Staff say the context arrives after the first request. That matters for the always-on line (decision 4) | Unknown (IDE only). Docs: [forum](https://forum.cursor.com/t/174143) |
 
 ### Windows
@@ -110,9 +110,9 @@ The docs say: "the desktop app runs hook commands through PowerShell and pipes t
 
 **Unknown by test, because we have no Windows machine with Cursor.** It matters a lot, since many Cursor users are on Windows:
 
-- **Today's hook commands are POSIX `sh`:** `command -v node … || exit 0; exec node "$CLAUDE_PROJECT_DIR/…"`. PowerShell can't run them. They fail with an exit code other than 2, so they fail open. Nothing breaks, but nothing is checked either.
+- **Claude Code's hook commands are POSIX `sh`:** `command -v node … || exit 0; exec node "$CLAUDE_PROJECT_DIR/…"`, in `.claude/settings.json` and the Claude Code plugin. PowerShell can't run them. They fail with an exit code other than 2, so they fail open: nothing breaks, but those copies check nothing.
 - **The git pre-push hook still works,** because git runs hooks through its own `sh`.
-- **The design below uses plain `node <relative path> <command>` lines.** These run in both shells. It also strips a BOM before parsing the payload.
+- **Cursor's own hooks, since 0.3.0, are plain `node` lines,** in the Cursor plugin and the repo's `.cursor/hooks.json`. These run in both shells (tested in `pwsh` in CI, not on Windows). The gate strips a BOM before parsing a payload.
 
 Windows as a whole is tracked in [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10).
 
@@ -140,7 +140,7 @@ Each push is checked once, whatever mix of hook files and plugins is present ([S
 - **A JSON deny can't send a separate note to the agent.** Only `user_message` reaches it. Exit 2 with stderr is the same for everyone.
 - **The MCP server needs approval** (`--approve-mcps` in headless runs). Until then, the memory tools aren't there, and "check me" saves the report with `gate.mjs save --input` instead.
 - **The skill can load twice.** Cursor also runs the Claude Code plugins you've installed. Install Comprende in one place.
-- **Cursor's agent signs its commits.** It adds `Co-authored-by: Cursor <cursoragent@cursor.com>` to the commits it makes. Turn that off in Cursor's settings if you don't want it.
+- **Cursor's agent signs its commits.** It adds `Co-authored-by: Cursor <cursoragent@cursor.com>` to the commits it makes. Turn off `attribution.attributeCommitsToAgent` if you don't want it.
 
 ## Checking it in the Cursor IDE
 
@@ -392,6 +392,7 @@ So each push is checked once, and each session gets each line once. `test/agents
 1. Install Node.js 20 or newer.
 2. Install the plugin into Cursor's folder for local plugins: `git clone https://github.com/AbdulrahmanMasoud/comprende.git ~/.cursor/plugins/local/comprende`, then **Developer: Reload Window**.
    - Cursor loads a plugin from `~/.cursor/plugins/local/<name>` after a reload, unless local plugin imports are off (Enterprise: **Allow Local Plugin Imports**). A symlink there is skipped. Docs: [plugins](https://cursor.com/docs/plugins). The CLI loads it too (tested).
+   - On Windows, in PowerShell: `git clone https://github.com/AbdulrahmanMasoud/comprende.git "$HOME\.cursor\plugins\local\comprende"`. PowerShell 5.1 and cmd don't expand `~` for `git`.
    - To update: `git -C ~/.cursor/plugins/local/comprende pull`, then reload.
    - If Comprende is already in Claude Code, Cursor imports it, so skip this step.
    - The Cursor Marketplace comes later (decision 2). `agent plugin marketplace add` would register this repo on your Cursor account, through Cursor's server, so it isn't the documented route.
@@ -441,9 +442,7 @@ So each push is checked once, and each session gets each line once. `test/agents
    - the BOM handling and the step-aside rules
    - the tests and the end-to-end script
    - the docs its changes touch: `docs/teams.md`, `docs/how-it-works.md`, `SECURITY.md` (the new gate file), and the CHANGELOG under Unreleased
-3. **`docs:` the READMEs, then `chore:` release 0.3.0.**
-   - Both READMEs, where Cursor is announced, and this page's status.
-   - The release, on `chore/release-0.3.0`.
+3. **`chore:` release 0.3.0, with the docs,** on `chore/release-0.3.0`, as the maintainer asked: both READMEs, where Cursor is announced, this page's status, and the release itself.
 
 ## Decisions
 
