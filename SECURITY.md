@@ -23,6 +23,10 @@ The plugin runs in every repo you open with Claude, including ones you just clon
 - **The project-level Claude hook** that `gate.mjs install` adds to `.claude/settings.json` runs the repo's own gate. Claude Code applies it under its normal workspace-trust rules. Cursor runs it too, under its own workspace trust.
 - **No code from the environment either.** The pinned hook clears `NODE_OPTIONS` and `NODE_PATH` before running the gate, and the CI step does the same, so nothing can be preloaded into it. The CI workflow restores no dependency cache either.
 - **File names are data.** Paths are stored in prototype-free maps and looked up as own keys only, so a file named `__proto__` or `constructor` is an ordinary file to the gate.
+- **PR text can't take over CI output.** File names, concepts and summaries come from the PR, and a file name can contain a new line. GitHub's runner reads any output line that starts with `::` as a workflow command, so a crafted name could otherwise stop command processing, mask output or set variables.
+  - Every message the gate prints in CI is on one line, with control characters escaped (`\n`, `\r`, `\t`, `\xNN`): file names in messages, and errors that quote the PR's report, such as its version.
+  - Annotations escape their text the way GitHub's own toolkit does: `%`, `\r` and `\n` in the message, plus `:` and `,` in properties.
+  - The job summary escapes markdown and turns new lines into `\n`, so PR text can't add a row, a heading or a line of its own.
 - **Hooks fail open, never closed by accident.** A hook only blocks Claude when the gate deliberately returns exit code 2.
   - If `node` isn't on PATH, the plugin's hooks and the project-level hook that `install` writes exit 0. They check with plain POSIX `sh` before starting Node.
   - If Node can't run the gate (a missing file, or a Node too old to load it), SessionStart prints the same note and exits 0. PreToolUse exits 1, which Claude Code and Cursor both treat as a non-blocking error.

@@ -7,12 +7,13 @@ import { resolveBase } from "./git.js";
 import { type Report, readReport, reportPath } from "./report.js";
 import { GATE_VERSION, sorted, splitLines } from "./shared.js";
 
-/** Report text comes from the PR author: no HTML, images, links, table breaks
- *  or code spans in the reviewer's summary. */
+/** Report text comes from the PR author: no HTML, images, links, table breaks,
+ *  code spans or new lines in the reviewer's summary. A new line inside a value
+ *  would end its table row or list item and start a line of the PR's own. */
 export function escapeMarkdown(text: string): string {
   let t = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   for (const ch of ["\\", "[", "]", "|", "`", "*", "_"]) t = t.split(ch).join(`\\${ch}`);
-  return t;
+  return t.replace(/\r\n|\r|\n/g, "\\n");
 }
 
 export function jobSummary(

@@ -20,7 +20,7 @@ import { currentBranch, repoRoot } from "./git.js";
 import { agentHook, installHooks, prePush, sessionStart } from "./hooks.js";
 import { install } from "./install.js";
 import { type AnnotationKind, ciPlatform, REPO_PLATFORM } from "./platforms/index.js";
-import { GATE_VERSION, GateError } from "./shared.js";
+import { GATE_VERSION, GateError, oneLine } from "./shared.js";
 import { testCall } from "./test-hooks.js";
 
 const HELP = `Ownership gate (comprende)
@@ -195,11 +195,17 @@ export function main(argv: string[]): number {
         }
         if (passed) {
           if (messages.length) annotate(mode === "skipped" ? "warning" : "notice", messages);
-          out(messages.length ? messages[0] : mode === "off" ? "Ownership check is off." : "Ownership check passed.");
+          out(
+            messages.length
+              ? oneLine(messages[0])
+              : mode === "off"
+                ? "Ownership check is off."
+                : "Ownership check passed.",
+          );
           return 0;
         }
         annotate(mode === "required" ? "error" : "warning", messages);
-        process.stderr.write(`Ownership check failed:\n- ${messages.join("\n- ")}\n`);
+        process.stderr.write(`Ownership check failed:\n- ${messages.map(oneLine).join("\n- ")}\n`);
         return mode === "required" ? 1 : 0;
       }
       case "pre-push":
@@ -250,7 +256,7 @@ export function main(argv: string[]): number {
       const code = (e as NodeJS.ErrnoException).code;
       if (!code) throw e; // a real bug: let it surface with a stack trace
     }
-    process.stderr.write(`ownership gate: ${msg}\n`);
+    process.stderr.write(`ownership gate: ${oneLine(msg)}\n`);
     annotate("error", [msg]);
     return 1;
   }

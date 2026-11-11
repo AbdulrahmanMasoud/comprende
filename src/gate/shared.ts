@@ -53,3 +53,20 @@ export const splitLines = (s: string): string[] => {
 export const VERSION_RE = /^\/\/ ownership-gate-version: (\d+)/m;
 
 export const FEATURES_RE = /^\/\/ ownership-gate-features: (.*)$/m;
+
+/** Text on one line, with control characters escaped (\n, \r, \t, \xNN), for file
+ *  names in messages and for every message the gate prints in CI. Text from a PR
+ *  (a file name, a broken report quoted in an error) must never start a line of
+ *  its own: GitHub's runner reads a line starting with "::" as a workflow command. */
+export function oneLine(text: string): string {
+  let out = "";
+  for (const ch of text) {
+    const code = ch.charCodeAt(0);
+    if (ch === "\n") out += "\\n";
+    else if (ch === "\r") out += "\\r";
+    else if (ch === "\t") out += "\\t";
+    else if (code < 0x20 || code === 0x7f) out += `\\x${code.toString(16).padStart(2, "0")}`;
+    else out += ch;
+  }
+  return out;
+}

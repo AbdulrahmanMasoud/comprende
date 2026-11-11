@@ -5,7 +5,21 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import YAML, { parse as parseYaml } from "yaml";
-import { commitAll, ENV, gate, git, payload, REPO_GATE, read, runGate, SUMMARY, setup, sh, write } from "./helpers.mjs";
+import {
+  commitAll,
+  ENV,
+  gate,
+  git,
+  payload,
+  REPO_GATE,
+  read,
+  runGate,
+  SUMMARY,
+  saveAndCommit,
+  setup,
+  sh,
+  write,
+} from "./helpers.mjs";
 
 /** JS equivalent of impl.code_print_exit (node flavour). */
 function codePrintExit(message, code, toStderr = false) {
@@ -153,4 +167,78 @@ test("the job summary escapes the PR author's markdown", () => {
   for (const bad of ["[click](", "![i]", "<b>", "|x|", "`code`", "**bold**"]) {
     assert.ok(!s.includes(bad), bad);
   }
+});
+
+// GitHub's runner reads any output line that starts with "::" as a workflow
+// command. File names, concepts and summaries come from the PR, and a file name
+// can contain a newline, so none of them may start a line of their own.
+const INJECTED = "::stop-commands::pwned";
+const FAKE_PASS = "## ✅ Ownership check passed";
+const EVIL_NAME = `evil\n${INJECTED}\n::warning title=x::injected\n${FAKE_PASS}.js`;
+const CONTROL_NAME = "tab\tesc\x1bdel\x7fcr\r%0A::x.js";
+
+test("a file name can't inject a workflow command into CI output", { skip: process.platform === "win32" }, (t) => {
+  const { dev, tmp } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  saveAndCommit(dev);
+  write(dev, EVIL_NAME, "x\n");
+  write(dev, CONTROL_NAME, "x\n");
+  commitAll(dev, "files the report doesn't cover");
+  const summaryFile = join(tmp, "summary.md");
+  const r = runGate(dev, ["verify"], { env: { ...ENV, GITHUB_ACTIONS: "true", GITHUB_STEP_SUMMARY: summaryFile } });
+  assert.equal(r.status, 1, r.stderr);
+  for (const line of `${r.stdout}${r.stderr}`.split(/\r?\n|\r/)) {
+    if (line.startsWith("::")) assert.match(line, /^::(error|warning|notice) title=Ownership check::/, line);
+  }
+  assert.match(
+    r.stdout,
+    /::error title=Ownership check::Changed after the check \(not in the report\): evil\\n::stop-commands::pwned/,
+  );
+  assert.match(r.stderr, /Changed after the check \(not in the report\): .*evil\\n::stop-commands::pwned\\n/);
+  // Every control character is escaped, and "%" too inside an annotation.
+  assert.ok(r.stderr.includes(String.raw`tab\tesc\x1bdel\x7fcr\r%0A::x.js`), r.stderr);
+  assert.ok(r.stdout.includes(String.raw`tab\tesc\x1bdel\x7fcr\r%250A::x.js`), r.stdout);
+});
+
+test("a broken report quoted in an error can't inject a workflow command either", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  saveAndCommit(dev);
+  const rel = gate.reportRelpath("feature/rate-limit");
+  // The version error quotes the report's own "version" field, which the PR controls.
+  const report = read(dev, rel).replace(/```json\n([\s\S]*?)\n```/, (_, block) => {
+    const data = JSON.parse(block);
+    data.version = `3\n${INJECTED}`;
+    return `\`\`\`json\n${JSON.stringify(data)}\n\`\`\``;
+  });
+  write(dev, rel, report);
+  commitAll(dev, "break the report");
+  const r = runGate(dev, ["verify"], { env: { ...ENV, GITHUB_ACTIONS: "true" } });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /Report was made by gate v3\\n::stop-commands::pwned/);
+  for (const line of `${r.stdout}${r.stderr}`.split(/\r?\n|\r/)) {
+    if (line.startsWith("::")) assert.match(line, /^::(error|warning|notice) title=Ownership check::/, line);
+  }
+});
+
+test("PR-controlled text can't add a line to the job summary", { skip: process.platform === "win32" }, (t) => {
+  const { dev, tmp } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  write(dev, EVIL_NAME, "x\n");
+  gate.save(
+    {
+      summary: `${SUMMARY}\n${INJECTED}\n${FAKE_PASS}`,
+      verified: { "src/app.js": [`limit math\n${FAKE_PASS}`], [EVIL_NAME]: ["the evil file"] },
+    },
+    dev,
+  );
+  commitAll(dev, "report");
+  write(dev, "src/app.js", "export const app = 3;\n");
+  commitAll(dev, "changed after the check");
+  const summaryFile = join(tmp, "summary.md");
+  const r = runGate(dev, ["verify"], { env: { ...ENV, GITHUB_ACTIONS: "true", GITHUB_STEP_SUMMARY: summaryFile } });
+  assert.equal(r.status, 1, r.stderr);
+  const lines = readFileSync(summaryFile, "utf8").split("\n");
+  assert.ok(lines[0].startsWith("## ❌ Ownership check failed"), lines[0]);
+  assert.ok(!lines.some((l) => l.startsWith("::") || l === FAKE_PASS || l.startsWith(INJECTED)), lines.join("\n"));
 });
