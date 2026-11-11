@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.3
+
+**Upgrading:** update the plugin, then upgrade the repo's copy of the gate in its own PR, with `node <plugin>/dist/gate.mjs install --upgrade --repo .` (see [Upgrading the gate](docs/teams.md#upgrading-the-gate)). The upgrade PR needs no report. The CI fix (#32) applies once the base branch runs the new copy, and the hook fix (#30) once the repo's copy and the plugin are updated. `GATE_VERSION` stays 3, since the report format is unchanged.
+
 - **`install --owner` no longer hides your CODEOWNERS** ([#33](https://github.com/AbdulrahmanMasoud/comprende/issues/33)). GitHub reads only the first CODEOWNERS it finds (`.github/`, then the root, then `docs/`). `install` always wrote `.github/CODEOWNERS`, so a repo whose owners lived in a root or `docs/` file lost all those rules. It now adds its lines to the file GitHub reads, and creates `.github/CODEOWNERS` only when there's none.
 - **A usage error in a hook no longer blocks every command** ([#30](https://github.com/AbdulrahmanMasoud/comprende/issues/30)). An unknown option, an option missing its value, or an unknown command exited 2, which Claude Code and Cursor read as "block". The hook entry points now fail open with one line on stderr: exit 1 for `agent-hook`, `claude-hook` and `session-start`, and 0 for `pre-push`, since git blocks a push on any non-zero exit. An unknown command now exits 1 for every caller, since it may be a newer hook entry point. Other commands keep exit 2 for a usage error.
 - **CI: PR text can't inject a workflow command** ([#32](https://github.com/AbdulrahmanMasoud/comprende/issues/32)). A file name with a new line followed by `::` could start a GitHub workflow command of its own, in the gate's output or its annotations. Every message verify prints is now on one line, with control characters escaped (file names, and errors that quote the PR's report), annotations escape `%`, `\r`, `\n` (and `:`, `,` in properties) as GitHub's toolkit does, and the job summary turns new lines into `\n`. CI runs the base branch's gate, so this applies once the repo's copy is upgraded.
