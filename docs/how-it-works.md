@@ -14,7 +14,7 @@ Claude Code itself can run without Node. If `node` is missing or older than 20, 
 ## Explain as you build
 
 - **The skill** (`skills/comprende/SKILL.md`) tells Claude when to explain and how: only code that is new, non-obvious, risky or a real decision, in the user's language.
-- **It's on in every session.** At session start, one fixed line reminds Claude to follow the skill whenever it writes or changes code. "add a login endpoint" gets the same treatment as "teach me while you build". Set `COMPRENDE_QUIET=1` to drop that line. The skill still loads when you ask for explanations, and the gate isn't affected.
+- **It's on in every session.** At session start, one fixed line reminds Claude to follow the skill whenever it writes or changes code. "add a login endpoint" gets the same treatment as "teach me while you build". Set `COMPRENDE_QUIET=1` to swap it for a quiet one: Claude then explains only when you ask, and the gate isn't affected.
 - **Memory.** A small MCP server keeps what you already know in `~/.comprende/` (`COMPRENDE_HOME` moves it), so Claude doesn't explain the same thing twice. It's never committed.
 
 ## The gate

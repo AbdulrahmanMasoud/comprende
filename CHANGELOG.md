@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Codex: the skill's "trust the hooks again" note could never fire.** After a plugin update, the agent looked for `.learning/config.json` with `rg --files`, which skips hidden folders, so it never opened the skill. The skill now loads for any code change in every tool, as the always-on line already asked, and checks for the gate with one exact command. Not yet confirmed in Codex.
+  - **`COMPRENDE_QUIET=1`** now swaps the always-on line for a quiet one, so the skill still explains only when asked.
+
 ## 0.4.0
 
 - **Codex support** ([#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)). Comprende runs in Codex: the skill, the memory server, the always-on line and the push guard, from a Codex plugin (`.codex-plugin/`) or the repo's own `.codex/hooks.json`. To install: `codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`, then trust its hooks in `/hooks` ([README](README.md#codex)).

@@ -1887,6 +1887,7 @@ function agentHook(stdinText, source, requested) {
 var MIN_NODE = 20;
 var nodeNote = (app) => `Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of ${app}.`;
 var ALWAYS_ON = "Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
+var QUIET_MODE = "Comprende is installed, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.";
 var withLfEndings = (bytes) => Buffer.from(bytes.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
 function gateCopyDifference(repoCopy, pluginCopy) {
   if (repoCopy.equals(pluginCopy)) return "none";
@@ -1909,7 +1910,7 @@ function sessionStart(stdinText, source, requested) {
     lines.push(
       `Comprende is running on Node.js ${node}, which is too old. ${nodeNote((agent?.names ?? UNKNOWN_AGENT_NAMES).app)}`
     );
-  if (source === "plugin" && process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
+  if (source === "plugin") lines.push(process.env.COMPRENDE_QUIET === "1" ? QUIET_MODE : ALWAYS_ON);
   if (run2) lines.push(...gatedRepoContext(run2, payload));
   return sessionContextReply(agent, lines);
 }
@@ -2156,6 +2157,7 @@ function testCall(fn, a) {
     CHECK_NAME: REPO_PLATFORM.checkName,
     REPO_GATE: GATE_REL,
     ALWAYS_ON,
+    QUIET_MODE,
     // Every adapter, so a per-agent test can check it covers them all.
     AGENT_IDS: AGENTS.map((a2) => a2.id)
   };
