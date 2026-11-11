@@ -13,8 +13,7 @@
 
 import { appendFileSync, readFileSync, readSync } from "node:fs";
 import { isRecord } from "../util.js";
-import { CLAUDE_SETTINGS } from "./agents/claude-settings.js";
-import { AGENTS, resolveAgent } from "./agents/index.js";
+import { AGENTS, PROJECT_HOOK_FILES, resolveAgent } from "./agents/index.js";
 import { collectChanges, isPlumbing } from "./changes.js";
 import { annotate, escapeMarkdown, jobSummary } from "./ci-summary.js";
 import { CHECK_NAME, WORKFLOW } from "./ci-workflow.js";
@@ -40,7 +39,7 @@ Commands (run from inside the repo, or pass --repo):
   verify         Check a commit (default HEAD) against its report — used by CI   [--json]
   pre-push       Git pre-push hook entry point (reads refs from stdin)
   agent-hook     PreToolUse hook entry point for AI tools (reads JSON from stdin)   [--agent ID]
-  claude-hook    The same as agent-hook (the name repos installed before 0.3 call)
+  claude-hook    The same as agent-hook. install and the plugin still call this name, which older gates know
   session-start  SessionStart hook (plugin): the always-on note; in gated repos, the git hook   [--agent ID]
   install        Add the gate, config, CI workflow, the AI tools' repo hook files and the git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
@@ -126,8 +125,11 @@ function testCall(fn: string, a: unknown[]): unknown {
     }
     case "read_report":
       return readReport(repoRoot(s(0)), String(a[1]), s(2));
-    case "merge_claude_settings":
-      return addProjectHook(String(a[0]), CLAUDE_SETTINGS);
+    case "merge_claude_settings": {
+      // The test suite's name for adding the hook to a .claude/settings.json at any path.
+      const file = PROJECT_HOOK_FILES.find((f) => f.path === ".claude/settings.json");
+      return file ? addProjectHook(String(a[0]), file) : null;
+    }
     case "resolve_agent": {
       // [payload JSON text, env, --agent]: which adapter runs, and what it reads.
       const env = (a[1] ?? {}) as Record<string, string>;
@@ -247,13 +249,13 @@ export function main(argv: string[]): number {
         return prePush(readStdin(), o("repo"));
       case "agent-hook":
       case "claude-hook": {
-        const reply = agentHook(readStdin(), { fromPlugin: Boolean(opts["from-plugin"]), agent: o("agent") });
+        const reply = agentHook(readStdin(), Boolean(opts["from-plugin"]), o("agent"));
         process.stdout.write(reply.stdout);
         process.stderr.write(reply.stderr);
         return reply.exitCode;
       }
       case "session-start":
-        out(sessionStart(readStdin(), { agent: o("agent") }));
+        out(sessionStart(readStdin(), o("agent")));
         return 0;
       case "install":
       case "install-hooks":

@@ -4,19 +4,12 @@
 
 import { lstat } from "../util.js";
 import type { ProjectHookFile } from "./agents/index.js";
-import { atomicWrite, MAX_CONFIG_BYTES, readRepoFile } from "./files.js";
+import { atomicWrite, MAX_CONFIG_BYTES, readExisting, readRepoFile } from "./files.js";
 
 /** Add the gate's hook to the file at `path` (created if missing), keeping the rest. */
 export function addProjectHook(path: string, file: ProjectHookFile): string {
-  let existing: string | null = null;
-  if (lstat(path)) {
-    try {
-      existing = readRepoFile(path, MAX_CONFIG_BYTES);
-    } catch (e) {
-      return `SKIPPED ${file.label}: ${(e as Error).message}`;
-    }
-  }
-  const { content, message } = file.withGateHook(existing, path);
+  // lstat, not existsSync: a dangling symlink is there, and must not be written through.
+  const { content, message } = file.withGateHook(lstat(path) ? readExisting(path) : null, path);
   if (content !== undefined) atomicWrite(path, content);
   return message;
 }

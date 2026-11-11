@@ -6,57 +6,40 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFile
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isFile, isSymlink, lstat } from "../util.js";
-import {
-  type Agent,
-  decisionReply,
-  type HookEnv,
-  type HookReply,
-  resolveAgent,
-  SILENT_ALLOW,
-  sessionContextReply,
-} from "./agents/index.js";
+import { type Agent, type HookEnv, type HookReply, resolveAgent } from "./agents/index.js";
 import { verify } from "./commands.js";
 import { loadConfig } from "./config.js";
 import { git, repoRoot, resolveBase } from "./git.js";
+import { decisionReply, SILENT_ALLOW, sessionContextReply } from "./hook-replies.js";
 import { projectHookRunsGate } from "./project-hooks.js";
 import { isPushCommand } from "./push-detect.js";
 import { uncommittedReport } from "./report.js";
 import { CONFIG_PATH, GATE_ATTRIBUTES_LINE, GATE_REL, GateError, SELF, splitLines, ZERO_SHA } from "./shared.js";
 
-/** How a hook was started: from the plugin (not the repo's own hook file), and
- *  with `--agent` naming the tool, or null to detect it from the payload. */
-export interface HookOptions {
-  fromPlugin?: boolean;
-  agent?: string | null;
-  env?: HookEnv;
-}
-
-/** The hook's payload, or undefined when stdin isn't JSON. */
-function parsePayload(stdinText: string): unknown {
+/** The hook's payload and the adapter that reads it, or no adapter when stdin
+ *  isn't JSON or `--agent` names an unknown tool. Never throws. */
+function readHookInput(stdinText: string, requested: string | null): { payload: unknown; agent: Agent | null } {
   try {
-    return JSON.parse(stdinText || "{}");
+    const payload: unknown = JSON.parse(stdinText || "{}");
+    return { payload, agent: resolveAgent(payload, process.env, requested) };
   } catch {
-    return undefined;
+    return { payload: undefined, agent: null };
   }
 }
 
 /** The PreToolUse hook, for every AI tool: the adapter reads the payload, and the
- *  reply is in the adapter's format. By default exit 2 blocks the call and shows
- *  stderr to the agent, and allowing prints nothing, since Cursor blocks a call
- *  when a hook's stdout isn't JSON. It checks the current branch; pushes of other
+ *  reply is in the adapter's format, by default exit 2 with stderr to block and
+ *  nothing to allow (hook-replies.ts). It checks the current branch; pushes of other
  *  branches are checked by the pre-push hook and CI. Outside a repo with the gate
  *  installed, for an unknown tool, or on an unexpected crash, it allows the call:
  *  this hook is a reminder; CI is the lock. fromPlugin: stays out of the way when
  *  the repo's own hook file already runs the gate, so the check never runs twice.
  *  The plugin never executes code from the repo it's looking at; it applies its
  *  own logic to the repo's data. */
-export function agentHook(
-  stdinText: string,
-  { fromPlugin = false, agent: requested = null, env = process.env }: HookOptions = {},
-): HookReply {
-  const payload = parsePayload(stdinText);
-  const agent = payload === undefined ? null : resolveAgent(payload, env, requested);
+export function agentHook(stdinText: string, fromPlugin: boolean, requested: string | null): HookReply {
+  const { payload, agent } = readHookInput(stdinText, requested);
   if (!agent) return SILENT_ALLOW;
+  const env: HookEnv = process.env;
   const allow = decisionReply(agent, { allow: true });
   let root: string;
   try {
@@ -125,27 +108,23 @@ const UNTRUSTED_GATE_NOTE: Record<Exclude<GateCopyDifference, "none">, string> =
 
 /** SessionStart hook (plugin): the stdout that adds context for the agent, in the
  *  adapter's format. Never throws — a session must always start. */
-export function sessionStart(
-  stdinText: string,
-  { agent: requested = null, env = process.env }: HookOptions = {},
-): string {
-  const payload = parsePayload(stdinText);
-  const agent = payload === undefined ? null : resolveAgent(payload, env, requested);
+export function sessionStart(stdinText: string, requested: string | null): string {
+  const { payload, agent } = readHookInput(stdinText, requested);
   const lines: string[] = [];
   const node = process.versions.node;
   if (Number.parseInt(node, 10) < MIN_NODE)
     lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
-  if (agent) lines.push(...gatedRepoContext(agent, payload, env));
+  if (agent) lines.push(...gatedRepoContext(agent, payload));
   return sessionContextReply(agent, lines);
 }
 
 /** In a repo that uses the gate: install the local pre-push hook if this clone
  *  lacks it, and tell the agent the repo is gated so the ownership-check protocol
  *  is followed. Elsewhere: nothing. */
-function gatedRepoContext(agent: Agent, payload: unknown, env: HookEnv): string[] {
+function gatedRepoContext(agent: Agent, payload: unknown): string[] {
   try {
-    const root = repoRoot(agent.projectDir(payload, env) ?? process.cwd());
+    const root = repoRoot(agent.projectDir(payload, process.env) ?? process.cwd());
     if (!lstat(join(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];

@@ -36,7 +36,7 @@ actionlint                        # the GitHub workflows
   - `commands.ts` (status, save, verify), `push-detect.ts`, `hooks.ts`, `ci-summary.ts`, `cli.ts`
   - `install.ts` (writes the gate's files into a repo), `ci-workflow.ts` (the CI workflow text and the check's name), `codeowners.ts` (CODEOWNERS entries for the gate files), `protect.ts` (the GitHub ruleset)
   - `gate-files.ts` (the files that control the gate), `project-hooks.ts` (safe reads and writes of the agents' repo-level hook files)
-  - `agents/`: one adapter per AI tool behind one interface. `types.ts` (the `Agent` interface), `index.ts` (the registry, the resolve step, the default replies), `claude-code.ts`, `cursor.ts`, `claude-settings.ts` (the `.claude/settings.json` hook file both run). How to add a tool: CONTRIBUTING.md, "Adding an AI tool"
+  - `agents/`: one adapter per AI tool behind one interface. `types.ts` (the `Agent` interface), `index.ts` (the registry and the resolve step), `claude-code.ts`, `cursor.ts`, and what both use: `claude-format.ts` (the payload) and `claude-settings.ts` (the `.claude/settings.json` hook file). `hook-replies.ts` holds the core's default replies. How to add a tool: CONTRIBUTING.md, "Adding an AI tool"
 - `src/store/`: the memory store. `profile.ts` (the learner profile), `project.ts` (`.learning/` map and decisions), `common.ts`
 - `src/server.ts`: the MCP server (thin: tools in, store or gate out). `src/learning.ts`: the skill's file-only helper
 - `src/util.ts`: helpers the gate and the store share, including the prototype-free `dict`/`own`/`get`

@@ -2,6 +2,8 @@
 // to do (block an unverified push, add session context); an adapter only reads its
 // tool's hook payloads and knows its tool's repo-level hook files. See docs/agents.md.
 
+import type { ExistingFile } from "../files.js";
+
 /** The tools the gate has an adapter for. */
 export type AgentId = "claude-code" | "cursor";
 
@@ -53,15 +55,13 @@ export interface ProjectHookFile {
   /** The path from the repo root. */
   readonly path: string;
 
-  /** How install's messages name this hook, such as "Claude hook". */
-  readonly label: string;
-
   /** Does this file's content already run the gate's hook? */
   runsGate(content: string): boolean;
 
   /** The content with the gate's hook added and everything else kept, plus what
-   *  install reports. No content means leave the file alone (the hook is already
-   *  there, or the file has a shape this adapter doesn't understand). Pure: the
-   *  core does the safe read and the atomic write. `shownPath` is for messages. */
-  withGateHook(existing: string | null, shownPath: string): { readonly content?: string; readonly message: string };
+   *  install reports. No content means leave the file alone: the hook is already
+   *  there, or the file can't be read or has a shape this adapter doesn't
+   *  understand. Pure: the core does the safe read and the atomic write.
+   *  `shownPath` is for messages. */
+  withGateHook(existing: ExistingFile, shownPath: string): { readonly content?: string; readonly message: string };
 }

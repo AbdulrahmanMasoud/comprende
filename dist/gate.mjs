@@ -33,6 +33,17 @@ var isFile = (p) => {
   }
 };
 
+// src/gate/agents/claude-format.ts
+function readClaudeFormat(payload) {
+  const p = isRecord(payload) ? payload : {};
+  const input = isRecord(p.tool_input) ? p.tool_input : {};
+  return {
+    toolName: p.tool_name === void 0 || p.tool_name === null ? null : String(p.tool_name),
+    command: String(input.command ?? ""),
+    cwd: typeof p.cwd === "string" && p.cwd ? p.cwd : null
+  };
+}
+
 // src/gate/shared.ts
 import { fileURLToPath } from "node:url";
 var GATE_VERSION = 3;
@@ -67,24 +78,28 @@ var HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUD
 var HOOK_BY_HAND = "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-claude-hook-by-hand";
 var LABEL = "Claude hook";
 var isGateHookCommand = (command) => typeof command === "string" && command.includes("gate.mjs") && (command.includes("claude-hook") || command.includes("agent-hook"));
-var listsGateHook = (groups) => groups.some((g) => (g?.hooks ?? []).some((h) => isGateHookCommand(h?.command)));
+var listsGateHook = (groups) => groups.some(
+  (g) => isRecord(g) && Array.isArray(g.hooks) && g.hooks.some((h) => isRecord(h) && isGateHookCommand(h.command))
+);
 var CLAUDE_SETTINGS = {
   path: ".claude/settings.json",
-  label: LABEL,
   runsGate(content) {
+    let settings;
     try {
-      const groups = JSON.parse(content)?.hooks?.PreToolUse ?? [];
-      return Array.isArray(groups) && listsGateHook(groups);
+      settings = JSON.parse(content);
     } catch {
       return false;
     }
+    const groups = isRecord(settings) && isRecord(settings.hooks) ? settings.hooks.PreToolUse : void 0;
+    return Array.isArray(groups) && listsGateHook(groups);
   },
   withGateHook(existing, shownPath) {
+    if (existing !== null && "unreadable" in existing) return { message: `SKIPPED ${LABEL}: ${existing.unreadable}` };
     let settings = {};
     if (existing !== null) {
       let parsed;
       try {
-        parsed = JSON.parse(existing || "{}");
+        parsed = JSON.parse(existing.text || "{}");
       } catch {
         return { message: `SKIPPED ${LABEL}: ${shownPath} is not valid JSON; ${HOOK_BY_HAND}` };
       }
@@ -116,33 +131,26 @@ var claudeCode = {
   // their own, and the tools that also run it are detected first (index.ts).
   detects: () => true,
   shellCommand(payload) {
-    const p = payload;
-    if ((p?.tool_name ?? "Bash") !== "Bash") return null;
-    return String(p?.tool_input?.command ?? "");
+    const { toolName, command } = readClaudeFormat(payload);
+    return (toolName ?? "Bash") === "Bash" ? command : null;
   },
-  projectDir(payload, env) {
-    const cwd = payload?.cwd;
-    return cwd ? String(cwd) : env.CLAUDE_PROJECT_DIR || null;
-  },
+  projectDir: (payload, env) => readClaudeFormat(payload).cwd ?? (env.CLAUDE_PROJECT_DIR || null),
   projectHookFiles: [CLAUDE_SETTINGS]
 };
 
 // src/gate/agents/cursor.ts
 var cursor = {
   id: "cursor",
-  // Only Cursor puts cursor_version in a payload. Not the environment: Claude Code
-  // started from Cursor's terminal may inherit Cursor's variables.
-  detects: (payload) => typeof payload?.cursor_version === "string",
+  // Only Cursor sends cursor_version, or calls its shell tool "Shell". Not the
+  // environment: Claude Code started from Cursor's terminal may inherit Cursor's variables.
+  detects: (payload) => isRecord(payload) && (typeof payload.cursor_version === "string" || payload.tool_name === "Shell"),
   shellCommand(payload) {
-    const p = payload;
-    if ((p?.tool_name ?? "Shell") !== "Shell") return null;
-    return String(p?.tool_input?.command ?? "");
+    const { toolName, command } = readClaudeFormat(payload);
+    return (toolName ?? "Shell") === "Shell" ? command : null;
   },
-  // Cursor sets CLAUDE_PROJECT_DIR to the same path, for Claude-format hooks.
-  projectDir(payload, env) {
-    const cwd = payload?.cwd;
-    return cwd ? String(cwd) : env.CURSOR_PROJECT_DIR || env.CLAUDE_PROJECT_DIR || null;
-  },
+  // Cursor sets both variables to the same path. CLAUDE_PROJECT_DIR comes first,
+  // as it did before this adapter existed.
+  projectDir: (payload, env) => readClaudeFormat(payload).cwd ?? (env.CLAUDE_PROJECT_DIR || env.CURSOR_PROJECT_DIR || null),
   projectHookFiles: [CLAUDE_SETTINGS]
 };
 
@@ -153,18 +161,6 @@ function resolveAgent(payload, env, requested) {
   return AGENTS.find((a) => a.detects(payload, env)) ?? null;
 }
 var PROJECT_HOOK_FILES = [...new Set(AGENTS.flatMap((a) => a.projectHookFiles))];
-var SILENT_ALLOW = { stdout: "", stderr: "", exitCode: 0 };
-function decisionReply(agent, decision) {
-  if (agent.formatDecision) return agent.formatDecision(decision);
-  return decision.allow ? SILENT_ALLOW : { stdout: "", stderr: `${decision.reason}
-`, exitCode: 2 };
-}
-function sessionContextReply(agent, lines) {
-  if (agent?.formatSessionContext) return agent.formatSessionContext(lines);
-  return JSON.stringify(
-    lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {}
-  );
-}
 
 // src/gate/changes.ts
 import { mkdtempSync as mkdtempSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
@@ -191,6 +187,13 @@ import { basename, dirname, join } from "node:path";
 var MAX_CONFIG_BYTES = 256 * 1024;
 var MAX_REPORT_BYTES = 4 * 1024 * 1024;
 var MAX_GATE_BYTES = 8 * 1024 * 1024;
+function readExisting(path, limit = MAX_CONFIG_BYTES) {
+  try {
+    return { text: readRepoFile(path, limit) };
+  } catch (e) {
+    return { unreadable: e.message };
+  }
+}
 function readRepoFile(path, limit) {
   const st = lstat(path);
   if (!st || st.isSymbolicLink() || !st.isFile())
@@ -1256,17 +1259,23 @@ import { chmodSync as chmodSync2, existsSync as existsSync3, mkdirSync as mkdirS
 import { homedir as homedir2 } from "node:os";
 import { isAbsolute as isAbsolute2, join as join9, relative, resolve as resolve3, sep } from "node:path";
 
+// src/gate/hook-replies.ts
+var SILENT_ALLOW = { stdout: "", stderr: "", exitCode: 0 };
+function decisionReply(agent, decision) {
+  if (agent.formatDecision) return agent.formatDecision(decision);
+  return decision.allow ? SILENT_ALLOW : { stdout: "", stderr: `${decision.reason}
+`, exitCode: 2 };
+}
+function sessionContextReply(agent, lines) {
+  if (agent?.formatSessionContext) return agent.formatSessionContext(lines);
+  return JSON.stringify(
+    lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {}
+  );
+}
+
 // src/gate/project-hooks.ts
 function addProjectHook(path, file) {
-  let existing = null;
-  if (lstat(path)) {
-    try {
-      existing = readRepoFile(path, MAX_CONFIG_BYTES);
-    } catch (e) {
-      return `SKIPPED ${file.label}: ${e.message}`;
-    }
-  }
-  const { content, message } = file.withGateHook(existing, path);
+  const { content, message } = file.withGateHook(lstat(path) ? readExisting(path) : null, path);
   if (content !== void 0) atomicWrite(path, content);
   return message;
 }
@@ -1397,17 +1406,18 @@ function isPushCommand(command, depth = 0) {
 }
 
 // src/gate/hooks.ts
-function parsePayload(stdinText) {
+function readHookInput(stdinText, requested) {
   try {
-    return JSON.parse(stdinText || "{}");
+    const payload = JSON.parse(stdinText || "{}");
+    return { payload, agent: resolveAgent(payload, process.env, requested) };
   } catch {
-    return void 0;
+    return { payload: void 0, agent: null };
   }
 }
-function agentHook(stdinText, { fromPlugin = false, agent: requested = null, env = process.env } = {}) {
-  const payload = parsePayload(stdinText);
-  const agent = payload === void 0 ? null : resolveAgent(payload, env, requested);
+function agentHook(stdinText, fromPlugin, requested) {
+  const { payload, agent } = readHookInput(stdinText, requested);
   if (!agent) return SILENT_ALLOW;
+  const env = process.env;
   const allow = decisionReply(agent, { allow: true });
   let root;
   try {
@@ -1451,20 +1461,19 @@ var UNTRUSTED_GATE_NOTE = {
   "repo-crlf": `This repo's ${GATE_REL} differs from the plugin's copy only in its line endings: git's core.autocrlf checked it out with CRLF. The local pre-push hook trusts only a byte-identical copy, so it was NOT installed automatically. Tell the user in one line to run \`git -c core.autocrlf=false checkout -- ${GATE_REL}\`, then \`node ${GATE_REL} install\`, which adds \`${GATE_ATTRIBUTES_LINE}\` to .gitattributes so it stays that way.`,
   "plugin-crlf": `The plugin's own copy of gate.mjs has CRLF line endings (git's core.autocrlf, in an install from before Comprende 0.2.1), so it differs from this repo's ${GATE_REL} only in its line endings, and the local pre-push hook was NOT installed automatically. Tell the user in one line to update the plugin: \`/plugin marketplace update comprende\`.`
 };
-function sessionStart(stdinText, { agent: requested = null, env = process.env } = {}) {
-  const payload = parsePayload(stdinText);
-  const agent = payload === void 0 ? null : resolveAgent(payload, env, requested);
+function sessionStart(stdinText, requested) {
+  const { payload, agent } = readHookInput(stdinText, requested);
   const lines = [];
   const node = process.versions.node;
   if (Number.parseInt(node, 10) < MIN_NODE)
     lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
-  if (agent) lines.push(...gatedRepoContext(agent, payload, env));
+  if (agent) lines.push(...gatedRepoContext(agent, payload));
   return sessionContextReply(agent, lines);
 }
-function gatedRepoContext(agent, payload, env) {
+function gatedRepoContext(agent, payload) {
   try {
-    const root = repoRoot(agent.projectDir(payload, env) ?? process.cwd());
+    const root = repoRoot(agent.projectDir(payload, process.env) ?? process.cwd());
     if (!lstat(join9(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];
@@ -1784,7 +1793,7 @@ Commands (run from inside the repo, or pass --repo):
   verify         Check a commit (default HEAD) against its report \u2014 used by CI   [--json]
   pre-push       Git pre-push hook entry point (reads refs from stdin)
   agent-hook     PreToolUse hook entry point for AI tools (reads JSON from stdin)   [--agent ID]
-  claude-hook    The same as agent-hook (the name repos installed before 0.3 call)
+  claude-hook    The same as agent-hook. install and the plugin still call this name, which older gates know
   session-start  SessionStart hook (plugin): the always-on note; in gated repos, the git hook   [--agent ID]
   install        Add the gate, config, CI workflow, the AI tools' repo hook files and the git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
@@ -1858,8 +1867,10 @@ function testCall(fn, a) {
     }
     case "read_report":
       return readReport(repoRoot(s(0)), String(a[1]), s(2));
-    case "merge_claude_settings":
-      return addProjectHook(String(a[0]), CLAUDE_SETTINGS);
+    case "merge_claude_settings": {
+      const file = PROJECT_HOOK_FILES.find((f) => f.path === ".claude/settings.json");
+      return file ? addProjectHook(String(a[0]), file) : null;
+    }
     case "resolve_agent": {
       const env = a[1] ?? {};
       let payload;
@@ -1979,13 +1990,13 @@ ${HELP}`);
         return prePush(readStdin(), o("repo"));
       case "agent-hook":
       case "claude-hook": {
-        const reply = agentHook(readStdin(), { fromPlugin: Boolean(opts["from-plugin"]), agent: o("agent") });
+        const reply = agentHook(readStdin(), Boolean(opts["from-plugin"]), o("agent"));
         process.stdout.write(reply.stdout);
         process.stderr.write(reply.stderr);
         return reply.exitCode;
       }
       case "session-start":
-        out(sessionStart(readStdin(), { agent: o("agent") }));
+        out(sessionStart(readStdin(), o("agent")));
         return 0;
       case "install":
       case "install-hooks":

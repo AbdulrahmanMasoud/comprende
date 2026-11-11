@@ -22,6 +22,21 @@ export const MAX_REPORT_BYTES = 4 * 1024 * 1024;
 
 export const MAX_GATE_BYTES = 8 * 1024 * 1024;
 
+/** A file install may change, as an adapter sees it: missing (null), its text, or
+ *  why it can't be read safely. Adapters decide what to write from it; the core
+ *  reads and writes. */
+export type ExistingFile = { readonly text: string } | { readonly unreadable: string } | null;
+
+/** The text of a file that's there, or why it can't be read safely (a symlink, a
+ *  special file, too big). Callers decide what "there" means. */
+export function readExisting(path: string, limit = MAX_CONFIG_BYTES): Exclude<ExistingFile, null> {
+  try {
+    return { text: readRepoFile(path, limit) };
+  } catch (e) {
+    return { unreadable: (e as Error).message };
+  }
+}
+
 /** Read a repo-controlled file safely: never through a symlink (it could point
  *  at /dev/zero or a secret), never a FIFO, never more than `limit` bytes. */
 export function readRepoFile(path: string, limit: number): string {

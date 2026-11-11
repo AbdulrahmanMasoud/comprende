@@ -85,8 +85,9 @@ Code that's specific to one AI tool (Claude Code, Cursor, and later Codex and An
 
 ```
 src/gate/agents/      types.ts (the Agent interface), index.ts (the registry and the resolve step),
-                      one module per AI tool: claude-code.ts, cursor.ts, plus the hook files they
-                      share (claude-settings.ts)
+                      one module per AI tool: claude-code.ts, cursor.ts, plus what they share:
+                      claude-format.ts (the payload) and claude-settings.ts (the hook file)
+src/gate/hook-replies.ts   the core's default replies, for adapters that don't format their own
 src/gate/platforms/   one module per git platform (next: the platform PR of #18)
 ```
 

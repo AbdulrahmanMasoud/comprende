@@ -2,11 +2,9 @@
 // the project-level hook in .claude/settings.json.
 // https://code.claude.com/docs/en/hooks
 
+import { readClaudeFormat } from "./claude-format.js";
 import { CLAUDE_SETTINGS } from "./claude-settings.js";
 import type { Agent } from "./types.js";
-
-/** The fields this adapter reads. The payload is unvalidated JSON, so each one is unknown. */
-type Payload = { tool_name?: unknown; tool_input?: { command?: unknown }; cwd?: unknown } | null | undefined;
 
 export const claudeCode: Agent = {
   id: "claude-code",
@@ -16,15 +14,11 @@ export const claudeCode: Agent = {
   detects: () => true,
 
   shellCommand(payload) {
-    const p = payload as Payload;
-    if ((p?.tool_name ?? "Bash") !== "Bash") return null;
-    return String(p?.tool_input?.command ?? "");
+    const { toolName, command } = readClaudeFormat(payload);
+    return (toolName ?? "Bash") === "Bash" ? command : null;
   },
 
-  projectDir(payload, env) {
-    const cwd = (payload as Payload)?.cwd;
-    return cwd ? String(cwd) : env.CLAUDE_PROJECT_DIR || null;
-  },
+  projectDir: (payload, env) => readClaudeFormat(payload).cwd ?? (env.CLAUDE_PROJECT_DIR || null),
 
   projectHookFiles: [CLAUDE_SETTINGS],
 };

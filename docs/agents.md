@@ -230,18 +230,21 @@ export interface ProjectHookFile {
   /** The path from the repo root. */
   readonly path: string;
 
-  /** How install's messages name this hook, such as "Claude hook". */
-  readonly label: string;
-
   /** Does this file's content already run the gate's hook? */
   runsGate(content: string): boolean;
 
   /** The content with the gate's hook added and everything else kept, plus what
-   *  install reports. No content means leave the file alone. Pure: the core does
-   *  the safe read and the atomic write. `shownPath` is for messages. */
-  withGateHook(existing: string | null, shownPath: string): { readonly content?: string; readonly message: string };
+   *  install reports. No content means leave the file alone: the hook is already
+   *  there, or the file can't be read or has a shape this adapter doesn't
+   *  understand. Pure: the core does the safe read and the atomic write. */
+  withGateHook(existing: ExistingFile, shownPath: string): { readonly content?: string; readonly message: string };
 }
+
+/** (files.ts) A file install may change: missing, its text, or why it can't be read safely. */
+export type ExistingFile = { readonly text: string } | { readonly unreadable: string } | null;
 ```
+
+The default replies live in the core, in `src/gate/hook-replies.ts`. Claude-format payloads, which Claude Code and Cursor both send, are read and validated once, in `agents/claude-format.ts`.
 
 **The resolve step** (`resolveAgent` in `agents/index.ts`) picks the adapter for a hook run:
 1. `--agent <id>` wins.
@@ -256,9 +259,9 @@ How each tool fills it in:
 
 | | Claude Code | Cursor | Codex (docs) | Antigravity ([#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25), from #16) |
 |---|---|---|---|---|
-| `detects` | any payload: the fallback | `cursor_version` in the payload. Not the environment: Claude Code started from Cursor's terminal may inherit Cursor's variables | `--agent codex` in its hook file | `toolCall` and `workspacePaths` |
+| `detects` | any payload: the fallback | `cursor_version` in the payload, or the tool name `Shell`. Not the environment: Claude Code started from Cursor's terminal may inherit Cursor's variables | `--agent codex` in its hook file | `toolCall` and `workspacePaths` |
 | Shell tool | `Bash` | `Shell` | `Bash` | `run_command`, command in `toolCall.args.CommandLine` |
-| `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR` | `CURSOR_PROJECT_DIR`, else `CLAUDE_PROJECT_DIR` (`cwd` is `""`) | `cwd` | `workspacePaths[0]` |
+| `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR` | `CLAUDE_PROJECT_DIR`, else `CURSOR_PROJECT_DIR` (`cwd` is `""`). Cursor sets both to the same path | `cwd` | `workspacePaths[0]` |
 | `projectHookFiles` | `.claude/settings.json` | `.claude/settings.json` now; `.cursor/hooks.json` first, from the Cursor PR | `.codex/hooks.json` | the plugin's `hooks.json` only |
 | `formatDecision` | the default | the default | the default | `{"decision": …}` |
 | `formatSessionContext` | the default | the default | the default | `injectSteps` |
