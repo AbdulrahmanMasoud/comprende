@@ -36,7 +36,8 @@ actionlint                        # the GitHub workflows
   - `features.ts` (a gate's header, and what the gate CI runs knows), `install-lines.ts` (install's `.gitignore` and `.gitattributes` lines)
   - `git.ts` (safe git runner, temp index, inert repo config), `config.ts` (config, validation, rules from the base)
   - `changes.ts` (fingerprints, plumbing, 3-way replay, states, small changes), `report.ts` (the report file)
-  - `commands.ts` (status, save, verify), `push-detect.ts`, `hooks.ts`, `ci-summary.ts` (the reviewer summary, in markdown), `cli.ts`
+  - `commands.ts` (status, save, verify), `push-detect.ts`, `ci-summary.ts` (the reviewer summary, in markdown), `cli.ts`
+  - the hooks: `agent-hook.ts` (the AI tools' PreToolUse), `session-start.ts` (their SessionStart), `hook-input.ts` (the payload and the adapter that reads it), `pre-push-hook.ts` (git's pre-push hook, and installing it pinned), `gate-copy-difference.ts` (how a repo's `gate.mjs` differs from the plugin's)
   - `hook-copies.ts` (which copy of the gate's hook speaks, when several run on one event), `hook-claims.ts` (the claims it uses, in a private temp folder)
   - `install.ts` (writes the gate's files into a repo), `codeowners.ts` (CODEOWNERS entries for the gate files), `run.ts` (spawning a program without a shell), `test-hooks.ts` (`__test`, the internals the test suite calls)
   - `gate-files.ts` (the files that control the gate), `project-hooks.ts` (safe reads and writes of the agents' repo-level hook files)

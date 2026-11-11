@@ -11,11 +11,11 @@ import { samePath } from "./files.js";
 import { GATE_FILES } from "./gate-files.js";
 import { repoRoot } from "./git.js";
 import { decisionReply } from "./hook-replies.js";
-import { ALWAYS_ON, PLUGIN_LINE_START, QUIET_MODE } from "./hooks.js";
 import { ciPlatform, REPO_PLATFORM } from "./platforms/index.js";
 import { addProjectHook } from "./project-hooks.js";
 import { isPushCommand } from "./push-detect.js";
 import { parseReport, readReport, renderReport, reportPath } from "./report.js";
+import { ALWAYS_ON, PLUGIN_LINE_START, QUIET_MODE } from "./session-start.js";
 import { GATE_REL, GATE_VERSION, GateError, sorted } from "./shared.js";
 
 /** Internal functions, JSON in / JSON out, for the black-box test suite. */
