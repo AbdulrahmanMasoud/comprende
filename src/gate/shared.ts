@@ -28,9 +28,9 @@ export const REPORT_INPUT = `${LEARNING}/report.local.json`;
 // to the plugin's, so SessionStart can't trust it and installs no pre-push hook.
 export const GATE_ATTRIBUTES_LINE = `${GATE_REL} -text`;
 
-// The tool names a PreToolUse payload uses for a shell command. Cursor runs
-// Claude-format hooks, but reports its shell tool as "Shell", not "Bash":
-// https://cursor.com/docs/reference/third-party-hooks
+// The tool names a PreToolUse payload uses for a shell command. Claude Code
+// calls it "Bash". Cursor runs Claude-format hooks (a "Bash" matcher still
+// fires) but calls it "Shell": https://cursor.com/docs/reference/third-party-hooks
 // Moves into the agent adapters in #18.
 export const SHELL_TOOL_NAMES: readonly string[] = ["Bash", "Shell"];
 

@@ -268,14 +268,29 @@ test("from Cursor, the repo's Claude hook blocks an unverified push, with the re
 
 test("from Cursor, the plugin's hook finds the repo through CLAUDE_PROJECT_DIR and blocks an unverified push", (t) => {
   const { dev } = setup(t);
-  unlinkSync(join(dev, ".claude/settings.json"));
-  unlinkSync(join(dev, REPO_GATE));
+  unlinkSync(join(dev, ".claude/settings.json")); // so the plugin's hook doesn't step aside
   write(dev, "src/app.js", "export const app = 2;\n");
   commitAll(dev, "unchecked");
   // Cursor runs a plugin's hooks from the plugin's folder, and its payload's cwd is "".
   const r = plugin(REPO, ["claude-hook", "--from-plugin"], fromCursor("pre-tool-use.shell.git-push.json", dev));
   assert.equal(r.status, 2, r.stderr);
   assert.match(r.stderr, /No ownership report for branch 'feature\/rate-limit'/);
+});
+
+test("from Cursor, the plugin's hook steps aside when the repo registers its own", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  const r = plugin(REPO, ["claude-hook", "--from-plugin"], fromCursor("pre-tool-use.shell.git-push.json", dev));
+  assert.deepEqual([r.status, r.stdout, r.stderr], [0, "", ""]);
+});
+
+test("from Cursor, session start finds the repo through CLAUDE_PROJECT_DIR and prints only JSON", (t) => {
+  const { dev } = setup(t);
+  // Cursor's sessionStart payload has no cwd, and the plugin's hook runs from the plugin's folder.
+  const r = plugin(REPO, ["session-start"], fromCursor("session-start.json", dev));
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(contextOf(r), /This repository uses the ownership gate \(mode: required\)/);
 });
 
 // Cursor reads anything on a Claude-format hook's stdout as JSON, and blocks the
@@ -302,28 +317,27 @@ test("the Claude hook prints nothing whenever it allows", (t) => {
   const { dev, tmp } = setup(t);
   write(dev, "src/app.js", "export const app = 2;\n");
   commitAll(dev, "unchecked");
-  const event = (command, cwd = dev, tool_name = "Bash") => JSON.stringify({ tool_name, tool_input: { command }, cwd });
   const plain = join(tmp, "plain");
   git(tmp, "init", "-q", "-b", "main", plain);
   const silent = (r, why) => assert.deepEqual([r.status, r.stdout, r.stderr], [0, "", ""], why);
 
   silent(runGate(dev, ["claude-hook"], { input: "not json" }), "input that isn't JSON");
   silent(runGate(dev, ["claude-hook"], { input: "" }), "no input");
-  silent(runGate(dev, ["claude-hook"], { input: event("git push", dev, "Read") }), "a tool that isn't the shell");
-  silent(runGate(dev, ["claude-hook"], { input: event("npm test") }), "a command that isn't a push");
-  silent(runGate(dev, ["claude-hook"], { input: event("git push", "/") }), "outside a git repo");
-  silent(runGate(dev, ["claude-hook"], { input: event("git push", plain) }), "a repo without the gate");
-  silent(plugin(tmp, ["claude-hook", "--from-plugin"], { input: event("git push") }), "the plugin stepping aside");
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent(dev, "git push", "Read") }), "a tool that isn't the shell");
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent(dev, "npm test") }), "a command that isn't a push");
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent("/") }), "outside a git repo");
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent(plain) }), "a repo without the gate");
+  silent(plugin(tmp, ["claude-hook", "--from-plugin"], { input: pushEvent(dev) }), "the plugin stepping aside");
 
   saveAndCommit(dev);
-  silent(runGate(dev, ["claude-hook"], { input: event("git push") }), "a verified push");
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent(dev) }), "a verified push");
 
   write(dev, "src/app.js", "export const app = 3;\n");
   commitAll(dev, "unchecked again");
   setBaseConfig(dev, (c) => {
     c.mode = "suggested";
   });
-  silent(runGate(dev, ["claude-hook"], { input: event("git push") }), "a push the gate only suggests checking");
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent(dev) }), "a push the gate only suggests checking");
 });
 
 test("session start installs the pre-push hook once and tells Claude the repo is gated", (t) => {

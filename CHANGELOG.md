@@ -4,13 +4,13 @@
 
 ## 0.2.2
 
-**Upgrading:** update the plugin, then run `node .learning/gate.mjs install --upgrade` in its own PR. Cursor users get the fix only once that PR is merged: the repo's Claude hook runs the repo's own copy of the gate, and the plugin's hook steps aside while the repo has its own. `GATE_VERSION` stays 3, since the report format is unchanged.
+**Upgrading:** update the plugin, then upgrade the repo's copy of the gate in its own PR, with `node <plugin>/dist/gate.mjs install --upgrade --repo .` (see [Upgrading the gate](docs/teams.md#upgrading-the-gate)). The upgrade PR needs no report. Cursor users get the fix only once it's merged: the repo's Claude hook runs the repo's own copy, and the plugin's hook steps aside while the repo has its own. `GATE_VERSION` stays 3, since the report format is unchanged.
 
 - **Cursor: the Claude hook now blocks unverified pushes** ([#17](https://github.com/AbdulrahmanMasoud/comprende/issues/17)).
   - Cursor runs Claude Code's hooks: the repo's `.claude/settings.json`, and the hooks of the Claude Code plugins you've installed. But it reports its shell tool as `Shell`, not `Bash`. The hook checked only for `Bash`, so in Cursor it let every push through, including `git push --no-verify`. The git pre-push hook and CI weren't affected.
   - The hook now accepts both names. When it allows a command, it still prints nothing, because Cursor blocks a command when a hook's stdout isn't JSON.
   - The tests use payloads captured from real Cursor runs, in `test/fixtures/cursor/`.
-- **CI:** `claude plugin validate` now runs on Claude Code 2.1.322.
+- **CI:** `claude plugin validate` now runs on Claude Code 2.1.322 ([#20](https://github.com/AbdulrahmanMasoud/comprende/pull/20)).
 
 ## 0.2.1
 

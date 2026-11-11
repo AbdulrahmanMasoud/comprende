@@ -11,13 +11,13 @@ Don't write these by hand. To change one, capture it again from a real run.
 | `pre-tool-use.shell.git-status.json` | `preToolUse` before `git status` |
 | `pre-tool-use.shell.ls.json` | `preToolUse` before `ls` |
 | `pre-tool-use.read.json` | `preToolUse` before the Read tool (not a shell command) |
-| `before-shell-execution.git-push.json` | `beforeShellExecution` before `git push origin feature/probe` |
+| `before-shell-execution.git-push.json` | `beforeShellExecution` before `git push origin feature/probe`. Comprende doesn't use this event yet; it's here for the Cursor adapter ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)) |
 | `before-shell-execution.git-status.json` | `beforeShellExecution` before `git status` |
 | `hook-env.json` | The `CURSOR_*` and `CLAUDE_*` environment variables a project hook got |
 
 Things to know:
 
-- Cursor gives the same stdin to a Claude-format hook (`.claude/settings.json`) as it does to its own hooks (`.cursor/hooks.json`). The event is named `preToolUse`, not `PreToolUse`, and the shell tool is `Shell`, not `Bash`. The `preToolUse` files were captured through a Claude-format hook with `"matcher": "Bash"`.
+- Cursor gives the same stdin to a Claude-format hook (`.claude/settings.json`) as it does to its own hooks (`.cursor/hooks.json`). The event is named `preToolUse`, not `PreToolUse`, and the shell tool is `Shell`, not `Bash`. The shell `preToolUse` files came through a Claude-format hook with `"matcher": "Bash"`, which Cursor fires for `Shell`. `pre-tool-use.read.json` came through one with no matcher, which fires for every tool.
 - `cwd` is an empty string. The repo comes from `CLAUDE_PROJECT_DIR` or `CURSOR_PROJECT_DIR`. Cursor sets both, and runs project hooks from the project root.
 
 ## How the captures were cleaned
