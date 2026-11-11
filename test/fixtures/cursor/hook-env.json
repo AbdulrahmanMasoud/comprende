@@ -1,0 +1,9 @@
+{
+  "CLAUDE_PROJECT_DIR": "/work/probe-app",
+  "CURSOR_INVOKED_AS": "cursor-agent",
+  "CURSOR_PROJECT_DIR": "/work/probe-app",
+  "CURSOR_RIPGREP_PATH": "/home/user/.local/share/cursor-agent/versions/2026.11.10-731fb78/rg",
+  "CURSOR_TRANSCRIPT_PATH": "/home/user/.cursor/projects/work-probe-app/agent-transcripts/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000001.jsonl",
+  "CURSOR_USER_EMAIL": "user@example.com",
+  "CURSOR_VERSION": "2026.11.10-731fb78"
+}

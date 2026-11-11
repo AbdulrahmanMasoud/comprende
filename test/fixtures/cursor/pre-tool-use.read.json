@@ -1,0 +1,16 @@
+{
+  "conversation_id": "00000000-0000-4000-8000-000000000004",
+  "generation_id": "00000000-0000-4000-8000-000000000004",
+  "model": "default",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/work/probe-app/README.md"
+  },
+  "tool_use_id": "call-00000000-0000-4000-8000-000000000006-1\nfc_00000000-0000-4000-8000-000000000007_0",
+  "session_id": "00000000-0000-4000-8000-000000000004",
+  "hook_event_name": "preToolUse",
+  "cursor_version": "2026.11.10-731fb78",
+  "workspace_roots": ["/work/probe-app"],
+  "user_email": "user@example.com",
+  "transcript_path": "/home/user/.cursor/projects/work-probe-app/agent-transcripts/00000000-0000-4000-8000-000000000004/00000000-0000-4000-8000-000000000004.jsonl"
+}
