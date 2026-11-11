@@ -13,14 +13,16 @@
 
 import { appendFileSync, readFileSync, readSync } from "node:fs";
 import { isRecord } from "../util.js";
+import { agentHook } from "./agent-hook.js";
 import { AGENTS } from "./agents/index.js";
 import { jobSummary } from "./ci-summary.js";
 import { deleteReportInputFile, formatStatus, save, status, verify } from "./commands.js";
 import { currentBranch, repoRoot } from "./git.js";
 import type { HookSource } from "./hook-copies.js";
-import { agentHook, installHooks, prePush, sessionStart } from "./hooks.js";
 import { install } from "./install.js";
 import { type AnnotationKind, ciPlatform, REPO_PLATFORM } from "./platforms/index.js";
+import { installHooks, prePush } from "./pre-push-hook.js";
+import { sessionStart } from "./session-start.js";
 import { GATE_VERSION, GateError, oneLine, withoutBom } from "./shared.js";
 import { testCall } from "./test-hooks.js";
 

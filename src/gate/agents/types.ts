@@ -53,8 +53,8 @@ export interface Agent {
    *  they're trusted): how to get the plugin running, as two options, install it or
    *  trust its hooks, since the note can't tell a teammate without the plugin from
    *  skipped hooks. The repo's own hook file says it at session start, in a gated
-   *  repo (hooks.ts). Leave it out for a tool that runs an installed plugin's hooks
-   *  without asking. */
+   *  repo (session-start.ts). Leave it out for a tool that runs an installed
+   *  plugin's hooks without asking. */
   readonly pluginNotRunningHint?: string;
 
   /** The repo-level hook files this tool runs, most specific first; `install`
