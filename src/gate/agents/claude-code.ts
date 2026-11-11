@@ -18,7 +18,12 @@ export const claudeCode: Agent = {
     return (toolName ?? "Bash") === "Bash" ? command : null;
   },
 
-  projectDir: (payload, env) => readClaudeFormat(payload).cwd ?? (env.CLAUDE_PROJECT_DIR || null),
+  // Claude Code runs every hook from the project, so its own folder is a fair last guess.
+  projectDir: (payload, env) => readClaudeFormat(payload).cwd ?? (env.CLAUDE_PROJECT_DIR || process.cwd()),
+
+  names: { assistant: "Claude", app: "Claude Code" },
+
+  pluginUpdateHint: "`/plugin marketplace update comprende`",
 
   projectHookFiles: [CLAUDE_SETTINGS],
 };

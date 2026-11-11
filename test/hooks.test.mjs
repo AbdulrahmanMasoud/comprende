@@ -99,7 +99,8 @@ const CURSOR_FIXTURES = join(REPO, "test/fixtures/cursor");
 function fromCursor(fixture, dev) {
   const env = JSON.parse(readFileSync(join(CURSOR_FIXTURES, "hook-env.json"), "utf8"));
   return {
-    input: readFileSync(join(CURSOR_FIXTURES, fixture), "utf8"),
+    // Cursor's workspace_roots name the repo, as in a real run.
+    input: readFileSync(join(CURSOR_FIXTURES, fixture), "utf8").replaceAll("/work/probe-app", dev),
     env: { ...ENV, ...env, CLAUDE_PROJECT_DIR: dev, CURSOR_PROJECT_DIR: dev },
   };
 }

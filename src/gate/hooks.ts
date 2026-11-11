@@ -45,7 +45,9 @@ export function agentHook(stdinText: string, fromPlugin: boolean, requested: str
   try {
     const command = agent.shellCommand(payload);
     if (command === null || !isPushCommand(command)) return allow;
-    root = repoRoot(agent.projectDir(payload, env) ?? process.cwd());
+    const dir = agent.projectDir(payload, env);
+    if (dir === null) return allow; // the tool didn't say which repo: step aside
+    root = repoRoot(dir);
     if (!lstat(join(root, CONFIG_PATH))) return allow;
     if (fromPlugin && agent.projectHookFiles.some((f) => projectHookRunsGate(join(root, f.path), f))) return allow;
   } catch {
@@ -53,7 +55,7 @@ export function agentHook(stdinText: string, fromPlugin: boolean, requested: str
   }
   let passed: boolean, problems: string[], mode: string;
   try {
-    [passed, problems, mode] = verify(root);
+    [passed, problems, mode] = verify(root, null, null, "HEAD", [], agent.names.assistant);
   } catch (e) {
     if (!(e instanceof GateError)) return allow;
     [passed, problems, mode] = [false, [e.message], "required"]; // e.g. a broken report
@@ -76,8 +78,8 @@ export function agentHook(stdinText: string, fromPlugin: boolean, requested: str
 const MIN_NODE = 20;
 
 // hooks/hooks.json carries the same note for a missing or unusable node.
-const NODE_NOTE =
-  "Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.";
+const nodeNote = (app: string) =>
+  `Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of ${app}.`;
 
 // Every session, so explanations don't depend on the request sounding like a
 // wish to learn. Fixed text on purpose: nothing read from the repo goes into it.
@@ -100,11 +102,11 @@ export function gateCopyDifference(repoCopy: Buffer, pluginCopy: Buffer): GateCo
 
 // Why the pre-push hook wasn't installed automatically. Fixed text, like the
 // rest of the SessionStart context: nothing read from the repo goes into it.
-const UNTRUSTED_GATE_NOTE: Record<Exclude<GateCopyDifference, "none">, string> = {
+const untrustedGateNote = (agent: Agent): Record<Exclude<GateCopyDifference, "none">, string> => ({
   content: `This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`,
   "repo-crlf": `This repo's ${GATE_REL} differs from the plugin's copy only in its line endings: git's core.autocrlf checked it out with CRLF. The local pre-push hook trusts only a byte-identical copy, so it was NOT installed automatically. Tell the user in one line to run \`git -c core.autocrlf=false checkout -- ${GATE_REL}\`, then \`node ${GATE_REL} install\`, which adds \`${GATE_ATTRIBUTES_LINE}\` to .gitattributes so it stays that way.`,
-  "plugin-crlf": `The plugin's own copy of gate.mjs has CRLF line endings (git's core.autocrlf, in an install from before Comprende 0.2.1), so it differs from this repo's ${GATE_REL} only in its line endings, and the local pre-push hook was NOT installed automatically. Tell the user in one line to update the plugin: \`/plugin marketplace update comprende\`.`,
-};
+  "plugin-crlf": `The plugin's own copy of gate.mjs has CRLF line endings (git's core.autocrlf, in an install from before Comprende 0.2.1), so it differs from this repo's ${GATE_REL} only in its line endings, and the local pre-push hook was NOT installed automatically. Tell the user in one line to update the plugin: ${agent.pluginUpdateHint}.`,
+});
 
 /** SessionStart hook (plugin): the stdout that adds context for the agent, in the
  *  adapter's format. Never throws — a session must always start. */
@@ -113,7 +115,9 @@ export function sessionStart(stdinText: string, requested: string | null): strin
   const lines: string[] = [];
   const node = process.versions.node;
   if (Number.parseInt(node, 10) < MIN_NODE)
-    lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
+    lines.push(
+      `Comprende is running on Node.js ${node}, which is too old. ${nodeNote(agent?.names.app ?? "the AI tool")}`,
+    );
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
   if (agent) lines.push(...gatedRepoContext(agent, payload));
   return sessionContextReply(agent, lines);
@@ -124,7 +128,9 @@ export function sessionStart(stdinText: string, requested: string | null): strin
  *  is followed. Elsewhere: nothing. */
 function gatedRepoContext(agent: Agent, payload: unknown): string[] {
   try {
-    const root = repoRoot(agent.projectDir(payload, process.env) ?? process.cwd());
+    const dir = agent.projectDir(payload, process.env);
+    if (dir === null) return [];
+    const root = repoRoot(dir);
     if (!lstat(join(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];
@@ -136,7 +142,7 @@ function gatedRepoContext(agent: Agent, payload: unknown): string[] {
       // The installed hook runs the repo's gate on every push. Only set that up
       // automatically when it's byte-identical to this (trusted) copy.
       const difference = SELF ? gateCopyDifference(readFileSync(repoGate), readFileSync(SELF)) : "content";
-      if (difference !== "none") lines.push(UNTRUSTED_GATE_NOTE[difference]);
+      if (difference !== "none") lines.push(untrustedGateNote(agent)[difference]);
       else {
         const result = installHooks(root, true)[0];
         if (result.startsWith("installed") || result.startsWith("re-pinned")) {

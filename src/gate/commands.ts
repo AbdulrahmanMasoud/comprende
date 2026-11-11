@@ -22,7 +22,10 @@ import { previousReport, readReport, renderReport, reportPath } from "./report.j
 import { GATE_REL, GATE_VERSION, GateError, oneLine, REPORT_INPUT, sorted, VERSION_RE } from "./shared.js";
 
 // English only: terminals draw right-to-left text in reverse order. The skill understands the phrase in any language.
-const CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
+/** What to do next, naming the assistant when the gate knows which one is asking
+ *  (an agent hook), and none otherwise (CI, pre-push). */
+const checkMeHint = (assistant: string) =>
+  `Ask ${assistant} to run the ownership check ("check me"), then commit the report.`;
 
 /** File names for a message, one line whatever they contain. */
 const listPaths = (paths: string[]) => paths.map(oneLine).join(", ");
@@ -195,6 +198,7 @@ export function verify(
   branch?: string | null,
   rev = "HEAD",
   labels: string[] = [],
+  assistant = "your AI assistant",
 ): [boolean, string[], string] {
   const root = repoRoot(repo);
   const baseRef = resolveBase(root, loadConfig(root, rev), base);
@@ -208,7 +212,11 @@ export function verify(
   if (report === null) {
     if (Object.entries(changes).every(([p, c]) => needsNoQuestions(p, c.mode, cfg)))
       return [true, ["Only ignored files changed (e.g. lockfiles) — no report needed."], cfg.mode];
-    return [false, [`No ownership report for branch '${oneLine(br)}' (${reportPath(br)}). ${CHECK_ME_HINT}`], cfg.mode];
+    return [
+      false,
+      [`No ownership report for branch '${oneLine(br)}' (${reportPath(br)}). ${checkMeHint(assistant)}`],
+      cfg.mode,
+    ];
   }
   const st = fileStates(root, changes, report, rev, mb);
   const by = (s: State) => Object.keys(changes).filter((p) => st[p] === s);
@@ -228,7 +236,7 @@ export function verify(
   const len = charCount(trimSummary(report.summary));
   const shortOk = () => len >= cfg.small_summary_chars && smallChange(root, baseRef, mb, rev, changes, cfg).small;
   if (len < cfg.min_summary_chars && !shortOk()) problems.push("The developer's summary is missing or too short.");
-  if (problems.length && !(by("rebased").length && problems.length === 1)) problems.push(CHECK_ME_HINT);
+  if (problems.length && !(by("rebased").length && problems.length === 1)) problems.push(checkMeHint(assistant));
   return [problems.length === 0, problems, cfg.mode];
 }
 
