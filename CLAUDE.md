@@ -63,8 +63,10 @@ actionlint                        # the GitHub workflows
 - **Always rebuild after editing `src/`.** `dist/` and `skills/comprende/scripts/*.mjs` must match a fresh `npm run build`. CI checks this with `git diff --exit-code`.
 - **`gate.mjs` and `learning.mjs` import only `node:` built-ins.** `build.mjs` enforces it. The pinned git hook runs `gate.mjs` as an in-memory module, so it can't load anything else.
 - **The plugin never executes code from the repo it's looking at.** Hooks and the MCP server run only the plugin's own `dist/gate.mjs`. A repo's config is read as data, with no symlinks and a size limit. The git hook is auto-installed only when the repo's `gate.mjs` is byte-identical to the plugin's copy.
-- **A hook blocks only on a deliberate deny:** exit 2, or a JSON deny on exit 0 for a tool that ignores exit codes. Only a verdict on the change denies: no report, a file that isn't verified, or a report that's there but can't be read. A crash, a usage error or bad input NEVER produces a deny, in any format:
-  - a git or file-system failure, a broken config, a missing file, an unknown option or a broken payload lets the command run, and CI still checks
+- **A hook blocks only on a deliberate deny:** exit 2, or a JSON deny on exit 0 for a tool that ignores exit codes. Only a verdict on the change denies: no report, a file that isn't verified, or a report that's there but can't be read (broken, or too large). A crash, a usage error or bad input NEVER produces a deny, in any format:
+  - a git or file-system failure, a broken config, a missing `gate.mjs` or `node`, an unknown option or a broken payload lets the command run, and CI still checks
+  - in code: `checkForHook` (`commands.ts`) is the one place that tells a verdict from a check that couldn't run
+  - a report from another gate version is a verdict only in git's hook, which runs the repo's own gate. In the agents' hook, the plugin's copy may be newer than the repo's
   - Claude Code and Cursor read exit 2 as "block", so an accidental 2 would block every command for the user
   - git's pre-push hook follows the same rule: it skips the branch and says so
   - `test/agents.test.mjs` checks it for every adapter, and `test/hooks.test.mjs` for the git hook

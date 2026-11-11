@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- **A hook never blocks by accident.** Only a verdict on the change blocks a push: no report, a file that isn't verified, or a report that's there but can't be read. Before, a git failure during the check (or a broken `.learning/config.json`) blocked the agent's push too, and the git hook blocked on any unexpected error. Now they let the push run, and the git hook skips the branch with a note. CI still checks.
+- **A hook never blocks by accident.** Only a verdict on the change blocks a push: no report, a file that isn't verified, or a report that's there but can't be read (broken, or too large). Before, a git failure during the check or a broken `.learning/config.json` blocked the agent's push too, and the git hook blocked on any unexpected error. Now they let the push run, and the git hook skips the branch with a note. CI still checks.
+  - A report made by another gate version still blocks git's hook, which runs the repo's own gate. It no longer blocks the agents' hook, where the plugin's copy may simply be newer than the repo's.
 
 ## 0.3.0
 

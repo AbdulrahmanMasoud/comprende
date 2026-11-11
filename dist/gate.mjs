@@ -59,6 +59,8 @@ var ZERO_SHA = "0".repeat(40);
 var REGULAR_MODES = ["100644", "100755"];
 var GateError = class extends Error {
 };
+var UnreadableFileError = class extends GateError {
+};
 var SELF = (() => {
   try {
     return fileURLToPath(import.meta.url);
@@ -326,7 +328,7 @@ function readExisting(path, limit = MAX_CONFIG_BYTES) {
 function readRepoFile(path, limit) {
   const st = lstat(path);
   if (!st || st.isSymbolicLink() || !st.isFile())
-    throw new GateError(`${basename(path)} must be a regular file, not a symlink or special file.`);
+    throw new UnreadableFileError(`${basename(path)} must be a regular file, not a symlink or special file.`);
   const fd = openSync(path, "r");
   try {
     const buf = Buffer.alloc(limit + 1);
@@ -336,7 +338,9 @@ function readRepoFile(path, limit) {
       if (got === 0) break;
       n += got;
       if (n > limit)
-        throw new GateError(`${basename(path)} is larger than ${Math.floor(limit / 1024)} KB \u2014 refusing to read it.`);
+        throw new UnreadableFileError(
+          `${basename(path)} is larger than ${Math.floor(limit / 1024)} KB \u2014 refusing to read it.`
+        );
     }
     return buf.subarray(0, n).toString("utf8");
   } finally {
@@ -636,7 +640,9 @@ function readFileAtRev(root, rev, rel, limit) {
   const size = git(root, ["cat-file", "-s", `${rev}:${rel}`], { check: false }).trim();
   if (!/^\d+$/.test(size)) throw new GateError(`${rel} at ${rev} isn't readable.`);
   if (Number(size) > limit)
-    throw new GateError(`${rel} at ${rev} is larger than ${Math.floor(limit / 1024)} KB \u2014 refusing to read it.`);
+    throw new UnreadableFileError(
+      `${rel} at ${rev} is larger than ${Math.floor(limit / 1024)} KB \u2014 refusing to read it.`
+    );
   return git(root, ["show", `${rev}:${rel}`]);
 }
 function resolveBase(root, cfg, base) {
@@ -959,6 +965,8 @@ function extractDataBlock(text) {
 }
 var ReportError = class extends GateError {
 };
+var ReportVersionError = class extends ReportError {
+};
 function parseReport(text) {
   if (!text.includes(DATA_MARKER))
     throw new ReportError("Report is missing its data block \u2014 run the check again to regenerate it.");
@@ -978,7 +986,7 @@ function parseReport(text) {
       throw new ReportError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
   }
   if (data.version !== GATE_VERSION) {
-    throw new ReportError(
+    throw new ReportVersionError(
       `Report was made by gate v${String(data.version)}; this gate is v${GATE_VERSION}. If your branch is behind the base, merge it first; then run the check again.`
     );
   }
@@ -988,10 +996,17 @@ function readReport(root, branch, rev) {
   const rel = reportPath(branch);
   if (rev) {
     if (!revHasFile(root, rev, rel)) return null;
-    return parseReport(readFileAtRev(root, rev, rel, MAX_REPORT_BYTES));
+    return parseReport(readExisting2(() => readFileAtRev(root, rev, rel, MAX_REPORT_BYTES)));
   }
   const path = join4(root, rel);
-  return lstat(path) ? parseReport(readRepoFile(path, MAX_REPORT_BYTES)) : null;
+  return lstat(path) ? parseReport(readExisting2(() => readRepoFile(path, MAX_REPORT_BYTES))) : null;
+}
+function readExisting2(read) {
+  try {
+    return read();
+  } catch (e) {
+    throw e instanceof UnreadableFileError ? new ReportError(e.message) : e;
+  }
 }
 var unusableReport = (e) => [
   { files: {}, verified: {}, summary: "", _outdated: true },
@@ -1528,6 +1543,15 @@ function verify(repo, {
   if (problems.length && !(by("rebased").length && problems.length === 1)) problems.push(checkMeHint(assistant));
   return [problems.length === 0, problems, cfg.mode];
 }
+function checkForHook(root, options, versionGapIsVerdict) {
+  try {
+    const [passed, problems, mode] = verify(root, options);
+    return { passed, problems, mode };
+  } catch (e) {
+    const verdict = e instanceof ReportError && (versionGapIsVerdict || !(e instanceof ReportVersionError));
+    return verdict ? { passed: false, problems: [e.message], mode: "required" } : { skipped: e.message };
+  }
+}
 function deleteReportInputFile(input, repo) {
   try {
     const abs = resolve2(input);
@@ -1778,14 +1802,8 @@ function agentHook(stdinText, source, requested) {
   } catch {
     return allow;
   }
-  let passed, problems, mode;
-  try {
-    [passed, problems, mode] = verify(root, { assistant: agent.names.assistant });
-  } catch (e) {
-    if (!(e instanceof ReportError)) return allow;
-    [passed, problems, mode] = [false, [e.message], "required"];
-  }
-  if (passed || mode !== "required") return allow;
+  const check = checkForHook(root, { assistant: agent.names.assistant }, false);
+  if ("skipped" in check || check.passed || check.mode !== "required") return allow;
   const pending = uncommittedReport(root);
   if (pending) {
     return decisionReply(agent, {
@@ -1793,8 +1811,11 @@ function agentHook(stdinText, source, requested) {
       reason: `Blocked by the ownership gate: the report ${pending} is saved but not committed. Commit it first, then push as a separate command. This hook checks the branch before a command runs, so a push in the same command as the commit is blocked too.`
     });
   }
-  return decisionReply(agent, { allow: false, reason: `Blocked by the ownership gate:
-- ${problems.join("\n- ")}` });
+  return decisionReply(agent, {
+    allow: false,
+    reason: `Blocked by the ownership gate:
+- ${check.problems.join("\n- ")}`
+  });
 }
 var MIN_NODE = 20;
 var nodeNote = (app) => `Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of ${app}.`;
@@ -1860,7 +1881,9 @@ function prePush(stdinText, repo) {
     root = repoRoot(repo);
     const b = resolveBase(root, loadConfig(root), null);
     baseBranch = b.includes("/") ? b.slice(b.indexOf("/") + 1) : b;
-  } catch {
+  } catch (e) {
+    process.stderr.write(`ownership gate: skipped (${e.message})
+`);
     return 0;
   }
   let failed = false;
@@ -1871,24 +1894,19 @@ function prePush(stdinText, repo) {
     if (localSha === ZERO_SHA || !remoteRef.startsWith("refs/heads/")) continue;
     const branch = remoteRef.slice("refs/heads/".length);
     if (branch === baseBranch) continue;
-    let passed, problems, mode;
-    try {
-      [passed, problems, mode] = verify(root, { branch, rev: localSha });
-    } catch (e) {
-      if (!(e instanceof ReportError)) {
-        process.stderr.write(`ownership gate: skipped (${e.message})
+    const check = checkForHook(root, { branch, rev: localSha }, true);
+    if ("skipped" in check) {
+      process.stderr.write(`ownership gate: skipped (${check.skipped})
 `);
-        continue;
-      }
-      [passed, problems, mode] = [false, [e.message], "required"];
+      continue;
     }
-    if (passed) continue;
-    const label = mode === "required" ? "blocked" : "warning";
+    if (check.passed) continue;
+    const label = check.mode === "required" ? "blocked" : "warning";
     process.stderr.write(`
 Ownership gate ${label} for '${branch}':
-- ${problems.join("\n- ")}
+- ${check.problems.join("\n- ")}
 `);
-    failed ||= mode === "required";
+    failed ||= check.mode === "required";
   }
   if (failed) process.stderr.write("\n(Bypassing with --no-verify only delays this: CI runs the same check.)\n\n");
   return failed ? 1 : 0;
@@ -2103,6 +2121,10 @@ function testCall(fn, a) {
       }
       const agent = resolveAgent(payload, env, s(2));
       return agent && { id: agent.id, command: agent.shellCommand(payload), projectDir: agent.projectDir(payload, env) };
+    }
+    case "allow_reply": {
+      const agent = AGENTS.find((x) => x.id === s(0));
+      return agent ? decisionReply(agent, { allow: true }) : null;
     }
     case "is_push_command":
       return isPushCommand(String(a[0]));
@@ -2347,6 +2369,12 @@ ${HELP}`);
     }
   } catch (e) {
     const msg = e.message;
+    const failOpen = Object.hasOwn(FAIL_OPEN_EXIT, cmd) ? FAIL_OPEN_EXIT[cmd] : void 0;
+    if (failOpen !== void 0) {
+      process.stderr.write(`ownership gate: ${oneLine(msg)}; skipping this hook
+`);
+      return failOpen;
+    }
     if (!(e instanceof GateError)) {
       const code = e.code;
       if (!code) throw e;

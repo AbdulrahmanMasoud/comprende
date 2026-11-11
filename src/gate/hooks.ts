@@ -7,13 +7,13 @@ import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isFile, isSymlink, lstat } from "../util.js";
 import { type Agent, type HookEnv, type HookReply, resolveAgent, UNKNOWN_AGENT_NAMES } from "./agents/index.js";
-import { verify } from "./commands.js";
+import { checkForHook } from "./commands.js";
 import { loadConfig } from "./config.js";
 import { git, repoRoot, resolveBase } from "./git.js";
 import { claimed, type HookRun, type HookSource, stepsAside } from "./hook-copies.js";
 import { decisionReply, SILENT_ALLOW, sessionContextReply } from "./hook-replies.js";
 import { isPushCommand } from "./push-detect.js";
-import { ReportError, uncommittedReport } from "./report.js";
+import { uncommittedReport } from "./report.js";
 import { CONFIG_PATH, GATE_ATTRIBUTES_LINE, GATE_REL, SELF, splitLines, withoutBom, ZERO_SHA } from "./shared.js";
 
 /** The hook's payload and the adapter that reads it, or no adapter when stdin
@@ -53,17 +53,8 @@ export function agentHook(stdinText: string, source: HookSource, requested: stri
   } catch {
     return allow;
   }
-  let passed: boolean, problems: string[], mode: string;
-  try {
-    [passed, problems, mode] = verify(root, { assistant: agent.names.assistant });
-  } catch (e) {
-    // Only a report that's there but can't be used is a verdict. Any other failure
-    // (git, the file system, a broken config) lets the command run: a hook never
-    // blocks by accident, and CI still checks.
-    if (!(e instanceof ReportError)) return allow;
-    [passed, problems, mode] = [false, [e.message], "required"];
-  }
-  if (passed || mode !== "required") return allow;
+  const check = checkForHook(root, { assistant: agent.names.assistant }, false);
+  if ("skipped" in check || check.passed || check.mode !== "required") return allow;
   // The hook runs before the command, so `git commit … && git push` is checked
   // against the old HEAD. Say so when the fix is just a separate commit.
   const pending = uncommittedReport(root);
@@ -75,7 +66,10 @@ export function agentHook(stdinText: string, source: HookSource, requested: stri
         "This hook checks the branch before a command runs, so a push in the same command as the commit is blocked too.",
     });
   }
-  return decisionReply(agent, { allow: false, reason: `Blocked by the ownership gate:\n- ${problems.join("\n- ")}` });
+  return decisionReply(agent, {
+    allow: false,
+    reason: `Blocked by the ownership gate:\n- ${check.problems.join("\n- ")}`,
+  });
 }
 
 const MIN_NODE = 20;
@@ -180,7 +174,8 @@ export function prePush(stdinText: string, repo?: string | null): number {
     root = repoRoot(repo);
     const b = resolveBase(root, loadConfig(root), null);
     baseBranch = b.includes("/") ? b.slice(b.indexOf("/") + 1) : b;
-  } catch {
+  } catch (e) {
+    process.stderr.write(`ownership gate: skipped (${(e as Error).message})\n`);
     return 0;
   }
   let failed = false;
@@ -193,22 +188,18 @@ export function prePush(stdinText: string, repo?: string | null): number {
     if (localSha === ZERO_SHA || !remoteRef.startsWith("refs/heads/")) continue; // deletion or tag
     const branch = remoteRef.slice("refs/heads/".length);
     if (branch === baseBranch) continue; // reports are per feature branch; the base is guarded by PRs + rules
-    let passed: boolean, problems: string[], mode: string;
-    try {
-      [passed, problems, mode] = verify(root, { branch, rev: localSha });
-    } catch (e) {
-      // As in the agents' hook: only an unusable report blocks. Git blocks a push
-      // on any non-zero exit, so every other failure skips this branch.
-      if (!(e instanceof ReportError)) {
-        process.stderr.write(`ownership gate: skipped (${(e as Error).message})\n`);
-        continue;
-      }
-      [passed, problems, mode] = [false, [e.message], "required"];
+    // Git blocks a push on any non-zero exit, so a check that can't run skips
+    // the branch. This hook runs the repo's own gate, so a report from another
+    // gate version is a verdict here.
+    const check = checkForHook(root, { branch, rev: localSha }, true);
+    if ("skipped" in check) {
+      process.stderr.write(`ownership gate: skipped (${check.skipped})\n`);
+      continue;
     }
-    if (passed) continue;
-    const label = mode === "required" ? "blocked" : "warning";
-    process.stderr.write(`\nOwnership gate ${label} for '${branch}':\n- ${problems.join("\n- ")}\n`);
-    failed ||= mode === "required";
+    if (check.passed) continue;
+    const label = check.mode === "required" ? "blocked" : "warning";
+    process.stderr.write(`\nOwnership gate ${label} for '${branch}':\n- ${check.problems.join("\n- ")}\n`);
+    failed ||= check.mode === "required";
   }
   if (failed) process.stderr.write("\n(Bypassing with --no-verify only delays this: CI runs the same check.)\n\n");
   return failed ? 1 : 0;

@@ -18,6 +18,7 @@ import { pathToFileURL } from "node:url";
 import {
   commitAll,
   ENV,
+  failingGitBin,
   gate,
   git,
   gitTry,
@@ -156,7 +157,9 @@ for (const [refspec, remoteBranch] of [
   });
 }
 
-test("the git hook never blocks on a crash: a git failure during the check skips it, a broken report blocks", (t) => {
+test("the git hook never blocks on a crash: a check that can't run skips the branch with a note, a broken report blocks", {
+  skip: process.platform === "win32",
+}, (t) => {
   const { dev } = setup(t);
   write(dev, "src/app.js", "export const app = 2;\n");
   commitAll(dev, "unchecked");
@@ -170,18 +173,15 @@ test("the git hook never blocks on a crash: a git failure during the check skips
     const line = `refs/heads/feature/rate-limit ${sha} refs/heads/feature/rate-limit ${"0".repeat(40)}\n`;
     return runGate(dev, ["pre-push", "origin", "../remote.git"], { input: line, env });
   };
-  // A git that fails once the check reads the change.
-  const realGit = sh(dev, "/bin/sh", ["-c", "command -v git"]).stdout.trim();
-  const bin = join(tmp(t), "bin");
-  write(
-    bin,
-    "git",
-    `#!/bin/sh\nfor a in "$@"; do [ "$a" = diff ] && { echo "simulated git failure" >&2; exit 128; }; done\nexec "${realGit}" "$@"\n`,
-  );
-  chmodSync(join(bin, "git"), 0o755);
-  const failing = prePush({ ...ENV, PATH: `${bin}:${ENV.PATH}` });
-  assert.equal(failing.status, 0, failing.stderr);
-  assert.match(failing.stderr, /ownership gate: skipped \(git .*failed/);
+  const skipped = (r, why) => {
+    assert.equal(r.status, 0, `${why}: ${r.stderr}`);
+    assert.match(r.stderr, /ownership gate: skipped \(/, why);
+  };
+  skipped(prePush({ ...ENV, PATH: `${failingGitBin(t)}:${ENV.PATH}` }), "git fails during the check");
+  const config = readFileSync(join(dev, ".learning/config.json"), "utf8");
+  writeFileSync(join(dev, ".learning/config.json"), "{ not json");
+  skipped(prePush(), "the config in the working tree is broken");
+  writeFileSync(join(dev, ".learning/config.json"), config);
   // A report that's there but can't be read is a verdict on the change.
   write(dev, "src/app.js", "export const app = 3;\n");
   write(dev, gate.reportRelpath("feature/rate-limit"), "not a report\n");

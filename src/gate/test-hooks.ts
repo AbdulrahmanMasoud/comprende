@@ -10,6 +10,7 @@ import { type Config, isSensitive } from "./config.js";
 import { samePath } from "./files.js";
 import { GATE_FILES } from "./gate-files.js";
 import { repoRoot } from "./git.js";
+import { decisionReply } from "./hook-replies.js";
 import { ALWAYS_ON } from "./hooks.js";
 import { ciPlatform, REPO_PLATFORM } from "./platforms/index.js";
 import { addProjectHook } from "./project-hooks.js";
@@ -66,6 +67,11 @@ export function testCall(fn: string, a: unknown[]): unknown {
       return (
         agent && { id: agent.id, command: agent.shellCommand(payload), projectDir: agent.projectDir(payload, env) }
       );
+    }
+    case "allow_reply": {
+      // [agent id]: what that adapter prints to let a command run.
+      const agent = AGENTS.find((x) => x.id === s(0));
+      return agent ? decisionReply(agent, { allow: true }) : null;
     }
     case "is_push_command":
       return isPushCommand(String(a[0]));

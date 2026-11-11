@@ -8,7 +8,7 @@ import { isFile } from "../util.js";
 import type { Config } from "./config.js";
 import { ciHeadBranch } from "./platforms/index.js";
 import { type RunResult, run } from "./run.js";
-import { GateError, sorted, splitLines } from "./shared.js";
+import { GateError, sorted, splitLines, UnreadableFileError } from "./shared.js";
 
 /** Environment for every git call. core.fsmonitor can name a command in the
  *  repo's own .git/config; it's forced off for all calls (GIT_CONFIG_* outranks
@@ -87,7 +87,9 @@ export function readFileAtRev(root: string, rev: string, rel: string, limit: num
   const size = git(root, ["cat-file", "-s", `${rev}:${rel}`], { check: false }).trim();
   if (!/^\d+$/.test(size)) throw new GateError(`${rel} at ${rev} isn't readable.`);
   if (Number(size) > limit)
-    throw new GateError(`${rel} at ${rev} is larger than ${Math.floor(limit / 1024)} KB — refusing to read it.`);
+    throw new UnreadableFileError(
+      `${rel} at ${rev} is larger than ${Math.floor(limit / 1024)} KB — refusing to read it.`,
+    );
   return git(root, ["show", `${rev}:${rel}`]);
 }
 
