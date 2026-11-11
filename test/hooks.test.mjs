@@ -49,6 +49,7 @@ const isExecutable = (p) => {
 };
 
 const ALWAYS_ON = gate.const("ALWAYS_ON");
+const QUIET_MODE = gate.const("QUIET_MODE");
 
 const QUIET = { ...ENV, COMPRENDE_QUIET: "1" };
 
@@ -437,16 +438,17 @@ test("session start: the always-on line in every session, short", (t) => {
   assert.ok(ALWAYS_ON.split(/\s+/).length < 60, `${ALWAYS_ON.split(/\s+/).length} words`);
 });
 
-test("session start: COMPRENDE_QUIET=1 drops the always-on line, not the gate", (t) => {
+// The skill loads for any code change, so quiet mode must say so, and a session
+// with no Comprende note at all would read to the skill as hooks that didn't run.
+test("session start: COMPRENDE_QUIET=1 swaps the always-on line for the quiet one, and keeps the gate", (t) => {
   const { dev, tmp } = setup(t);
   const dir = tmpDir(t);
-  assert.deepEqual(
-    JSON.parse(plugin(dir, ["session-start"], { input: JSON.stringify({ cwd: dir }), env: QUIET }).stdout),
-    {},
-  );
+  const quiet = JSON.parse(plugin(dir, ["session-start"], { input: JSON.stringify({ cwd: dir }), env: QUIET }).stdout);
+  assert.equal(quiet.hookSpecificOutput.additionalContext, QUIET_MODE);
+  assert.match(QUIET_MODE, /^Comprende is installed, in quiet mode: .*only when the user asks/);
   const ctx = JSON.parse(plugin(tmp, ["session-start"], { input: JSON.stringify({ cwd: dev }), env: QUIET }).stdout)
     .hookSpecificOutput.additionalContext;
-  assert.ok(ctx.includes("ownership gate (mode: required)"), ctx);
+  assert.ok(ctx.startsWith(QUIET_MODE) && ctx.includes("ownership gate (mode: required)"), ctx);
   assert.ok(!ctx.includes(ALWAYS_ON), ctx);
   const loud = JSON.parse(plugin(tmp, ["session-start"], { input: JSON.stringify({ cwd: dev }) }).stdout);
   assert.ok(loud.hookSpecificOutput.additionalContext.startsWith(ALWAYS_ON));

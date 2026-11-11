@@ -85,6 +85,12 @@ export const ALWAYS_ON =
   "Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: " +
   "explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
 
+// COMPRENDE_QUIET=1 still sends a line, not nothing: the skill now loads for any
+// code change, so it needs telling to stay quiet, and a session with no note at
+// all reads to the skill as hooks that didn't run.
+export const QUIET_MODE =
+  "Comprende is installed, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.";
+
 const withLfEndings = (bytes: Buffer) => Buffer.from(bytes.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
 
 export type GateCopyDifference = "none" | "repo-crlf" | "plugin-crlf" | "content";
@@ -122,7 +128,7 @@ export function sessionStart(stdinText: string, source: HookSource, requested: s
     lines.push(
       `Comprende is running on Node.js ${node}, which is too old. ${nodeNote((agent?.names ?? UNKNOWN_AGENT_NAMES).app)}`,
     );
-  if (source === "plugin" && process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
+  if (source === "plugin") lines.push(process.env.COMPRENDE_QUIET === "1" ? QUIET_MODE : ALWAYS_ON);
   if (run) lines.push(...gatedRepoContext(run, payload));
   return sessionContextReply(agent, lines);
 }

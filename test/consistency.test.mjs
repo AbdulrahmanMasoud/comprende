@@ -2,11 +2,11 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { test } from "node:test";
 import { parse as parseYaml } from "yaml";
-import { ENV, git, NODE, REPO, SUMMARY, setup, sh, tmp } from "./helpers.mjs";
+import { commitAll, ENV, git, NODE, REPO, SUMMARY, setup, sh, tmp, write } from "./helpers.mjs";
 
 const read = (rel) => readFileSync(join(REPO, rel));
 
@@ -228,6 +228,52 @@ test("the Codex hook in docs/teams.md is the one install writes", (t) => {
   const { command } = JSON.parse(readFileSync(join(dev, ".codex/hooks.json"), "utf8")).hooks.PreToolUse[0].hooks[0];
   assert.match(command, /agent-hook --agent codex$/);
   assert.ok(read("docs/teams.md").toString("utf8").includes(JSON.stringify(command)), "update the snippet");
+});
+
+const skill = () => read("skills/comprende/SKILL.md").toString("utf8");
+const skillDescription = () => /^description: "(.*)"$/m.exec(skill())?.[1] ?? "";
+
+// Codex skips untrusted plugin hooks without a word, so the skill is what notices.
+// It can't load only "in a repo with .learning/config.json": an agent that searched
+// with `rg --files` missed the hidden folder and never opened the skill.
+test("the skill loads on any code change, not only where an agent's file search finds .learning/", () => {
+  const description = skillDescription();
+  assert.ok(description.includes("whenever you write, change, or walk through code"), description);
+  assert.ok(!description.includes("the user wants to learn"), "no condition on the user's wish to learn");
+  assert.ok(!description.includes(".learning"), "loading it must not depend on finding the hidden folder");
+});
+
+test("the skill's description fits the Agent Skills limit of 1024 characters", () => {
+  assert.ok([...skillDescription()].length <= 1024, `${[...skillDescription()].length} characters`);
+});
+
+// The shells an agent's command may run in. zsh is missing on CI's Linux runners,
+// and PowerShell (Codex on Windows) has no `test`: there the check finds no gate,
+// so the skill stays quiet.
+const POSIX_SHELLS = ["/bin/sh", "/bin/bash", "/bin/zsh"].filter((shell) => existsSync(shell));
+
+test("the skill's gate check prints gated only for the repo root's .learning/config.json, tracked or not", (t) => {
+  const command = /`(cd "\$\(git rev-parse --show-toplevel\)"[^`]*)`/.exec(skill())?.[1];
+  assert.ok(command, "the skill gives one exact command for the gate check");
+  for (const shell of POSIX_SHELLS) {
+    const gated = (cwd) => sh(cwd, shell, ["-c", command], { check: false }).stdout.trim().endsWith("gated");
+
+    const repo = tmp(t);
+    git(repo, "init", "-q");
+    write(repo, ".learning/config.json", "{}");
+    write(repo, "src/deep/app.js", "");
+    assert.ok(gated(repo), `${shell}: untracked, at the root`);
+    assert.ok(gated(join(repo, "src/deep")), `${shell}: from a subfolder`);
+    commitAll(repo, "gate");
+    rmSync(join(repo, ".learning/config.json"));
+    assert.ok(gated(repo), `${shell}: tracked, though not on disk`);
+
+    const plain = tmp(t);
+    git(plain, "init", "-q");
+    write(plain, "packages/a/.learning/config.json", "{}");
+    assert.ok(!gated(join(plain, "packages/a")), `${shell}: a config below the root isn't the gate`);
+    assert.ok(!gated(tmp(t)), `${shell}: outside a git repo`);
+  }
 });
 
 // Sanity: SUMMARY and NODE are what the other suites use.
