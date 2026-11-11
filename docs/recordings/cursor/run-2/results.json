@@ -1,0 +1,56 @@
+[
+  {
+    "step": "session start: the always-on line",
+    "ok": true
+  },
+  {
+    "step": "session start: the gate's message",
+    "ok": true
+  },
+  {
+    "step": "an ordinary command runs, and the hook is silent",
+    "ok": true,
+    "detail": "2 hook run(s), exits 0,0"
+  },
+  {
+    "step": "an unverified push is blocked, and the agent sees why",
+    "ok": true,
+    "detail": "1 copy(ies) checked"
+  },
+  {
+    "step": "check me: questions asked",
+    "ok": true
+  },
+  {
+    "step": "check me: the report saved",
+    "ok": true,
+    "detail": "with the memory server's save_check_report"
+  },
+  {
+    "step": "check me: committed, then a separate push goes through",
+    "ok": true
+  },
+  {
+    "step": "check me without the memory server: saved with save --input",
+    "ok": false,
+    "detail": "with the memory server's save_check_report"
+  },
+  {
+    "step": "check me without the memory server: a separate push goes through",
+    "ok": true
+  },
+  {
+    "step": "the memory server: learning_context works",
+    "ok": true
+  },
+  {
+    "step": "explain as you build: a short explanation of the non-obvious part",
+    "ok": false,
+    "detail": "0 characters"
+  },
+  {
+    "step": "with the Claude Code plugin also imported: still one check",
+    "ok": false,
+    "detail": "0 check(s)"
+  }
+]

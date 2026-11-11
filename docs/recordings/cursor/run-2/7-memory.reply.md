@@ -1,0 +1,1 @@
+No global comfort topics yet; you’re learning `array-reduce-initial-value` (checkpoint passed); project `app` has no map and no decisions.

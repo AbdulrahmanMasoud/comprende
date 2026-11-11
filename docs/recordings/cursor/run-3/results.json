@@ -1,0 +1,12 @@
+[
+  {
+    "step": "both plugins: each session line once",
+    "status": "PASS",
+    "detail": "3 session-start run(s): always-on 1, gate 1"
+  },
+  {
+    "step": "both-plugins",
+    "status": "BLOCKED",
+    "detail": "You've hit your usage limit Get Cursor Pro for more Agent usage, unlimited Tab, and more."
+  }
+]
