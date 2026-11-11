@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Contributions:** Comprende isn't accepting outside pull requests for now. Issues, feature requests and feedback are welcome. See [Contributions](CONTRIBUTING.md#contributions).
 - **Docs:** [docs/agents.md](docs/agents.md) has what we tested about Cursor, and a design for Cursor support and agent adapters ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)).
 
 ## 0.2.2

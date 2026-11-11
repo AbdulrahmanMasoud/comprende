@@ -137,7 +137,7 @@ Then, in Claude:
 
 - [**The gate for teams**](docs/teams.md): setup by hand, settings, small changes, emergencies
 - [**How it works**](docs/how-it-works.md): requirements, fingerprints, the four layers, honest limits
-- [**Contributing**](CONTRIBUTING.md): layout, tests, the demo, releases
+- [**Contributing**](CONTRIBUTING.md#contributions): pull requests from outside aren't accepted right now, but issues and feedback are welcome
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ## License
