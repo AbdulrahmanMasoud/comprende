@@ -39,7 +39,7 @@ actionlint                        # the GitHub workflows
 - `src/util.ts`: helpers the gate and the store share, including the prototype-free `dict`/`own`/`get`
 - `dist/`: built output, **committed on purpose**, because that's what the plugin runs
 - `test/`: `node:test` suites against real git repos, one file per topic (install, config, fingerprints, checks, report, small-changes, push-detection, hooks, security, ci, store, mcp, consistency, release). `helpers.mjs` has the fixtures.
-- `docs/`: `teams.md` (setting up the gate), `how-it-works.md` (requirements, internals, limits), `demo.tape` → `demo.gif` (VHS)
+- `docs/`: `teams.md` (setting up the gate), `how-it-works.md` (requirements, internals, limits), `agents.md` (other AI tools: Cursor research and the adapter design), `demo.tape` → `demo.gif` (VHS)
 - `.github/`:
   - `workflows/ci.yml`: the PR checks
   - `workflows/release.yml`: publishes a GitHub Release when a `v*` tag is pushed
