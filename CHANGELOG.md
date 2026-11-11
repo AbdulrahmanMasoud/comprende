@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- **Codex: after a plugin update, the agent now tells you to trust Comprende's hooks again.** Codex skips a plugin's hooks without a word after every update. In 0.4.0 the skill was to notice, but in two real runs Codex's agent didn't open the skill for a small code change. Now `install` gives the repo's `.codex/hooks.json` a session start too. Its trust lasts across plugin updates, so it still runs, and tells the agent what to say. Each Codex user trusts it once in `/hooks`, after `install --upgrade`. Not yet confirmed in Codex.
+## 0.4.1
+
+- **Codex: after a plugin update, the agent now tells you to trust Comprende's hooks again.** Codex skips a plugin's hooks without a word after every update. In 0.4.0 the skill was to notice, but in two real runs Codex's agent didn't open the skill for a small code change. Now `install` gives the repo's `.codex/hooks.json` a session start too. Its trust lasts across plugin updates, so it still runs, and tells the agent what to say. Each Codex user trusts it once in `/hooks`, after `install --upgrade`. Tested in the real Codex CLI ([recording](docs/recordings/codex/0.4.1-after-update/)).
   - With both trusted, the plugin's and the repo's session starts share one claim for the gate's message, so it comes once.
   - **The skill loads for any code change in every tool**, as the always-on line already asked. With no session-start note, it checks for the gate with one exact command, since an agent's file search can skip the hidden `.learning/`.
   - **`COMPRENDE_QUIET=1`** now swaps the always-on line for a quiet one, so the skill still explains only when asked.
