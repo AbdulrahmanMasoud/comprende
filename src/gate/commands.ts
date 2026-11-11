@@ -19,13 +19,13 @@ import { atomicWrite, realPath, samePath } from "./files.js";
 import { currentBranch, repoRoot, resolveBase } from "./git.js";
 import { matches } from "./glob.js";
 import { previousReport, readReport, renderReport, reportPath } from "./report.js";
-import { GATE_REL, GATE_VERSION, GateError, printablePath, REPORT_INPUT, sorted, VERSION_RE } from "./shared.js";
+import { GATE_REL, GATE_VERSION, GateError, oneLine, REPORT_INPUT, sorted, VERSION_RE } from "./shared.js";
 
 // English only: terminals draw right-to-left text in reverse order. The skill understands the phrase in any language.
 const CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
 
 /** File names for a message, one line whatever they contain. */
-const listPaths = (paths: string[]) => paths.map(printablePath).join(", ");
+const listPaths = (paths: string[]) => paths.map(oneLine).join(", ");
 
 /** A summary is measured after trimming blank characters from both ends:
  *  Unicode spaces and line breaks, plus the ASCII separator controls
@@ -208,7 +208,7 @@ export function verify(
   if (report === null) {
     if (Object.entries(changes).every(([p, c]) => needsNoQuestions(p, c.mode, cfg)))
       return [true, ["Only ignored files changed (e.g. lockfiles) — no report needed."], cfg.mode];
-    return [false, [`No ownership report for branch '${br}' (${reportPath(br)}). ${CHECK_ME_HINT}`], cfg.mode];
+    return [false, [`No ownership report for branch '${oneLine(br)}' (${reportPath(br)}). ${CHECK_ME_HINT}`], cfg.mode];
   }
   const st = fileStates(root, changes, report, rev, mb);
   const by = (s: State) => Object.keys(changes).filter((p) => st[p] === s);

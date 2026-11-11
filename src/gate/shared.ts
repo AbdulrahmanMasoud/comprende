@@ -54,12 +54,13 @@ export const VERSION_RE = /^\/\/ ownership-gate-version: (\d+)/m;
 
 export const FEATURES_RE = /^\/\/ ownership-gate-features: (.*)$/m;
 
-/** A path as it appears in a message: control characters escaped (\n, \r, \t,
- *  \xNN), so a file name from a PR can't start a line of its own in any output.
- *  GitHub's runner reads a line starting with "::" as a workflow command. */
-export function printablePath(path: string): string {
+/** Text on one line, with control characters escaped (\n, \r, \t, \xNN), for file
+ *  names in messages and for every message the gate prints in CI. Text from a PR
+ *  (a file name, a broken report quoted in an error) must never start a line of
+ *  its own: GitHub's runner reads a line starting with "::" as a workflow command. */
+export function oneLine(text: string): string {
   let out = "";
-  for (const ch of path) {
+  for (const ch of text) {
     const code = ch.charCodeAt(0);
     if (ch === "\n") out += "\\n";
     else if (ch === "\r") out += "\\r";

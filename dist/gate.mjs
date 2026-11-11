@@ -72,9 +72,9 @@ var splitLines = (s) => {
 };
 var VERSION_RE = /^\/\/ ownership-gate-version: (\d+)/m;
 var FEATURES_RE = /^\/\/ ownership-gate-features: (.*)$/m;
-function printablePath(path) {
+function oneLine(text) {
   let out = "";
-  for (const ch of path) {
+  for (const ch of text) {
     const code = ch.charCodeAt(0);
     if (ch === "\n") out += "\\n";
     else if (ch === "\r") out += "\\r";
@@ -1223,7 +1223,7 @@ function smallChange(root, baseRef, mb, rev, changes, cfg) {
 
 // src/gate/commands.ts
 var CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
-var listPaths = (paths) => paths.map(printablePath).join(", ");
+var listPaths = (paths) => paths.map(oneLine).join(", ");
 var BLANK = "[\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
 var BLANK_ENDS = new RegExp(`^${BLANK}+|${BLANK}+$`, "gu");
 var trimSummary = (s) => s.replace(BLANK_ENDS, "");
@@ -1368,7 +1368,7 @@ function verify(repo, base, branch, rev = "HEAD", labels = []) {
   if (report === null) {
     if (Object.entries(changes).every(([p, c]) => needsNoQuestions(p, c.mode, cfg)))
       return [true, ["Only ignored files changed (e.g. lockfiles) \u2014 no report needed."], cfg.mode];
-    return [false, [`No ownership report for branch '${br}' (${reportPath(br)}). ${CHECK_ME_HINT}`], cfg.mode];
+    return [false, [`No ownership report for branch '${oneLine(br)}' (${reportPath(br)}). ${CHECK_ME_HINT}`], cfg.mode];
   }
   const st = fileStates(root, changes, report, rev, mb);
   const by = (s) => Object.keys(changes).filter((p) => st[p] === s);
@@ -2056,12 +2056,14 @@ ${HELP}`);
         }
         if (passed) {
           if (messages.length) annotate(mode === "skipped" ? "warning" : "notice", messages);
-          out(messages.length ? messages[0] : mode === "off" ? "Ownership check is off." : "Ownership check passed.");
+          out(
+            messages.length ? oneLine(messages[0]) : mode === "off" ? "Ownership check is off." : "Ownership check passed."
+          );
           return 0;
         }
         annotate(mode === "required" ? "error" : "warning", messages);
         process.stderr.write(`Ownership check failed:
-- ${messages.join("\n- ")}
+- ${messages.map(oneLine).join("\n- ")}
 `);
         return mode === "required" ? 1 : 0;
       }
@@ -2112,7 +2114,7 @@ ${HELP}`);
       const code = e.code;
       if (!code) throw e;
     }
-    process.stderr.write(`ownership gate: ${msg}
+    process.stderr.write(`ownership gate: ${oneLine(msg)}
 `);
     annotate("error", [msg]);
     return 1;
