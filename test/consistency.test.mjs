@@ -295,7 +295,13 @@ test("without node, the Cursor plugin's hooks fail open", (t) => {
   for (const [event, [h]] of Object.entries(hooks)) {
     // Cursor puts the plugin's folder in place of the variable before the shell runs.
     const command = h.command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO);
-    const r = sh(REPO, "/bin/sh", ["-c", command], { check: false, input: "{}", env: { PATH: emptyPath } });
+    // No input: without node the shell exits before reading it, and writing it would race (EPIPE).
+    const r = spawnSync("/bin/sh", ["-c", command], {
+      cwd: REPO,
+      stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf8",
+      env: { PATH: emptyPath },
+    });
     assert.notEqual(r.status, 2, `${event}: ${r.stderr}`);
     assert.equal(r.stdout, "", event);
   }
@@ -311,14 +317,15 @@ test("the Cursor plugin's hook commands run in PowerShell, and fail open there w
   const nodeDir = dirname(NODE);
   for (const [event, [h]] of Object.entries(hooks)) {
     const command = `$input | ${h.command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO)}`;
-    const run = (path) =>
+    const run = (path, input) =>
       spawnSync(PWSH, ["-NoProfile", "-NonInteractive", "-Command", command], {
         cwd: REPO,
-        input: "{}",
+        // Without node there's nothing to read the input, and writing it would race (EPIPE).
+        ...(input === undefined ? { stdio: ["ignore", "pipe", "pipe"] } : { input }),
         encoding: "utf8",
         env: { ...ENV, PATH: path },
       });
-    const ok = run(`${nodeDir}${delimiter}${process.env.PATH}`);
+    const ok = run(`${nodeDir}${delimiter}${process.env.PATH}`, "{}");
     assert.equal(ok.status, 0, `${event}: ${ok.stderr}`);
     const noNode = run(emptyPath);
     assert.notEqual(noNode.status, 2, `${event}: ${noNode.stderr}`);
