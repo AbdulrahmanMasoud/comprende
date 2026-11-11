@@ -4,7 +4,7 @@
 // ownership-gate-features: small-change gitattributes
 
 // src/gate/cli.ts
-import { appendFileSync, readFileSync as readFileSync5, readSync as readSync2 } from "node:fs";
+import { appendFileSync, readFileSync as readFileSync4, readSync as readSync2 } from "node:fs";
 
 // src/util.ts
 import { lstatSync, statSync } from "node:fs";
@@ -1754,23 +1754,39 @@ function installHooks(repo, auto = false) {
 }
 
 // src/gate/install.ts
-import { chmodSync as chmodSync3, copyFileSync as copyFileSync2, existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync4 } from "node:fs";
-import { dirname as dirname4, join as join11, resolve as resolve4 } from "node:path";
+import { chmodSync as chmodSync3, copyFileSync as copyFileSync2, existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync3 } from "node:fs";
+import { dirname as dirname5, join as join11, resolve as resolve4 } from "node:path";
 
 // src/gate/codeowners.ts
-import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:fs";
-import { join as join10 } from "node:path";
+import { readdirSync } from "node:fs";
+import { basename as basename3, dirname as dirname4, join as join10 } from "node:path";
+function codeownersInUse(root, paths) {
+  return paths.find((p) => {
+    const abs = join10(root, p);
+    const st = lstat(abs);
+    if (!st || st.isDirectory()) return false;
+    try {
+      return readdirSync(dirname4(abs)).includes(basename3(abs));
+    } catch {
+      return false;
+    }
+  }) ?? paths[0];
+}
 function setUpCodeowners(root, owner) {
   const { paths, ownerPattern, ownerHint, reviewSetting } = REPO_PLATFORM.codeowners;
-  const rel = paths[0];
-  const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
+  const rel = codeownersInUse(root, paths);
+  const lines = GATE_FILES.map((p) => `/${paths.includes(p) ? rel : p} ${owner || "@your-team-lead"}`);
   if (!owner) {
     return `MANUAL STEP 2: add to ${rel} (or rerun install with --owner @handle) and turn on ${reviewSetting} \u2014 otherwise a PR could edit the workflow to skip the check:
   ` + lines.join("\n  ");
   }
   if (!ownerPattern.test(owner)) throw new GateError(`--owner must be ${ownerHint}; got ${JSON.stringify(owner)}.`);
   const path = join10(root, rel);
-  const existing = existsSync4(path) ? readFileSync3(path, "utf8") : "";
+  const found = lstat(path) ? readExisting(path, MAX_CONFIG_BYTES) : null;
+  if (found && "unreadable" in found)
+    return `SKIPPED CODEOWNERS: ${found.unreadable} (${rel}). Add these lines to it by hand:
+  ${lines.join("\n  ")}`;
+  const existing = found?.text ?? "";
   const have = new Set(
     splitLines(existing).filter((l) => l.trim() && !l.trimStart().startsWith("#")).map((l) => l.trim().split(/\s+/)[0])
   );
@@ -1784,7 +1800,7 @@ ${fresh.join("\n")}
 `
     );
   }
-  return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on ${reviewSetting} in branch protection.`;
+  return `CODEOWNERS: ${fresh.length} entries added to ${rel} for ${owner}. MANUAL STEP 2: turn on ${reviewSetting} in branch protection.`;
 }
 
 // src/gate/install.ts
@@ -1800,17 +1816,17 @@ function install(repo, upgrade = false, owner) {
   const done = [];
   const target = join11(root, GATE_REL);
   if (!SELF) throw new GateError("Can't locate this gate's own file to install it.");
-  if (existsSync5(target) && resolve4(target) === resolve4(SELF)) done.push(`${GATE_REL} is this file`);
-  else if (existsSync5(target) && !upgrade) {
-    done.push(`${GATE_REL} ${EXISTING_GATE_NOTE[gateCopyDifference(readFileSync4(target), readFileSync4(SELF))]}`);
+  if (existsSync4(target) && resolve4(target) === resolve4(SELF)) done.push(`${GATE_REL} is this file`);
+  else if (existsSync4(target) && !upgrade) {
+    done.push(`${GATE_REL} ${EXISTING_GATE_NOTE[gateCopyDifference(readFileSync3(target), readFileSync3(SELF))]}`);
   } else {
-    mkdirSync3(dirname4(target), { recursive: true });
+    mkdirSync3(dirname5(target), { recursive: true });
     copyFileSync2(SELF, target);
     chmodSync3(target, 493);
     done.push(`wrote ${GATE_REL}`);
   }
   const cfgPath = join11(root, CONFIG_PATH);
-  if (existsSync5(cfgPath)) done.push(`${CONFIG_PATH} exists (kept)`);
+  if (existsSync4(cfgPath)) done.push(`${CONFIG_PATH} exists (kept)`);
   else {
     const cfg = { ...DEFAULT_CONFIG };
     try {
@@ -1825,7 +1841,7 @@ function install(repo, upgrade = false, owner) {
   }
   const ci = REPO_PLATFORM.ciConfig;
   const ciPath = join11(root, ci.path);
-  const { content, message } = ci.withGateJob(existsSync5(ciPath) ? readExisting(ciPath) : null);
+  const { content, message } = ci.withGateJob(existsSync4(ciPath) ? readExisting(ciPath) : null);
   if (content !== void 0) atomicWrite(ciPath, content);
   done.push(message);
   for (const file of PROJECT_HOOK_FILES) done.push(addProjectHook(join11(root, file.path), file));
@@ -2010,7 +2026,7 @@ ${HELP}`);
         return 0;
       }
       case "save": {
-        const raw = o("input") ? readFileSync5(o("input"), "utf8") : readStdin();
+        const raw = o("input") ? readFileSync4(o("input"), "utf8") : readStdin();
         let payload;
         try {
           payload = JSON.parse(raw);
