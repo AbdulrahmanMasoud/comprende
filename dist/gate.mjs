@@ -72,6 +72,18 @@ var splitLines = (s) => {
 };
 var VERSION_RE = /^\/\/ ownership-gate-version: (\d+)/m;
 var FEATURES_RE = /^\/\/ ownership-gate-features: (.*)$/m;
+function printablePath(path) {
+  let out = "";
+  for (const ch of path) {
+    const code = ch.charCodeAt(0);
+    if (ch === "\n") out += "\\n";
+    else if (ch === "\r") out += "\\r";
+    else if (ch === "	") out += "\\t";
+    else if (code < 32 || code === 127) out += `\\x${code.toString(16).padStart(2, "0")}`;
+    else out += ch;
+  }
+  return out;
+}
 
 // src/gate/agents/claude-settings.ts
 var HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
@@ -262,6 +274,9 @@ function run(cmd, args, opts = {}) {
 
 // src/gate/platforms/github.ts
 var WORKFLOW_PATH = ".github/workflows/ownership-check.yml";
+var ANNOTATION_TITLE = "Ownership check";
+var commandData = (s) => s.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+var commandProperty = (s) => commandData(s).replaceAll(":", "%3A").replaceAll(",", "%2C");
 var WORKFLOW = `name: Ownership check
 
 on:
@@ -414,7 +429,7 @@ var github = {
   // branch also comes from the environment.
   ciContext: (env) => ({ baseRef: null, headBranch: env.GITHUB_HEAD_REF || null, labels: null }),
   reviewerSummaryFile: (env) => env.GITHUB_STEP_SUMMARY || null,
-  annotations: (kind, messages, env) => env.GITHUB_ACTIONS === "true" ? messages.map((m) => `::${kind} title=Ownership check::${m}
+  annotations: (kind, messages, env) => env.GITHUB_ACTIONS === "true" ? messages.map((m) => `::${kind} title=${commandProperty(ANNOTATION_TITLE)}::${commandData(m)}
 `).join("") : "",
   codeowners: {
     // GitHub's search order: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
@@ -919,7 +934,7 @@ function uncommittedReport(root) {
 function escapeMarkdown(text) {
   let t = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   for (const ch of ["\\", "[", "]", "|", "`", "*", "_"]) t = t.split(ch).join(`\\${ch}`);
-  return t;
+  return t.replace(/\r\n|\r|\n/g, "\\n");
 }
 function jobSummary(root, branch, rev, base, passed, messages, mode) {
   const icon = passed ? "\u2705" : mode === "required" ? "\u274C" : "\u26A0\uFE0F";
@@ -1208,6 +1223,7 @@ function smallChange(root, baseRef, mb, rev, changes, cfg) {
 
 // src/gate/commands.ts
 var CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
+var listPaths = (paths) => paths.map(printablePath).join(", ");
 var BLANK = "[\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
 var BLANK_ENDS = new RegExp(`^${BLANK}+|${BLANK}+$`, "gu");
 var trimSummary = (s) => s.replace(BLANK_ENDS, "");
@@ -1358,15 +1374,15 @@ function verify(repo, base, branch, rev = "HEAD", labels = []) {
   const by = (s) => Object.keys(changes).filter((p) => st[p] === s);
   const problems = [];
   const unverifiedSensitive = Object.entries(changes).filter(([p, c]) => isSensitive(p, c.mode, cfg) && !get(report.verified, p)?.length).map(([p]) => p);
-  if (by("new").length) problems.push(`Changed after the check (not in the report): ${by("new").join(", ")}`);
+  if (by("new").length) problems.push(`Changed after the check (not in the report): ${listPaths(by("new"))}`);
   if (by("stale").length)
-    problems.push(`Changed after the check (differs from what was verified): ${by("stale").join(", ")}`);
+    problems.push(`Changed after the check (differs from what was verified): ${listPaths(by("stale"))}`);
   if (by("rebased").length)
     problems.push(
-      `Verified before a rebase \u2014 save the report again, no new questions needed: ${by("rebased").join(", ")}`
+      `Verified before a rebase \u2014 save the report again, no new questions needed: ${listPaths(by("rebased"))}`
     );
   if (unverifiedSensitive.length)
-    problems.push(`Sensitive files not explicitly verified: ${unverifiedSensitive.join(", ")}`);
+    problems.push(`Sensitive files not explicitly verified: ${listPaths(unverifiedSensitive)}`);
   const len = charCount(trimSummary(report.summary));
   const shortOk = () => len >= cfg.small_summary_chars && smallChange(root, baseRef, mb, rev, changes, cfg).small;
   if (len < cfg.min_summary_chars && !shortOk()) problems.push("The developer's summary is missing or too short.");

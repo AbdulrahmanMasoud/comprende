@@ -9,6 +9,14 @@ import type { Platform, ProtectOptions } from "./types.js";
 
 const WORKFLOW_PATH = ".github/workflows/ownership-check.yml";
 
+const ANNOTATION_TITLE = "Ownership check";
+
+// Workflow commands: a message is "data" and a title is a "property", each with
+// its own escaping, so nothing in a message can end the command or start another.
+// https://github.com/actions/toolkit/blob/main/packages/core/src/command.ts
+const commandData = (s: string) => s.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+const commandProperty = (s: string) => commandData(s).replaceAll(":", "%3A").replaceAll(",", "%2C");
+
 const WORKFLOW = `name: Ownership check
 
 on:
@@ -189,7 +197,9 @@ export const github: Platform = {
   reviewerSummaryFile: (env) => env.GITHUB_STEP_SUMMARY || null,
 
   annotations: (kind, messages, env) =>
-    env.GITHUB_ACTIONS === "true" ? messages.map((m) => `::${kind} title=Ownership check::${m}\n`).join("") : "",
+    env.GITHUB_ACTIONS === "true"
+      ? messages.map((m) => `::${kind} title=${commandProperty(ANNOTATION_TITLE)}::${commandData(m)}\n`).join("")
+      : "",
 
   codeowners: {
     // GitHub's search order: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
