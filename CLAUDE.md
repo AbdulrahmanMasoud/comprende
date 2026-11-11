@@ -17,6 +17,7 @@ npm run format                    # apply Biome's formatting and safe fixes
 npm run build                     # rebuild dist/ and skills/comprende/scripts/
 npm test                          # tests only
 node tools/release.mjs check      # the version files agree with the newest CHANGELOG entry
+node tools/e2e-cursor.mjs --out <folder>   # the real Cursor CLI, end to end (needs a Cursor login)
 claude plugin validate ./.claude-plugin/plugin.json
 claude plugin validate ./.claude-plugin/marketplace.json
 actionlint                        # the GitHub workflows
@@ -52,6 +53,7 @@ actionlint                        # the GitHub workflows
   - `workflows/windows.yml`: "Windows (experimental)", the tests on Windows. Not required, and never on PRs (see CONTRIBUTING.md)
   - `dependabot.yml`, the PR template, and the issue templates
 - `tools/release.mjs`: the version check and the release notes, for both workflows
+- `tools/e2e-cursor.mjs`: the end-to-end run in the real Cursor CLI. By hand, since it needs a Cursor login: CONTRIBUTING.md, "Testing in Cursor"
 - `CONTRIBUTING.md`: setup, the workflow, the code rules, layout, tests, the demo, releasing
 - `biome.json`: formatting and lint (Markdown is left alone). `build.mjs`: the bundler.
 - `.gitattributes`: keeps `dist/` and `skills/comprende/scripts/` byte for byte on every platform, since SessionStart compares the repo's `gate.mjs` with `dist/gate.mjs` byte for byte

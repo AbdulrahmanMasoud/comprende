@@ -53,6 +53,8 @@ refactor: move the GitHub summary behind the platform interface
 
 No AI attribution (`Co-Authored-By`, "Generated with", session links) in commits, PRs, tags or releases.
 
+Cursor's agent adds a `Co-authored-by: Cursor <cursoragent@cursor.com>` trailer to the commits it makes. If you work in Cursor, turn that off in its settings, or remove the line before you push.
+
 ### Versions
 
 [SemVer](https://semver.org/). While we're on 0.x:
@@ -243,6 +245,7 @@ src/server.ts         the MCP server; src/learning.ts, the skill's file-only hel
 dist/                 the built, dependency-free files the plugin runs (committed)
 test/                 node:test suites against real git repos, one file per topic
 tools/release.mjs     the version check and the release notes, for CI and releases
+tools/e2e-cursor.mjs  the end-to-end run in the real Cursor CLI (by hand, not in CI)
 docs/                 the longer docs, and the terminal demo (demo.tape, demo.gif)
 .github/              CI and release workflows, Dependabot, PR and issue templates
 .gitattributes        keeps dist/ and the skill's scripts byte for byte (no CRLF on Windows)
@@ -261,6 +264,25 @@ The tests run against real git repos and are grouped by topic, one file each in 
 - `release`: the version check and the release notes
 
 They include real pushes through the hooks, a fresh CI-style clone at the PR head, the workflow's actual shell step, and a regression test for every bug found so far.
+
+### Testing in Cursor
+
+`tools/e2e-cursor.mjs` drives the real `cursor-agent` through Comprende, headless. It isn't in CI, because it needs a logged-in Cursor CLI and uses the account's agent requests. Run it after a change to the hooks, the skill or the Cursor plugin:
+
+```bash
+cursor-agent login                  # once
+node tools/e2e-cursor.mjs --out /tmp/e2e
+node tools/e2e-cursor.mjs --out /tmp/e2e-2 --only explain,both-plugins   # some scenarios only
+```
+
+- **Scenarios**, each in its own demo repo:
+  - `main`: session start, an ordinary command, an unverified push, "check me" through to a push that goes through, and the memory server
+  - `no-memory`: "check me" with a plugin copy that has no memory server, so the report is saved with `save --input`
+  - `explain`: explain-as-you-build on a small retry function
+  - `both-plugins`: the Claude Code plugin imported as well. Each session line comes once, and each push is checked once
+- **Output:** one line per step: PASS, FAIL, or BLOCKED when Cursor refuses to run the agent (the account's usage limit, or a model not on its plan). Transcripts, replies, stderr and a log of every `gate.mjs` run are saved to `--out`.
+- **Isolation:** a throwaway `HOME` with a copy of your `~/.cursor/cli-config.json`, so none of your plugins or settings load, and a `COMPRENDE_HOME` inside `--out`. On macOS the login is in the keychain, which the throwaway `HOME` links to. Elsewhere, set `CURSOR_API_KEY`. Each demo's remote is a local folder, so nothing is pushed anywhere.
+- Delete the `--out` folder afterwards: it holds a copy of your CLI config.
 
 ## The demo
 
