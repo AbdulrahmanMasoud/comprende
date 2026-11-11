@@ -541,6 +541,11 @@ test("session start explains a gate copy that differs only in CRLF line endings,
   ).hookSpecificOutput.additionalContext;
   assert.ok(inCursor.includes("`/plugin marketplace update comprende` in Claude Code"), inCursor);
   assert.ok(inCursor.includes("`git -C ~/.cursor/plugins/local/comprende pull`"), inCursor);
+  // In Codex, an update also needs the hooks trusted again.
+  const inCodex = JSON.parse(
+    sh(tmp, NODE, [join(tmp, "old-plugin/gate.mjs"), "session-start", "--agent", "codex"], { input: ev }).stdout,
+  ).hookSpecificOutput.additionalContext;
+  assert.ok(inCodex.includes("trust Comprende's hooks again in `/hooks`"), inCodex);
   assert.ok(!existsSync(hook));
 
   // Byte-identical again: the hook goes in, as before.

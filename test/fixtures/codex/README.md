@@ -1,6 +1,6 @@
 # Codex hook payloads
 
-Real hook input from Codex, captured on 2026-11-11 with the Codex CLI `0.167.1` on macOS, in headless mode (`codex exec --json`), signed in with ChatGPT. Each file is the JSON a hook read on stdin, except `hook-env.json`. No test reads them yet: they're for the Codex adapter ([#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)).
+Real hook input from Codex, captured on 2026-11-11 with the Codex CLI `0.167.1` on macOS, in headless mode (`codex exec --json`), signed in with ChatGPT. Each file is the JSON a hook read on stdin, except `hook-env.json`. `test/agents.test.mjs` reads them, for the Codex adapter ([#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)).
 
 Don't write these by hand. To change one, capture it again from a real run.
 

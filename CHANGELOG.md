@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Codex: the gate's hook knows Codex** (part of [#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)). Codex installs Comprende's Claude Code plugin as it is, and runs its hooks. The hook read Codex's payload as Claude Code's, so it stepped aside for the repo's `.claude/settings.json`, which Codex never runs, and left the agent's push to the git hook. It now detects Codex from the tool call's `turn_id`, checks the push, and the block says "Ask Codex …".
+
 - **A hook never blocks by accident.** Only a verdict on the change blocks a push: no report, a file that isn't verified, or a report that's there but can't be read (broken, or too large). Before, a git failure during the check or a broken `.learning/config.json` blocked the agent's push too, and the git hook blocked on any unexpected error. Now they let the push run, and the git hook skips the branch with a note. CI still checks.
   - A report made by another gate version still blocks git's hook, which runs the repo's own gate. It no longer blocks the agents' hook, where the plugin's copy may simply be newer than the repo's.
 

@@ -1,6 +1,6 @@
 # Comprende in other AI tools
 
-Comprende runs in Claude Code and, from 0.3.0, in Cursor ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)). Start with [What works where](#what-works-where-030), [What's weaker in Cursor](#whats-weaker-in-cursor-than-in-claude-code) and the [checklist for the IDE](#checking-it-in-the-cursor-ide). The rest of the page is the research behind it, and the design for other tools on the same adapter interface ([#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18)): Codex ([#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)) and Google Antigravity ([#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)), planned for 0.4.0.
+Comprende runs in Claude Code and, from 0.3.0, in Cursor ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)). Start with [What works where](#what-works-where-030), [What's weaker in Cursor](#whats-weaker-in-cursor-than-in-claude-code) and the [checklist for the IDE](#checking-it-in-the-cursor-ide). The rest of the page is the research behind it, and the design for other tools on the same adapter interface ([#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18)): Codex ([#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)), planned for 0.4.0, and Google Antigravity ([#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)), for 0.5.0.
 
 - **Cursor:** tested on 2026-11-11 with the Cursor CLI (`cursor-agent`) `2026.11.10-731fb78` on macOS, plus the official docs.
 - **Codex:** tested on 2026-11-11 with the Codex CLI `0.167.1` on macOS, plus the official docs and its source. See [Codex: what we found](#codex-what-we-found).
@@ -437,9 +437,9 @@ The default replies live in the core, in `src/gate/hook-replies.ts`. Claude-form
 
 How each tool fills it in:
 
-| | Claude Code | Cursor | Codex (proposed) | Antigravity (proposed) |
+| | Claude Code | Cursor | Codex | Antigravity (proposed) |
 |---|---|---|---|---|
-| `detects` | any payload: the fallback | `cursor_version` in the payload, or the tool name `Shell`. Not the environment: Claude Code started from Cursor's terminal may inherit Cursor's variables | `turn_id` or `model` in the payload, and `--agent codex` in its hook files | `toolCall` or `workspacePaths`, and `--agent antigravity` |
+| `detects` | any payload: the fallback | `cursor_version` in the payload, or the tool name `Shell`. Not the environment: Claude Code started from Cursor's terminal may inherit Cursor's variables | `turn_id` in a tool call's payload, and `--agent codex` in its hook files | `toolCall` or `workspacePaths`, and `--agent antigravity` |
 | Shell tool | `Bash` | `Shell` | `Bash` | `run_command`, command in `toolCall.args.CommandLine` |
 | `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR`, else its own folder (Claude Code runs hooks from the project) | the one entry in `workspace_roots` (`cwd` is `""`), else `CURSOR_PROJECT_DIR` or `CLAUDE_PROJECT_DIR`, else step aside: Cursor runs plugin hooks from the plugin's folder. With several roots it steps aside, since it can't tell which one the command runs in | `cwd`, the command's folder | `toolCall.args.Cwd`, else the one entry in `workspacePaths`, else step aside |
 | `names` | Claude, Claude Code | Cursor, Cursor | Codex, Codex | Antigravity, Antigravity |
@@ -574,7 +574,7 @@ So each push is checked once, and each session gets each line once. `test/agents
 
 | Member | Codex |
 |---|---|
-| `detects` | `turn_id`, or `model` without `cursor_version`. Claude Code sends neither, and Cursor sends `model` with `cursor_version`. The order in `AGENTS` becomes `[cursor, codex, antigravity, claudeCode]`: Cursor first, since its payloads carry `model` too, and Claude Code last, since it detects everything. Our own hook files pass `--agent codex` |
+| `detects` | `turn_id`, which only Codex sends, on a tool call. Not `model`: Claude Code's session start sends it too ([hooks](https://code.claude.com/docs/en/hooks)). So a Codex session start without `--agent` is read as Claude Code's, and its notes name Claude Code. Our own hook files pass `--agent codex`, which wins. In `AGENTS`, Codex comes after Cursor and before Claude Code, which detects everything |
 | `shellCommand` | `tool_input.command` when `tool_name` is `Bash`, read by `claude-format.ts` |
 | `projectDir` | the payload's `cwd`, which is the command's folder |
 | `names` | Codex, Codex |
@@ -749,7 +749,7 @@ The maintainer settled the open questions on 2026-11-11:
 3. **The skill loaded twice:** for now, document "install it in one place".
 4. **The always-on line stays in `sessionStart`.** There's no `alwaysApply` rule. The Cursor plugin's hook commands avoid shell syntax too.
 5. **Windows ships as "experimental" for Cursor**, tracked in [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10).
-6. **Release plan:** 0.3.0 is Cursor. 0.4.0 is Codex ([#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)) and Google Antigravity ([#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)). 0.5.0 is GitLab ([#4](https://github.com/AbdulrahmanMasoud/comprende/issues/4)).
+6. **Release plan,** updated on 2026-11-11: 0.3.0 is Cursor. 0.4.0 is Codex ([#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)), 0.5.0 is Google Antigravity ([#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)), and 0.6.0 is GitLab ([#4](https://github.com/AbdulrahmanMasoud/comprende/issues/4)). Antigravity got its own release, since it needs a signed-in run first.
 
 ### Open questions for 0.4.0
 

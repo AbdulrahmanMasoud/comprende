@@ -35,6 +35,9 @@ const envOf = (tool) => JSON.parse(fixture(tool, "hook-env.json"));
 /** A captured Claude Code payload, pointed at the repo `dev`. */
 const claudeCodePayload = (name, dev) => fixture("claude-code", name).replaceAll("/work/probe-app", dev);
 
+/** A captured Codex payload, pointed at the repo `dev`. */
+const codexPayload = (name, dev) => fixture("codex", name).replaceAll("/work/probe-app", dev);
+
 /** An unverified change on a branch of a gated repo. */
 function unverifiedRepo(t) {
   const { dev, tmp } = setup(t);
@@ -50,12 +53,24 @@ test("every Cursor payload resolves to Cursor, and every Claude Code payload to 
     assert.equal(gate.resolveAgent(fixture("claude-code", name), envOf("claude-code"))?.id, "claude-code", name);
 });
 
+test("a Codex tool call is detected as Codex, and --agent codex wins for every Codex payload", () => {
+  for (const name of payloadsOf("codex")) {
+    assert.equal(gate.resolveAgent(fixture("codex", name), envOf("codex"), "codex")?.id, "codex", name);
+    // Without --agent, as Codex runs a Claude Code plugin's hooks: only a tool call carries turn_id.
+    const detected = gate.resolveAgent(fixture("codex", name), envOf("codex"))?.id;
+    assert.equal(detected, name.startsWith("pre-tool-use") ? "codex" : "claude-code", name);
+  }
+});
+
 test("each adapter reads the command from its own shell tool only", () => {
   const read = (tool, name) => gate.resolveAgent(fixture(tool, name), envOf(tool))?.command;
   assert.equal(read("cursor", "pre-tool-use.shell.git-push.json"), "git push origin feature/probe");
   assert.equal(read("cursor", "pre-tool-use.read.json"), null);
   assert.equal(read("claude-code", "pre-tool-use.bash.git-push.json"), "git push origin feature/probe");
   assert.equal(read("claude-code", "pre-tool-use.read.json"), null);
+  assert.equal(read("codex", "pre-tool-use.bash.git-push.json"), "git push origin main");
+  // Another tool's shell payload, sent to Codex's adapter, is no command for it.
+  assert.equal(gate.resolveAgent(fixture("cursor", "pre-tool-use.shell.git-push.json"), {}, "codex")?.command, null);
 });
 
 test("the repo comes from the payload first: Claude Code's cwd, Cursor's workspace_roots", () => {
@@ -69,6 +84,26 @@ test("the repo comes from the payload first: Claude Code's cwd, Cursor's workspa
   assert.equal(dirOf("cursor", push, { CURSOR_PROJECT_DIR: "/a", CLAUDE_PROJECT_DIR: "/b" }, noWorkspace), "/a");
   assert.equal(dirOf("cursor", push, { CLAUDE_PROJECT_DIR: "/b" }, noWorkspace), "/b");
   assert.equal(dirOf("cursor", push, {}, noWorkspace), null);
+});
+
+test("Codex's repo comes from the payload's cwd only: without one it steps aside", () => {
+  const dirOf = (payload, env) => gate.resolveAgent(JSON.stringify(payload), env, "codex")?.projectDir;
+  const push = JSON.parse(fixture("codex", "pre-tool-use.bash.git-push.json"));
+  assert.equal(dirOf(push, {}), "/work/probe-app");
+  // Not Claude Code's variable, and not the process's folder: the hook runs in the session's folder.
+  assert.equal(dirOf({ ...push, cwd: "" }, { CLAUDE_PROJECT_DIR: "/b" }), null);
+});
+
+test("in Codex, the plugin's hook checks a push even though the repo has .claude/settings.json", (t) => {
+  // Codex runs the Claude Code plugin's hooks/hooks.json, so the hook gets no --agent.
+  // It never runs .claude/settings.json, so stepping aside for that file left the push unchecked.
+  const { dev } = unverifiedRepo(t);
+  const r = plugin(REPO, ["claude-hook", "--from-plugin"], {
+    input: codexPayload("pre-tool-use.bash.git-push.json", dev),
+    env: { ...ENV, ...envOf("codex") },
+  });
+  assert.equal(r.status, 2, r.stderr);
+  assert.match(r.stderr, /Ask Codex to run the ownership check/);
 });
 
 test("Cursor's plugin hook never takes its own folder for the repo: without a workspace it steps aside", (t) => {
@@ -113,6 +148,11 @@ test("each tool's messages name that tool, and CI's name none", (t) => {
   );
   const claudePush = claudeCodePayload("pre-tool-use.bash.git-push.json", dev);
   assert.match(runGate(dev, ["agent-hook"], { input: claudePush }).stderr, /Ask Claude to run the ownership check/);
+  const codexPush = codexPayload("pre-tool-use.bash.git-push.json", dev);
+  assert.match(
+    runGate(dev, ["agent-hook", "--agent", "codex"], { input: codexPush }).stderr,
+    /Ask Codex to run the ownership check/,
+  );
   const ci = runGate(dev, ["verify"]);
   assert.match(ci.stderr, /Ask your AI assistant to run the ownership check/);
   assert.doesNotMatch(ci.stderr, /Claude|Cursor/);
@@ -603,6 +643,7 @@ test("for every agent, only a verdict on the change blocks a push: a crash never
   const pushes = {
     "claude-code": claudeCodePayload("pre-tool-use.bash.git-push.json", dev),
     cursor: cursorPush(dev, "call"),
+    codex: codexPayload("pre-tool-use.bash.git-push.json", dev),
   };
   assert.deepEqual(Object.keys(pushes).sort(), [...gate.const("AGENT_IDS")].sort(), "a case for every adapter");
   const failingGit = failingGitBin(t);

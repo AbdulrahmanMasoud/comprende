@@ -2,12 +2,13 @@
 // hook run.
 
 import { claudeCode } from "./claude-code.js";
+import { codex } from "./codex.js";
 import { cursor } from "./cursor.js";
 import type { Agent, HookEnv, ProjectHookFile } from "./types.js";
 
 /** Every adapter, in detection order: a tool that also runs Claude Code's hook
  *  commands comes before Claude Code, which detects everything. */
-export const AGENTS: readonly Agent[] = [cursor, claudeCode];
+export const AGENTS: readonly Agent[] = [cursor, codex, claudeCode];
 
 /** The adapter for this hook run: `--agent <id>` wins, then detection. Null for
  *  an unknown `--agent`: the hook then steps aside silently. */
