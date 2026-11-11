@@ -6,6 +6,7 @@
 
 import { isRecord } from "../../util.js";
 import { readClaudeFormat } from "./claude-format.js";
+import { CODEX_HOOKS } from "./codex-hooks.js";
 import type { Agent } from "./types.js";
 
 export const codex: Agent = {
@@ -40,7 +41,9 @@ export const codex: Agent = {
     return event === "shell" ? toolUseId : sessionId;
   },
 
-  // None yet. Codex never runs .claude/settings.json or .cursor/hooks.json, so a
-  // plugin's hook must not step aside for them.
-  projectHookFiles: [],
+  // Codex never runs .claude/settings.json or .cursor/hooks.json, so a plugin's
+  // hook must not step aside for them. It runs .codex/hooks.json only once the
+  // project and the hook are trusted, so it can't count on that one either: the
+  // copies claim the tool call instead (hook-copies.ts).
+  projectHookFiles: [{ file: CODEX_HOOKS, alwaysRuns: false }],
 };

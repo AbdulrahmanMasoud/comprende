@@ -591,13 +591,13 @@ So each push is checked once, and each session gets each line once. `test/agents
   - plain `node` lines, since Codex runs hooks in PowerShell on Windows. Without `node`, the command fails with an exit code other than 2, and Codex lets the tool run.
 - **A Codex MCP config,** `.codex-plugin/mcp.json`, that starts the server. `${CLAUDE_PLUGIN_ROOT}` isn't expanded there, but a relative `cwd` resolves against the plugin's folder: `"command": "node", "args": ["dist/server.mjs"], "cwd": "."`. Tested: Codex's app server lists all 10 tools, with no sign-in needed.
 
-**What `install` writes for teammates on Codex:** `.codex/hooks.json`, behind a `codex-hooks` feature, like `.cursor/hooks.json`. Its pros and cons, to decide (below):
+**What `install` writes for teammates on Codex:** `.codex/hooks.json`, behind a `codex-hooks` feature, like `.cursor/hooks.json` (decided, and built in 0.4.0). Its pros and cons:
 - **For:**
   - It works without the plugin.
-  - It doesn't go untrusted when Comprende updates. Codex checks a project hook against its own declaration; only plugin hooks are checked against the whole folder (to confirm).
+  - It doesn't go untrusted when Comprende updates. Codex checks a project hook against its own declaration; only plugin hooks are checked against the whole folder. Tested: after `.learning/gate.mjs` changed, the hook stayed trusted; after its command changed, it was "modified".
 - **Against:**
   - Each developer has to trust the project, and then each hook, once.
-  - Codex runs hooks in the session's folder, which may be a subfolder. So the command can't be a plain relative path: `command` would find the repo with `node "$(git rev-parse --show-toplevel)/.learning/gate.mjs" agent-hook --agent codex`, and Codex's documented `commandWindows` would hold the PowerShell form. A failed `git` gives a wrong path, and `node` fails open (to test).
+  - Codex runs hooks in the session's folder, which may be a subfolder. So the command can't be a plain relative path: it's `node "$(git rev-parse --show-toplevel)/.learning/gate.mjs" agent-hook --agent codex`, and `$(…)` works in PowerShell too, so it needs no `commandWindows`. Tested: from a subfolder it blocks an unverified push, and without `git` or `node` it fails open.
   - Only the shell hook. A session start there would give the gate's message a second time: see below.
 
 **No double runs:**

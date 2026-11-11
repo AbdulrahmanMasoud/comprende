@@ -6,6 +6,7 @@
 
 import { isRecord } from "../../util.js";
 import { GATE_REL } from "../shared.js";
+import { compactHooksJson } from "./compact-hooks-json.js";
 import { isGateCommand } from "./gate-command.js";
 import type { HookEvent, ProjectHookFile } from "./types.js";
 
@@ -31,21 +32,6 @@ const runsGateFor = (hooks: Record<string, unknown>, event: HookEvent): boolean 
   const list = hooks[ENTRIES[event].key];
   return Array.isArray(list) && list.some((h) => isRecord(h) && isGateCommand(h.command, event));
 };
-
-/** The file as install writes it: one line per key, and each event's hooks on one
- *  line. A fresh file is 7 lines, so adding it is a small change (one question)
- *  while the base branch's gate doesn't know it yet. */
-function formatHooksFile(file: Record<string, unknown>): string {
-  const line = (key: string, value: unknown) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`;
-  const top = Object.entries(file).map(([key, value]) =>
-    key === "hooks" && isRecord(value)
-      ? `  "hooks": {\n${Object.entries(value)
-          .map(([event, list]) => `    ${line(event, list)}`)
-          .join(",\n")}\n  }`
-      : `  ${line(key, value)}`,
-  );
-  return `{\n${top.join(",\n")}\n}\n`;
-}
 
 export const CURSOR_HOOKS: ProjectHookFile = {
   path: ".cursor/hooks.json",
@@ -92,7 +78,7 @@ export const CURSOR_HOOKS: ProjectHookFile = {
     }
     if (!added) return { message: `${LABEL} already present (${shownPath})` };
     return {
-      content: formatHooksFile(file),
+      content: compactHooksJson(file),
       message: `merged the gate's Cursor hooks into ${shownPath} (other hooks kept)`,
     };
   },

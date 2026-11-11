@@ -88,8 +88,9 @@ Code that's specific to one AI tool (Claude Code, Cursor, and later Codex and An
 ```
 src/gate/agents/      types.ts (the Agent interface), index.ts (the registry and the resolve step),
                       one module per AI tool: claude-code.ts, cursor.ts, codex.ts, plus what they share:
-                      claude-format.ts (the payload), the repo hook files claude-settings.ts and
-                      cursor-hooks.ts, and gate-command.ts (does a hook file's command run the gate)
+                      claude-format.ts (the payload), the repo hook files claude-settings.ts,
+                      cursor-hooks.ts and codex-hooks.ts (with claude-format-hooks.ts and
+                      compact-hooks-json.ts), and gate-command.ts (does a hook file's command run the gate)
 src/gate/hook-replies.ts   the core's default replies, for adapters that don't format their own
 src/gate/hook-copies.ts    which copy of the gate's hook speaks when several run on one event,
                            with the claims in hook-claims.ts
@@ -252,6 +253,7 @@ dist/                 the built, dependency-free files the plugin runs (committe
 test/                 node:test suites against real git repos, one file per topic
 tools/release.mjs     the version check and the release notes, for CI and releases
 tools/e2e-cursor.mjs  the end-to-end run in the real Cursor CLI (by hand, not in CI)
+tools/e2e-codex.mjs   the same in the real Codex CLI
 docs/                 the longer docs, the terminal demo (demo.tape, demo.gif), and recordings/cursor/:
                       real Cursor replies, which the READMEs quote
 .github/              CI and release workflows, Dependabot, PR and issue templates
@@ -290,6 +292,23 @@ node tools/e2e-cursor.mjs --out /tmp/e2e-2 --only explain,both-plugins   # some 
 - **Output:** one line per step: PASS, FAIL, or BLOCKED when Cursor refuses to run the agent (the account's usage limit, or a model not on its plan). Transcripts, replies, stderr and a log of every `gate.mjs` run are saved to `--out`.
 - **Isolation:** a throwaway `HOME` with a copy of your `~/.cursor/cli-config.json`, so none of your plugins or settings load, and a `COMPRENDE_HOME` inside `--out`. On macOS the login is in the keychain, which the throwaway `HOME` links to. Elsewhere, set `CURSOR_API_KEY`. Each demo's remote is a local folder, so nothing is pushed anywhere.
 - Delete the `--out` folder afterwards: it holds a copy of your CLI config. If the READMEs will quote a new reply, copy its `.reply.md` into [`docs/recordings/cursor/`](docs/recordings/cursor/) first, checked for anything personal, and add its run and prompt to that folder's README.
+
+### Testing in Codex
+
+`tools/e2e-codex.mjs` does the same with the real Codex CLI, headless (`codex exec --json`). It isn't in CI either: it needs a Codex sign-in, and uses the account's requests.
+
+```bash
+node tools/e2e-codex.mjs --login ~/.codex/auth.json --out /tmp/e2e-codex          # a copy of your sign-in, deleted when the run ends
+CODEX_API_KEY=… node tools/e2e-codex.mjs --out /tmp/e2e-codex-2 --only explain      # or an API key
+```
+
+- **Scenarios**, each in its own demo repo:
+  - `main`: session start, an ordinary command, an unverified push blocked by Codex's hook, "check me" through to a push that goes through, the commit's trailer, and the memory server
+  - `explain`: explain-as-you-build on a small retry function
+  - `repo-hook`: the plugin and the repo's `.codex/hooks.json` both trusted: one check per push
+  - `after-update`: a file changed in the installed plugin, so Codex skips its hooks, and the skill says to trust them again
+- **Isolation:** a throwaway `HOME` and `CODEX_HOME`. This repo is installed as the plugin (`codex plugin marketplace add <this repo>`), and its hooks are trusted the way `/hooks` does it, through Codex's app server. It doesn't use `--dangerously-bypass-hook-trust`.
+- **Output:** PASS, FAIL or BLOCKED per step, and transcripts, replies, stderr and a log of every `gate.mjs` run in `--out`. To quote a reply in the READMEs, copy its `.reply.md` into [`docs/recordings/codex/`](docs/recordings/codex/), checked for anything personal, with its run and prompt in that folder's README.
 
 ## The demo
 

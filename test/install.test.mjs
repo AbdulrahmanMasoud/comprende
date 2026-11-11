@@ -481,3 +481,89 @@ test("install --upgrade adds .cursor/hooks.json, which needs no report only once
   commitAll(dev, "add the Cursor hooks");
   assert.deepEqual(gate.verify(dev), [true, [], "required"]);
 });
+
+test("install writes .codex/hooks.json with a command that finds the repo, keeps other hooks, and adds it once", (t) => {
+  const { dev } = setup(t);
+  const fresh = read(dev, ".codex/hooks.json");
+  assert.deepEqual(JSON.parse(fresh), {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "Bash",
+          hooks: [
+            {
+              type: "command",
+              command: 'node "$(git rev-parse --show-toplevel)/.learning/gate.mjs" agent-hook --agent codex',
+              timeout: 60,
+            },
+          ],
+        },
+      ],
+    },
+  });
+  // Short enough that adding it is a small change.
+  assert.ok(fresh.trim().split("\n").length <= 10, fresh);
+  // A file with the team's own hooks: they stay, and the gate's is added after them.
+  const theirs = {
+    hooks: {
+      PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "./lint.sh" }] }],
+      Stop: [{ hooks: [{ type: "command", command: "./notify.sh" }] }],
+    },
+  };
+  write(dev, ".codex/hooks.json", JSON.stringify(theirs));
+  const lines = gate.install(dev);
+  assert.ok(
+    lines.some((l) => l.startsWith("merged a Codex PreToolUse hook into")),
+    lines.join("\n"),
+  );
+  const merged = JSON.parse(read(dev, ".codex/hooks.json"));
+  assert.deepEqual(merged.hooks.Stop, theirs.hooks.Stop);
+  assert.equal(merged.hooks.PreToolUse[0].hooks[0].command, "./lint.sh");
+  assert.equal(merged.hooks.PreToolUse.length, 2);
+  // Again: nothing to add.
+  const again = read(dev, ".codex/hooks.json");
+  assert.ok(gate.install(dev).some((l) => l.startsWith("Codex hook already present")));
+  assert.equal(read(dev, ".codex/hooks.json"), again);
+});
+
+test("install leaves a .codex/hooks.json of a shape it doesn't know untouched", (t) => {
+  const { dev } = setup(t);
+  for (const body of ['{"hooks": []}', '{"hooks": {"PreToolUse": {"matcher": "Bash"}}}', "not json", "[]"]) {
+    write(dev, ".codex/hooks.json", body);
+    const line = gate.install(dev).find((l) => l.includes("Codex hook"));
+    assert.match(line ?? "", /^SKIPPED Codex hook: .*add the hook by hand/, body);
+    assert.equal(read(dev, ".codex/hooks.json"), body);
+  }
+});
+
+test("install --upgrade adds .codex/hooks.json, which needs no report only once the gate CI runs knows it", (t) => {
+  const { dev } = setup(t);
+  const olderGate = read(dev, REPO_GATE).replace(
+    /^\/\/ ownership-gate-features: .*$/m,
+    "// ownership-gate-features: small-change gitattributes cursor-hooks",
+  );
+  // main runs a gate from before Codex support (0.3.x), and has no .codex/hooks.json
+  git(dev, "checkout", "-q", "main");
+  writeFileSync(join(dev, REPO_GATE), olderGate);
+  git(dev, "rm", "-q", ".codex/hooks.json");
+  commitAll(dev, "the gate as 0.3.x installed it");
+  git(dev, "push", "-q", "--no-verify", "origin", "main");
+  git(dev, "checkout", "-q", "-B", "chore/upgrade-gate");
+  const lines = gate.install(dev, { upgrade: true });
+  assert.ok(existsSync(join(dev, ".codex/hooks.json")), lines.join("\n"));
+  commitAll(dev, "upgrade the gate");
+  // CI runs main's older gate, which counts the new file as a change: so does this one.
+  const [passed, problems] = gate.verify(dev);
+  assert.ok(!passed && problems[0].includes("No ownership report"), problems.join("\n"));
+  assert.equal(gate.status(dev).small_change, true); // a small change: one question
+
+  // Once main runs this gate, the file is one of the gate's own, and needs nothing.
+  git(dev, "checkout", "-q", "main");
+  git(dev, "checkout", "-q", "chore/upgrade-gate", "--", REPO_GATE);
+  commitAll(dev, "this gate, still without the file");
+  git(dev, "push", "-q", "--no-verify", "origin", "main");
+  git(dev, "checkout", "-q", "-B", "chore/codex-hooks");
+  gate.install(dev);
+  commitAll(dev, "add the Codex hook");
+  assert.deepEqual(gate.verify(dev), [true, [], "required"]);
+});

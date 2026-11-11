@@ -223,6 +223,13 @@ test("the Claude hook in docs/teams.md is the one install writes", (t) => {
   assert.ok(read("docs/teams.md").toString("utf8").includes(JSON.stringify(command)), "update the snippet");
 });
 
+test("the Codex hook in docs/teams.md is the one install writes", (t) => {
+  const { dev } = setup(t);
+  const { command } = JSON.parse(readFileSync(join(dev, ".codex/hooks.json"), "utf8")).hooks.PreToolUse[0].hooks[0];
+  assert.match(command, /agent-hook --agent codex$/);
+  assert.ok(read("docs/teams.md").toString("utf8").includes(JSON.stringify(command)), "update the snippet");
+});
+
 // Sanity: SUMMARY and NODE are what the other suites use.
 test("the shared test fixtures are usable", () => {
   assert.ok(SUMMARY.length >= 80);
