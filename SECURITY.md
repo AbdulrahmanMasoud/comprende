@@ -20,12 +20,13 @@ The plugin runs in every repo you open with Claude, including ones you just clon
   - A copy that differs only in line endings (CRLF, from git's `core.autocrlf` on Windows) isn't byte-identical, so it isn't trusted either. SessionStart says what the difference is and how to fix it, with fixed text.
   - `install` adds `.learning/gate.mjs -text` to `.gitattributes`, so git checks the gate out byte for byte.
 - **No commands from the repo's own git config.** `core.fsmonitor` is forced off for every git call the gate makes. Filter commands (`filter.*.clean/smudge/process`) defined in a repo's own `.git/config` are refused. That only happens when someone hands you a repo as an archive, since a normal clone doesn't carry `.git/config`. Filters you set up globally, like git-lfs, keep working. If the local ones are yours (git-crypt, `git lfs install --local`), set `OWNERSHIP_GATE_TRUST_REPO_CONFIG=1`.
-- **The project-level Claude hook** that `gate.mjs install` adds to `.claude/settings.json` runs the repo's own gate. Claude Code applies it under its normal workspace-trust rules.
+- **The project-level Claude hook** that `gate.mjs install` adds to `.claude/settings.json` runs the repo's own gate. Claude Code applies it under its normal workspace-trust rules. Cursor runs it too, under its own workspace trust.
 - **No code from the environment either.** The pinned hook clears `NODE_OPTIONS` and `NODE_PATH` before running the gate, and the CI step does the same, so nothing can be preloaded into it. The CI workflow restores no dependency cache either.
 - **File names are data.** Paths are stored in prototype-free maps and looked up as own keys only, so a file named `__proto__` or `constructor` is an ordinary file to the gate.
 - **Hooks fail open, never closed by accident.** A hook only blocks Claude when the gate deliberately returns exit code 2.
   - If `node` isn't on PATH, the plugin's hooks and the project-level hook that `install` writes exit 0. They check with plain POSIX `sh` before starting Node.
-  - If Node can't run the gate (a missing file, or a Node too old to load it), SessionStart prints the same note and exits 0. PreToolUse exits 1, which Claude Code treats as a non-blocking error.
+  - If Node can't run the gate (a missing file, or a Node too old to load it), SessionStart prints the same note and exits 0. PreToolUse exits 1, which Claude Code and Cursor both treat as a non-blocking error.
+  - When PreToolUse allows a command, it prints nothing. Cursor blocks a command when a hook's stdout isn't JSON, so a stray line would block every command.
   - The hook commands are plain POSIX `sh`, with no syntax that a shell could reject with its own exit code 2.
 - **Exemptions are exact.** Only these skip the check:
   - the gate's own files;

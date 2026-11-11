@@ -30,6 +30,7 @@ import {
   REPO_GATE,
   runGate,
   saveAndCommit,
+  setBaseConfig,
   setup,
   sh,
   tmp,
@@ -86,6 +87,29 @@ const runHook = (command, bin, input = "", shell = "/bin/sh") =>
   });
 
 const contextOf = (r) => JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+
+/** The PreToolUse command install writes into the repo's .claude/settings.json. */
+const projectHookCommand = (dev) =>
+  JSON.parse(readFileSync(join(dev, ".claude/settings.json"), "utf8")).hooks.PreToolUse[0].hooks[0].command;
+
+const CURSOR_FIXTURES = join(REPO, "test/fixtures/cursor");
+
+/** A payload Cursor sent, and the environment it gave the hook, with its
+ *  project paths pointed at `dev`. */
+function fromCursor(fixture, dev) {
+  const env = JSON.parse(readFileSync(join(CURSOR_FIXTURES, "hook-env.json"), "utf8"));
+  return {
+    input: readFileSync(join(CURSOR_FIXTURES, fixture), "utf8"),
+    env: { ...ENV, ...env, CLAUDE_PROJECT_DIR: dev, CURSOR_PROJECT_DIR: dev },
+  };
+}
+
+/** Run the repo's PreToolUse hook the way Cursor does: its command in a shell,
+ *  from the project root, with Cursor's payload and environment. */
+function cursorRunsProjectHook(dev, fixture) {
+  const { input, env } = fromCursor(fixture, dev);
+  return sh(dev, "/bin/sh", ["-c", projectHookCommand(dev)], { check: false, input, env });
+}
 
 test("the pre-push hook blocks a real push until the report is committed", (t) => {
   const { dev } = setup(t);
@@ -232,6 +256,90 @@ test("the plugin's hook still checks a repo whose gate copy is gone", (t) => {
   assert.ok(r.status === 2 && r.stderr.includes("No ownership report"));
 });
 
+test("from Cursor, the repo's Claude hook blocks an unverified push, with the reason on stderr", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  const r = cursorRunsProjectHook(dev, "pre-tool-use.shell.git-push.json");
+  assert.equal(r.status, 2, r.stderr);
+  assert.equal(r.stdout, "");
+  assert.match(r.stderr, /^Blocked by the ownership gate:\n- No ownership report for branch 'feature\/rate-limit'/);
+});
+
+test("from Cursor, the plugin's hook finds the repo through CLAUDE_PROJECT_DIR and blocks an unverified push", (t) => {
+  const { dev } = setup(t);
+  unlinkSync(join(dev, ".claude/settings.json")); // so the plugin's hook doesn't step aside
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  // Cursor runs a plugin's hooks from the plugin's folder, and its payload's cwd is "".
+  const r = plugin(REPO, ["claude-hook", "--from-plugin"], fromCursor("pre-tool-use.shell.git-push.json", dev));
+  assert.equal(r.status, 2, r.stderr);
+  assert.match(r.stderr, /No ownership report for branch 'feature\/rate-limit'/);
+});
+
+test("from Cursor, the plugin's hook steps aside when the repo registers its own", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  const r = plugin(REPO, ["claude-hook", "--from-plugin"], fromCursor("pre-tool-use.shell.git-push.json", dev));
+  assert.deepEqual([r.status, r.stdout, r.stderr], [0, "", ""]);
+});
+
+test("from Cursor, session start finds the repo through CLAUDE_PROJECT_DIR and prints only JSON", (t) => {
+  const { dev } = setup(t);
+  // Cursor's sessionStart payload has no cwd, and the plugin's hook runs from the plugin's folder.
+  const r = plugin(REPO, ["session-start"], fromCursor("session-start.json", dev));
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(contextOf(r), /This repository uses the ownership gate \(mode: required\)/);
+});
+
+// Cursor reads anything on a Claude-format hook's stdout as JSON, and blocks the
+// command when it isn't, even on exit 0. So an allowed command means no output.
+test("from Cursor, ls and git status pass with exit 0 and nothing on stdout", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  for (const fixture of ["pre-tool-use.shell.ls.json", "pre-tool-use.shell.git-status.json"]) {
+    const r = cursorRunsProjectHook(dev, fixture);
+    assert.deepEqual([r.status, r.stdout, r.stderr], [0, "", ""], fixture);
+  }
+});
+
+test("from Cursor, a tool that isn't the shell steps aside silently", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  const r = cursorRunsProjectHook(dev, "pre-tool-use.read.json");
+  assert.deepEqual([r.status, r.stdout, r.stderr], [0, "", ""]);
+});
+
+test("the Claude hook prints nothing whenever it allows", (t) => {
+  const { dev, tmp } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  const plain = join(tmp, "plain");
+  git(tmp, "init", "-q", "-b", "main", plain);
+  const silent = (r, why) => assert.deepEqual([r.status, r.stdout, r.stderr], [0, "", ""], why);
+
+  silent(runGate(dev, ["claude-hook"], { input: "not json" }), "input that isn't JSON");
+  silent(runGate(dev, ["claude-hook"], { input: "" }), "no input");
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent(dev, "git push", "Read") }), "a tool that isn't the shell");
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent(dev, "npm test") }), "a command that isn't a push");
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent("/") }), "outside a git repo");
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent(plain) }), "a repo without the gate");
+  silent(plugin(tmp, ["claude-hook", "--from-plugin"], { input: pushEvent(dev) }), "the plugin stepping aside");
+
+  saveAndCommit(dev);
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent(dev) }), "a verified push");
+
+  write(dev, "src/app.js", "export const app = 3;\n");
+  commitAll(dev, "unchecked again");
+  setBaseConfig(dev, (c) => {
+    c.mode = "suggested";
+  });
+  silent(runGate(dev, ["claude-hook"], { input: pushEvent(dev) }), "a push the gate only suggests checking");
+});
+
 test("session start installs the pre-push hook once and tells Claude the repo is gated", (t) => {
   const { dev, tmp } = setup(t);
   const hook = join(dev, ".git/hooks/pre-push");
@@ -323,8 +431,7 @@ test("hooks without node: SessionStart tells Claude, PreToolUse allows", (t) => 
   const pre = runHook(PRE_TOOL_USE, bin, pushEvent(dev));
   assert.deepEqual([pre.status, pre.stdout, pre.stderr], [0, "", ""]);
   // The project-level hook that install writes for teammates without the plugin.
-  const settings = JSON.parse(readFileSync(join(dev, ".claude/settings.json"), "utf8"));
-  const project = spawnSync("/bin/sh", ["-c", settings.hooks.PreToolUse[0].hooks[0].command], {
+  const project = spawnSync("/bin/sh", ["-c", projectHookCommand(dev)], {
     input: pushEvent(dev),
     encoding: "utf8",
     env: { PATH: bin, CLAUDE_PROJECT_DIR: dev },

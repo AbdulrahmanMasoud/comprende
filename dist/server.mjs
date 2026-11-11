@@ -24328,7 +24328,7 @@ var TOOLS = {
   })
 };
 function buildServer() {
-  const server = new McpServer({ name: "comprende", version: "0.2.1" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "comprende", version: "0.2.2" }, { instructions: INSTRUCTIONS });
   for (const [name, t] of Object.entries(TOOLS)) {
     server.registerTool(
       name,

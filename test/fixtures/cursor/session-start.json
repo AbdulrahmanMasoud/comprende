@@ -1,0 +1,12 @@
+{
+  "conversation_id": "00000000-0000-4000-8000-000000000004",
+  "generation_id": "00000000-0000-4000-8000-000000000004",
+  "model": "default",
+  "is_background_agent": false,
+  "session_id": "00000000-0000-4000-8000-000000000004",
+  "hook_event_name": "sessionStart",
+  "cursor_version": "2026.11.10-731fb78",
+  "workspace_roots": ["/work/probe-app"],
+  "user_email": "user@example.com",
+  "transcript_path": null
+}

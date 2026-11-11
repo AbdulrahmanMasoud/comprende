@@ -220,5 +220,6 @@ export const setBaseConfig = (dev, mutate) => {
 export const plugin = (cwd, args, { input = "", env, timeout = 60_000 } = {}) =>
   sh(cwd, NODE, [GATE, ...args], { check: false, input, env: env ?? ENV, timeout });
 
-/** The PreToolUse payload for Claude running `git push` in `cwd`. */
-export const pushEvent = (cwd) => JSON.stringify({ tool_name: "Bash", tool_input: { command: "git push" }, cwd });
+/** The PreToolUse payload for Claude running `command` (by default `git push`) in `cwd`. */
+export const pushEvent = (cwd, command = "git push", tool_name = "Bash") =>
+  JSON.stringify({ tool_name, tool_input: { command }, cwd });

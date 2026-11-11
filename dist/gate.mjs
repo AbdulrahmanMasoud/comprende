@@ -65,6 +65,7 @@ var CONFIG_PATH = `${LEARNING}/config.json`;
 var GATE_REL = `${LEARNING}/gate.mjs`;
 var REPORT_INPUT = `${LEARNING}/report.local.json`;
 var GATE_ATTRIBUTES_LINE = `${GATE_REL} -text`;
+var SHELL_TOOL_NAMES = ["Bash", "Shell"];
 var ZERO_SHA = "0".repeat(40);
 var REGULAR_MODES = ["100644", "100755"];
 var GATE_FILES = [
@@ -1237,7 +1238,7 @@ function claudeHook(stdinText, fromPlugin = false) {
   try {
     const payload = JSON.parse(stdinText || "{}");
     const command = String(payload?.tool_input?.command ?? "");
-    if ((payload?.tool_name ?? "Bash") !== "Bash" || !isPushCommand(command)) return 0;
+    if (!SHELL_TOOL_NAMES.includes(payload?.tool_name ?? "Bash") || !isPushCommand(command)) return 0;
     root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
     if (!lstat(join9(root, CONFIG_PATH))) return 0;
     if (fromPlugin && projectHasGateHook(root)) return 0;

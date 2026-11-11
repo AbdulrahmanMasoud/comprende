@@ -1,0 +1,19 @@
+{
+  "conversation_id": "00000000-0000-4000-8000-000000000001",
+  "generation_id": "00000000-0000-4000-8000-000000000001",
+  "model": "default",
+  "tool_name": "Shell",
+  "tool_input": {
+    "command": "git push origin feature/probe",
+    "cwd": "",
+    "timeout": 30000
+  },
+  "tool_use_id": "00000000-0000-4000-8000-000000000003",
+  "cwd": "",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "hook_event_name": "preToolUse",
+  "cursor_version": "2026.11.10-731fb78",
+  "workspace_roots": ["/work/probe-app"],
+  "user_email": "user@example.com",
+  "transcript_path": "/home/user/.cursor/projects/work-probe-app/agent-transcripts/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000001.jsonl"
+}

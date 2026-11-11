@@ -36,6 +36,8 @@ If the developer later merges or rebases onto a newer `main`, the gate replays `
 
 The first two catch forgetting. The last two are the lock.
 
+**In Cursor**, the first layer works too. Cursor runs Claude Code's hooks: the repo's `.claude/settings.json`, and the hooks of the Claude Code plugins you've installed. Its Third-Party Imports setting controls this, and it's on by default. Cursor names its shell tool `Shell`, not `Bash`. The hook accepts both since 0.2.2, once the repo's own copy of the gate is upgraded. Full Cursor support is tracked in [#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2).
+
 ### One file
 
 The whole gate is `gate.mjs`, one bundled file that imports only Node's built-ins (`node:fs`, `node:crypto` and so on). It's copied into each repo, and CI runs the copy on the base branch.

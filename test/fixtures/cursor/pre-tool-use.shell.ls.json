@@ -1,0 +1,19 @@
+{
+  "conversation_id": "00000000-0000-4000-8000-000000000004",
+  "generation_id": "00000000-0000-4000-8000-000000000004",
+  "model": "default",
+  "tool_name": "Shell",
+  "tool_input": {
+    "command": "ls",
+    "cwd": "",
+    "timeout": 30000
+  },
+  "tool_use_id": "00000000-0000-4000-8000-000000000005",
+  "cwd": "",
+  "session_id": "00000000-0000-4000-8000-000000000004",
+  "hook_event_name": "preToolUse",
+  "cursor_version": "2026.11.10-731fb78",
+  "workspace_roots": ["/work/probe-app"],
+  "user_email": "user@example.com",
+  "transcript_path": null
+}
