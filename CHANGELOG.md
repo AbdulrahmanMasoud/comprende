@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **`agent-hook`:** the gate's hook command now has a name that doesn't depend on the tool, and `--agent <id>` names the tool running it. `claude-hook` is the same command and keeps working, so existing repos need no change. Inside, each AI tool's hook payloads are read by its own adapter, starting with Claude Code and Cursor ([#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18)).
 - **Contributions:** Comprende isn't accepting outside pull requests for now. Issues, feature requests and feedback are welcome. See [Contributions](CONTRIBUTING.md#contributions).
 - **Docs:** [docs/agents.md](docs/agents.md) has what we tested about Cursor, and a design for Cursor support and agent adapters ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)).
 

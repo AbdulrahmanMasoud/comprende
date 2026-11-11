@@ -1,0 +1,16 @@
+{
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "transcript_path": "/home/user/.claude/projects/-work-probe-app/00000000-0000-4000-8000-000000000001.jsonl",
+  "cwd": "/work/probe-app",
+  "prompt_id": "00000000-0000-4000-8000-000000000002",
+  "permission_mode": "default",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/work/probe-app/README.md"
+  },
+  "tool_use_id": "toolu_000000000000000000000000"
+}

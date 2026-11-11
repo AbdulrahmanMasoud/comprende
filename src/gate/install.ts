@@ -1,17 +1,18 @@
 // install: turning the gate on for a repo. It writes the gate copy, the config,
-// the CI workflow and the Claude hook, adds the .gitignore and .gitattributes
+// the CI workflow and each agent's repo-level hook file, adds the .gitignore and .gitattributes
 // lines and the local pre-push hook, and sets up CODEOWNERS.
 
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { PROJECT_HOOK_FILES } from "./agents/index.js";
 import { CHECK_NAME, WORKFLOW } from "./ci-workflow.js";
-import { mergeClaudeSettings } from "./claude-settings.js";
 import { setUpCodeowners } from "./codeowners.js";
 import { DEFAULT_CONFIG } from "./config.js";
 import { atomicWrite } from "./files.js";
 import { repoRoot, resolveBase } from "./git.js";
 import { type GateCopyDifference, gateCopyDifference, installHooks } from "./hooks.js";
 import { addInstallLine, INSTALL_LINES } from "./install-lines.js";
+import { addProjectHook } from "./project-hooks.js";
 import { CONFIG_PATH, GATE_REL, GateError, SELF } from "./shared.js";
 
 /** What install says about an existing gate.mjs it wasn't asked to replace. */
@@ -61,7 +62,7 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
     done.push(`wrote ${wfRel}`);
   }
 
-  done.push(mergeClaudeSettings(join(root, ".claude", "settings.json")));
+  for (const file of PROJECT_HOOK_FILES) done.push(addProjectHook(join(root, file.path), file));
   for (const { file, line } of INSTALL_LINES) done.push(addInstallLine(root, file, line));
   done.push(...installHooks(root));
   done.push(
