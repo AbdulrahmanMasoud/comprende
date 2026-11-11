@@ -207,9 +207,17 @@ export interface Agent {
    *  tool's shell tool (Claude Code's "Bash", Cursor's "Shell"). */
   shellCommand(payload: unknown): string | null;
 
-  /** The repo the hook is for, from the payload or this tool's project
-   *  variable, or null when neither says (the core then uses its own cwd). */
+  /** The repo the hook is for, or null when this run can't tell: the hook then
+   *  steps aside. The core never guesses from its own working folder, because a
+   *  tool may run plugin hooks from the plugin's folder (Cursor does). */
   projectDir(payload: unknown, env: HookEnv): string | null;
+
+  /** How the gate's messages name this tool: the assistant the user asks
+   *  ("Ask Claude to …"), and the app to restart ("a restart of Claude Code"). */
+  readonly names: { readonly assistant: string; readonly app: string };
+
+  /** How the user updates the plugin in this tool, for a message. */
+  readonly pluginUpdateHint: string;
 
   /** This tool's repo-level hook files, most specific first. `install` writes
    *  them, and the plugin's hook steps aside when one of them already runs the gate. */
@@ -261,7 +269,8 @@ How each tool fills it in:
 |---|---|---|---|---|
 | `detects` | any payload: the fallback | `cursor_version` in the payload, or the tool name `Shell`. Not the environment: Claude Code started from Cursor's terminal may inherit Cursor's variables | `--agent codex` in its hook file | `toolCall` and `workspacePaths` |
 | Shell tool | `Bash` | `Shell` | `Bash` | `run_command`, command in `toolCall.args.CommandLine` |
-| `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR` | `CLAUDE_PROJECT_DIR`, else `CURSOR_PROJECT_DIR` (`cwd` is `""`). Cursor sets both to the same path | `cwd` | `workspacePaths[0]` |
+| `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR`, else its own folder (Claude Code runs hooks from the project) | `workspace_roots[0]` (`cwd` is `""`), else `CURSOR_PROJECT_DIR` or `CLAUDE_PROJECT_DIR`, else step aside: Cursor runs plugin hooks from the plugin's folder |
+| `names` | Claude, Claude Code | Cursor, Cursor | `cwd` | `workspacePaths[0]` |
 | `projectHookFiles` | `.claude/settings.json` | `.claude/settings.json` now; `.cursor/hooks.json` first, from the Cursor PR | `.codex/hooks.json` | the plugin's `hooks.json` only |
 | `formatDecision` | the default | the default | the default | `{"decision": …}` |
 | `formatSessionContext` | the default | the default | the default | `injectSteps` |

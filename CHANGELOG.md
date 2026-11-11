@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Cursor: the gate's hook reads the repo from the payload** (part of [#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)). In Cursor it uses `workspace_roots`, then Cursor's project variables, and steps aside when neither says, instead of guessing from its own folder, since Cursor runs a plugin's hooks from the plugin's folder.
+- **Messages name the tool you're in:** "Ask Claude to run the ownership check" in Claude Code, "Ask Cursor …" in Cursor, and "Ask your AI assistant …" in CI and the git hook. The Node.js note and the plugin-update hint name the right app too.
+
 ## 0.2.3
 
 **Upgrading:** update the plugin, then upgrade the repo's copy of the gate in its own PR, with `node <plugin>/dist/gate.mjs install --upgrade --repo .` (see [Upgrading the gate](docs/teams.md#upgrading-the-gate)). The upgrade PR needs no report. The CI fix (#32) applies once the base branch runs the new copy, and the hook fix (#30) once the repo's copy and the plugin are updated. `GATE_VERSION` stays 3, since the report format is unchanged.
