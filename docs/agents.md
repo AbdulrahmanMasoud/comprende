@@ -614,6 +614,7 @@ So each push is checked once, and each session gets each line once. `test/agents
 **What's weaker than in Claude Code:**
 - **Hooks need trust,** after the install and after every update, and Codex skips them without a word until then. The git hook and CI still check. So does `.codex/hooks.json`, if it's written and trusted.
 - **Codex's `workspace-write` sandbox keeps `.git` read-only,** so the agent asks before it commits.
+- **On Windows, a block doesn't reach Codex as exit 2.** Codex runs hooks in PowerShell with `-Command`, which turns a program's exit 2 into 1 unless the command ends with `exit $LASTEXITCODE`. So the push guard fails open there, and the git hook and CI still check. Tested in `pwsh` in CI. Cursor, which also runs hooks in PowerShell on Windows, has the same limit. The fix, a JSON deny that doesn't depend on exit codes, needs a Windows run: [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10).
 - **The repo's `.codex/hooks.json` needs a common shell.** Its `$(git rev-parse …)` works in sh, bash, zsh, fish 3.4+ and PowerShell. With another `$SHELL` (tcsh, nu) that copy fails open, and the plugin's hook still checks.
 - **The commit trailer** depends on an account setting that Codex has no config key for.
 - **Windows is untested.**

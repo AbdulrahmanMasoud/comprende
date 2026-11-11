@@ -776,7 +776,10 @@ test("the repo's .codex/hooks.json blocks an unverified push from a subfolder, a
   symlinkSync(NODE, join(nodeOnly, "node"));
   assert.notEqual(run({ ...ENV, PATH: nodeOnly }).status, 2, "without git");
   assert.notEqual(run({ ...ENV, PATH: tmpDir(t) }).status, 2, "without node");
-  // On Windows, Codex runs hooks in PowerShell, which reads the same $(…).
+  // On Windows, Codex runs hooks in PowerShell (-Command), which reads the same $(…):
+  // the gate finds the repo and blocks. But -Command turns a program's exit 2 into
+  // 1 unless the command ends with `exit $LASTEXITCODE`, so the block doesn't reach
+  // the tool as exit 2: on Windows the push guard fails open (#10).
   if (PWSH) {
     const ps = spawnSync(PWSH, ["-NoProfile", "-NonInteractive", "-Command", `$input | ${command}`], {
       cwd: sub,
@@ -784,6 +787,7 @@ test("the repo's .codex/hooks.json blocks an unverified push from a subfolder, a
       encoding: "utf8",
       env: ENV,
     });
-    assert.equal(ps.status, 2, `PowerShell: ${ps.stderr}`);
+    assert.match(ps.stderr, /Blocked by the ownership gate/, "PowerShell finds the gate and it blocks");
+    assert.equal(ps.status, 1, "PowerShell's -Command turns exit 2 into 1");
   }
 });
