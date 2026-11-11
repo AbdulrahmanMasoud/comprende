@@ -146,7 +146,7 @@ test("the README's 'try it' script makes a gated repo where an unchecked push is
   const swaps = new Map([
     ["mkdir -p /tmp/comprende-try && cd /tmp/comprende-try", 'cd "$TRY"'],
     ["git clone -q https://github.com/AbdulrahmanMasoud/comprende.git", 'ln -s "$COMPRENDE" comprende'],
-    ["claude   # or open this folder in Cursor", ""],
+    ["claude   # or open this folder in Cursor or Codex", ""],
   ]);
   const lines = script.trim().split("\n");
   for (const line of swaps.keys()) assert.ok(lines.includes(line), `the script no longer has: ${line}`);

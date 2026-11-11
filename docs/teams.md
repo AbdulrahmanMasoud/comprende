@@ -33,7 +33,7 @@ node <plugin>/dist/gate.mjs install --repo . --owner @your-org/leads
   - A symlinked CODEOWNERS is left alone, and `install` prints the lines to add by hand.
 - the local git `pre-push` hook
 
-**Teammates** with the plugin don't need to do anything: their first session in the repo installs their git hook. Teammates without the plugin run `node .learning/gate.mjs install-hooks` once per clone.
+**Teammates** with the plugin don't need to do anything: their first session in the repo installs their git hook. In Codex, they first trust the project and the hooks in `/hooks`. Teammates without the plugin run `node .learning/gate.mjs install-hooks` once per clone.
 
 ### Upgrading the gate
 
@@ -52,7 +52,7 @@ One repo works for everyone. `install` writes the hooks for each tool, and the r
 - **Each developer installs the plugin in the tool they use** ([Install](../README.md#install)). Someone with Comprende in Claude Code who also opens Cursor already has it there: Cursor runs Claude Code's plugins while its Third-Party Imports setting is on. Codex doesn't, so it needs its own install.
 - **Without the plugin,** the repo's own hook files still stop the agent's push: `.claude/settings.json` in Claude Code, `.cursor/hooks.json` in Cursor, `.codex/hooks.json` in Codex (once trusted). Developers without the plugin run `node .learning/gate.mjs install-hooks` once per clone to get the git hook.
 - **Each push is checked once,** whichever hook files and plugins are present ([how](agents.md#step-aside-rules)).
-- **Codex users trust the hooks.** Once per repo, the project and its `.codex/hooks.json`, and the plugin's two hooks in `/hooks` after every plugin update. Codex skips untrusted hooks without a word.
+- **Codex users trust the hooks.** Once per repo: the project and its `.codex/hooks.json`. And the plugin's two hooks in `/hooks`, after installing and after every update. Codex skips untrusted hooks without a word.
 - **Repos set up before 0.3.0 or 0.4.0** get `.cursor/hooks.json` and `.codex/hooks.json` with `install --upgrade` ([Upgrading the gate](#upgrading-the-gate)).
 - **Cursor's agent signs its commits** with `Co-authored-by: Cursor <cursoragent@cursor.com>`. If the team doesn't want that line, each Cursor user turns off `attribution.attributeCommitsToAgent`.
 - **What's weaker** in [Cursor](agents.md#whats-weaker-in-cursor-than-in-claude-code) and in [Codex](agents.md#whats-weaker-in-codex-than-in-claude-code) is listed in docs/agents.md.

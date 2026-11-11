@@ -116,6 +116,8 @@ The docs say: "the desktop app runs hook commands through PowerShell and pipes t
 - **The git pre-push hook still works,** because git runs hooks through its own `sh`.
 - **Cursor's own hooks, since 0.3.0, are plain `node` lines,** in the Cursor plugin and the repo's `.cursor/hooks.json`. These run in both shells (tested in `pwsh` in CI, not on Windows). The gate strips a BOM before parsing a payload.
 
+- **And PowerShell hides the block:** with `-Command`, it turns a program's exit 2 into 1, unless the command ends with `exit $LASTEXITCODE`. So even a hook that runs can't block a push by exit code there. Tested in `pwsh` in CI, in [#50](https://github.com/AbdulrahmanMasoud/comprende/pull/50).
+
 Windows as a whole is tracked in [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10).
 
 ## What works where
@@ -128,7 +130,7 @@ Windows as a whole is tracked in [#10](https://github.com/AbdulrahmanMasoud/comp
 | The push guard (the agent's `git push`) | the plugin, or the repo's `.claude/settings.json` | the plugin, or the repo's `.cursor/hooks.json`. Also `.claude/settings.json` and an imported Claude Code plugin, while Third-Party Imports is on (tested in the CLI) | the plugin, or the repo's `.codex/hooks.json`, each once trusted. The repo's keeps its trust across updates (tested in the CLI) |
 | The git `pre-push` hook | installed by the plugin at session start | the same (tested in unit tests, not in the CLI run) | the same, once the hooks are trusted (tested in the CLI) |
 | CI | the same check: it doesn't depend on the tool | the same | the same |
-| Windows | experimental: hooks run in Git Bash | experimental and untested: hooks run in PowerShell, which turns a block's exit 2 into 1, so the push guard fails open ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)) | the same as Cursor (tested in `pwsh` in CI, not on Windows) |
+| Windows | experimental: hooks run in Git Bash | experimental: hooks run in PowerShell, which turns a block's exit 2 into 1, so the push guard fails open (tested in `pwsh` in CI, not on Windows; [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)) | the same as Cursor |
 
 Each push is checked once, whatever mix of hook files and plugins is present ([Step-aside rules](#step-aside-rules)).
 
@@ -146,7 +148,7 @@ Each push is checked once, whatever mix of hook files and plugins is present ([S
 
 ## What's weaker in Codex than in Claude Code
 
-- **Hooks need trust.** Codex runs no plugin hook until it's trusted in `/hooks`, and asks again after every plugin update: it checks the plugin's whole folder. Until then it skips the hooks without a word, so the agent's push isn't checked by the hook (the git hook and CI still check it). The repo's `.codex/hooks.json` keeps its trust across updates, and in a gated repo the skill tells the user when the session got no Comprende note.
+- **Hooks need trust.** Codex runs no plugin hook until it's trusted in `/hooks`, and again after every plugin update: it checks the plugin's whole folder. Until then it skips the hooks without a word, so the agent's push isn't checked by the hook (the git hook and CI still check it). The repo's `.codex/hooks.json` keeps its trust across updates. In a gated repo, the skill tells the agent to mention it when the session got no Comprende note (the skill tells the agent to; not yet confirmed in Codex).
 - **Project hooks need the project trusted too.** Each developer trusts the project once, then the repo's hook.
 - **Codex's `workspace-write` sandbox keeps `.git` read-only,** so the agent asks before it commits.
 - **The repo's hook needs a common shell.** Codex runs it with your `$SHELL`: it works in sh, bash, zsh, fish 3.4+ and PowerShell. In tcsh or nu that copy fails open, and the plugin's hook still checks.
@@ -184,7 +186,7 @@ The CLI run (`tools/e2e-cursor.mjs`) can't see the IDE. Check these by hand, in 
 
 Tested on 2026-11-11 with the Codex CLI `0.167.1` on macOS, signed in with ChatGPT, plus the official docs and, where they're silent, Codex's source at the [`rust-v0.167.1`](https://github.com/openai/codex/tree/rust-v0.167.1) tag. The captures are in [`test/fixtures/codex/`](../test/fixtures/codex/).
 
-### Comprende 0.3.0 in Codex today
+### Comprende 0.3.0 in Codex, before Codex support
 
 Codex installs today's Comprende as it is: it reads `.claude-plugin/marketplace.json` as a marketplace, and `.claude-plugin/plugin.json` as the plugin. All tested, in a gated demo repo:
 
@@ -260,7 +262,7 @@ From the official docs (read on 2026-11-11), and the Antigravity CLI (`agy`) `1.
 
 Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is the only one we can drive from a script.
 
-### Comprende 0.3.0 in Antigravity today
+### Comprende 0.3.0 in Antigravity
 
 `agy plugin install <this repo>` converts today's Comprende by itself, since it's a Claude Code plugin: "1 skill, 1 MCP server, 2 hooks" (tested). We ran the converted hooks the way Antigravity does, from the plugin's folder, on payloads built from the docs' fields. The real payloads need a signed-in run.
 
@@ -778,13 +780,13 @@ The maintainer settled the open questions on 2026-11-11:
 
 ### Open questions for 0.4.0
 
-1. **Codex: should `install` write `.codex/hooks.json`?** It survives plugin updates and works without the plugin. But each developer trusts the project and the hooks once, and the command needs `git rev-parse` to find the gate from a subfolder.
+1. **Codex: should `install` write `.codex/hooks.json`?** Decided: yes, and built in 0.4.0. It survives plugin updates and works without the plugin. But each developer trusts the project and the hooks once, and the command needs `git rev-parse` to find the gate from a subfolder.
 2. **Codex: re-trusting after every update.** There's no way around it short of `--dangerously-bypass-hook-trust`, which is for automation, not users. A session-start message can't say so, since untrusted hooks don't run. The skill loads without trust, so proposal: the skill and the README say "after an update, trust Comprende's hooks again in `/hooks`". Decided: yes, and the skill now says so when a gated repo's session got no session-start note. Found since: `codex plugin marketplace upgrade` updates the installed plugin too (tested). Still to find out: whether the MCP server needs approval again after an update.
 3. **Antigravity: plugin files at this repo's root.** A `hooks.json` and an `mcp_config.json`, maybe a `rules/` folder: Antigravity reads them only there.
 4. **Antigravity: the always-on line from a plugin rule** (`rules/AGENTS.md`) instead of `SessionStart`? A rule doesn't depend on hooks running, which is disputed in the IDE.
 5. **Antigravity: the CLI first?** We can test only the CLI, and the IDE may not run hooks.
 6. **Antigravity: should `install` write `.agents/hooks.json`?** Better decided after a signed-in run shows which folder project hooks run in.
-7. **One release or two?** Codex is ready to build now. Antigravity waits on a signed-in run: 0.4.0 could ship Codex, and 0.4.x Antigravity.
+7. **One release or two?** Decided: 0.4.0 is Codex, 0.5.0 Antigravity, 0.6.0 GitLab.
 
 **What a signed-in Antigravity run must answer first,** before the adapter:
 - **What an empty stdout does.** It matters for safety: every path that can't format a reply prints nothing, such as an unknown `--agent` passed to an older repo copy of `gate.mjs`. If an empty reply blocks, every command would be blocked.

@@ -53,7 +53,7 @@ codex plugin marketplace add AbdulrahmanMasoud/comprende
 codex plugin add comprende@comprende
 ```
 
-Then open Codex in a repo, type `/hooks`, and trust Comprende's two hooks. Codex asks again after every update (`codex plugin marketplace upgrade comprende`), and runs none of its hooks until you do. So until then the agent's push isn't checked, though the git hook and CI still check it.
+Then open Codex in a repo, type `/hooks`, and trust Comprende's two hooks. Trust them again after every update (`codex plugin marketplace upgrade comprende`): until then Codex skips them without a word, so the agent's push isn't checked, though the git hook and CI still check it.
 
 On Windows, Comprende is experimental in all three tools ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 
@@ -89,7 +89,7 @@ Claude remembers what you already know in `~/.comprende/`, on your machine only.
 1. Open Claude in the repo and say: **"Enable the ownership gate in this repo."**
 2. Claude opens a PR that adds the gate (`.learning/`), a CI check, and hooks for Claude Code, Cursor and Codex. Review `.learning/config.json`, mainly `sensitive`: paths like auth or payments, which always get questions. Then merge it.
 3. Make the check required: run `node .learning/gate.mjs protect --apply`, or ask Claude to. It needs admin rights on GitHub.
-4. Ask your team to install the plugin, in Claude Code, Cursor or Codex. That's all they need: their first session in the repo sets up the rest.
+4. Ask your team to install the plugin, in Claude Code, Cursor or Codex. That's all they need: their first session in the repo sets up the rest. In Codex they also trust the project and the hooks, in `/hooks`.
 
 ### Use it (every developer)
 
@@ -138,11 +138,9 @@ A real session, shortened:
 
 **In Codex**, too. A real run, shortened:
 
-> **You:** Run exactly this shell command once … `git push -u origin feature/sum`. Quote any block message word for word.
+> **You:** Run exactly this shell command once … `git push -u origin feature/sum`. …
 >
-> **Codex:** … Blocked by the ownership gate:
->
-> > No ownership report for branch 'feature/sum' (.learning/checks/feature%2Fsum.md). Ask Codex to run the ownership check ("check me"), then commit the report. …
+> **Codex:** … Blocked by the ownership gate: … Ask Codex to run the ownership check ("check me"), then commit the report. …
 
 **If you skip the check**, the agent won't push, `git push` is blocked by a git hook, and CI fails the PR. This is what you see in a terminal:
 
@@ -177,10 +175,10 @@ git add -A && git commit -qm init
 node ../comprende/dist/gate.mjs install --repo . > /dev/null
 git add -A && git commit -qm "add ownership gate" && git push -q -u origin main
 git checkout -q -b feature/sum
-claude   # or open this folder in Cursor
+claude   # or open this folder in Cursor or Codex
 ```
 
-Then, in Claude (or open `/tmp/comprende-try/app` in Cursor, with the plugin installed):
+Then, in Claude (or open `/tmp/comprende-try/app` in Cursor or Codex, with the plugin installed; in Codex, trust the hooks in `/hooks` first):
 
 1. Say: **"add a sum(xs) function to math.js using add, then commit and push it"**.
 2. Answer its question. Try a wrong answer first, to see what happens.

@@ -83,7 +83,7 @@ Before opening a PR, get a review from someone who hasn't seen the work. That ca
 
 ### Adapters
 
-Code that's specific to one AI tool (Claude Code, Cursor, and later Codex and Antigravity) lives in one adapter module, behind a small interface that every adapter implements. The same goes for git platforms (GitHub, and later GitLab).
+Code that's specific to one AI tool (Claude Code, Cursor, Codex, and later Antigravity) lives in one adapter module, behind a small interface that every adapter implements. The same goes for git platforms (GitHub, and later GitLab).
 
 ```
 src/gate/agents/      types.ts (the Agent interface), index.ts (the registry and the resolve step),

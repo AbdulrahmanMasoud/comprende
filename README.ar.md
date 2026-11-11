@@ -57,7 +57,7 @@ codex plugin marketplace add AbdulrahmanMasoud/comprende
 codex plugin add comprende@comprende
 ```
 
-وبعدين افتح Codex في الـ repo، واكتب `/hooks`، ووافق على الـ hooks الاتنين بتوع Comprende (trust). Codex بيطلب الموافقة دي تاني بعد كل update (`codex plugin marketplace upgrade comprende`)، ومش بيشغّل أي hook ليه لحد ما توافق. يعني لحد ساعتها الـ push بتاع الـ agent مش بيتراجع، بس الـ git hook والـ CI لسه بيراجعوه.
+وبعدين افتح Codex في الـ repo، واكتب `/hooks`، ووافق على الـ hooks الاتنين بتوع Comprende (trust). ووافق عليهم تاني بعد كل update (`codex plugin marketplace upgrade comprende`): لحد ما توافق، Codex بيتخطّى أي hook من بتوعه من غير ما يقول حاجة، يعني محدش بيعمل check على الـ push بتاع الـ agent، بس الـ git hook والـ CI لسه بيعملوا check.
 
 على Windows، Comprende لسه experimental في التلات أدوات ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 
@@ -93,7 +93,7 @@ Claude بيفتكر إنت عارف إيه في `~/.comprende/`، على جها�
 1. افتح Claude في الـ repo وقوله: **"فعّل بوابة الفهم في المشروع ده"**.
 2. Claude هيفتح PR بيضيف البوابة (`.learning/`)، و CI check، و hooks لـ Claude Code و Cursor و Codex. راجع `.learning/config.json`، خصوصاً `sensitive`: دي المسارات زي auth و payments اللي لازم يتسأل عليها دايماً. وبعدين اعمل merge.
 3. خلّي الـ check إجباري: شغّل `node .learning/gate.mjs protect --apply`، أو اطلبها من Claude. محتاجة صلاحيات admin على GitHub.
-4. خلّي التيم يسطّبوا الـ plugin، في Claude Code أو Cursor أو Codex، وبس كده. أول session ليهم في الـ repo بتظبط الباقي.
+4. خلّي التيم يسطّبوا الـ plugin، في Claude Code أو Cursor أو Codex، وبس كده. أول session ليهم في الـ repo بتظبط الباقي. وفي Codex كمان بيوافقوا على الـ project والـ hooks في `/hooks`.
 
 ### استخدامه (كل مطوّر)
 
@@ -178,10 +178,10 @@ git add -A && git commit -qm init
 node ../comprende/dist/gate.mjs install --repo . > /dev/null
 git add -A && git commit -qm "add ownership gate" && git push -q -u origin main
 git checkout -q -b feature/sum
-claude   # or open this folder in Cursor
+claude   # or open this folder in Cursor or Codex
 ```
 
-وبعدين جوه Claude (أو افتح `/tmp/comprende-try/app` في Cursor، والـ plugin متسطّب):
+وبعدين جوه Claude (أو افتح `/tmp/comprende-try/app` في Cursor أو Codex، والـ plugin متسطّب؛ وفي Codex وافق على الـ hooks في `/hooks` الأول):
 
 1. قول: **"ضيف function اسمها sum(xs) في math.js باستخدام add، وبعدين اعمل commit و push"**.
 2. جاوب على السؤال. جرّب إجابة غلط الأول، عشان تشوف هيحصل إيه.
