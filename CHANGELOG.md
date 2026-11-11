@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- **Codex: the repo's note no longer tells a teammate without the plugin to trust its hooks again.** In a real run with only the repo's `.codex/hooks.json`, the agent told the user to re-trust hooks they never had, and not how to install the plugin. The note now says the plugin isn't running, either not installed or its hooks skipped, and has the agent give both options in one line: install it, or trust its hooks in `/hooks`.
+## 0.4.2
+
+- **Codex: the repo's note no longer tells a teammate without the plugin to trust its hooks again.** In a real run with only the repo's `.codex/hooks.json`, the agent told the user to re-trust hooks they never had, and not how to install the plugin. The note now says the plugin isn't running, either not installed or its hooks skipped, and has the agent give both options in one line: install it, or trust its hooks in `/hooks`. Tested in the real Codex CLI ([recording](docs/recordings/codex/0.4.2/)). The note comes from the repo's own `.learning/gate.mjs`, so teams get it with `install --upgrade`. The hook's command is unchanged.
 
 ## 0.4.1
 
