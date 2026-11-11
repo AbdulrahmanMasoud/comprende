@@ -136,7 +136,7 @@ claude
 
 - [**البوابة للتيمز**](docs/teams.md): التسطيب بالإيد، الإعدادات، التغييرات الصغيرة، الطوارئ
 - [**بيشتغل إزاي**](docs/how-it-works.md): المتطلبات، الـ fingerprints، الطبقات الأربعة، الحدود بصراحة
-- [**المساهمة**](CONTRIBUTING.md): شكل الـ repo، الـ tests، الـ demo، الـ releases
+- [**المساهمة**](CONTRIBUTING.md#contributions): مش بنقبل pull requests من برّه دلوقتي، بس الـ issues والاقتراحات مرحّب بيها جدًا
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ## License

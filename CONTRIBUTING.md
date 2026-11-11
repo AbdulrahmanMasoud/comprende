@@ -1,6 +1,10 @@
 # Contributing
 
-Issues and PRs are welcome. For security-relevant problems, see [SECURITY.md](SECURITY.md). The rules that must not break, and the full workflow and code rules, are in [CLAUDE.md](CLAUDE.md).
+## Contributions
+
+Comprende isn't accepting pull requests from outside contributors right now. Bug reports, feature requests and feedback are very welcome: [open an issue](https://github.com/AbdulrahmanMasoud/comprende/issues/new/choose). For a security problem, see [SECURITY.md](SECURITY.md). This may change later.
+
+The rest of this file is the maintainers' guide. The rules that must not break, and the full workflow and code rules, are in [CLAUDE.md](CLAUDE.md).
 
 ## Setup
 
