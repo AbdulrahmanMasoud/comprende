@@ -957,26 +957,28 @@ function extractDataBlock(text) {
   const m = /```json\r?\n([\s\S]*?)\r?\n```/.exec(after);
   return m ? m[1] : null;
 }
+var ReportError = class extends GateError {
+};
 function parseReport(text) {
   if (!text.includes(DATA_MARKER))
-    throw new GateError("Report is missing its data block \u2014 run the check again to regenerate it.");
+    throw new ReportError("Report is missing its data block \u2014 run the check again to regenerate it.");
   const block = extractDataBlock(text);
-  if (block === null) throw new GateError("Report data block is malformed \u2014 run the check again to regenerate it.");
+  if (block === null) throw new ReportError("Report data block is malformed \u2014 run the check again to regenerate it.");
   let data;
   try {
     data = JSON.parse(block);
   } catch (e) {
-    throw new GateError(`Report data is not valid JSON (${e.message}) \u2014 run the check again.`);
+    throw new ReportError(`Report data is not valid JSON (${e.message}) \u2014 run the check again.`);
   }
   if (!(isRecord(data) && isRecord(data.files) && isRecord(data.verified) && typeof data.summary === "string")) {
-    throw new GateError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
+    throw new ReportError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
   }
   for (const v of Object.values(data.verified)) {
     if (!Array.isArray(v) || !v.every((x) => typeof x === "string"))
-      throw new GateError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
+      throw new ReportError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
   }
   if (data.version !== GATE_VERSION) {
-    throw new GateError(
+    throw new ReportError(
       `Report was made by gate v${String(data.version)}; this gate is v${GATE_VERSION}. If your branch is behind the base, merge it first; then run the check again.`
     );
   }
@@ -1780,7 +1782,7 @@ function agentHook(stdinText, source, requested) {
   try {
     [passed, problems, mode] = verify(root, { assistant: agent.names.assistant });
   } catch (e) {
-    if (!(e instanceof GateError)) return allow;
+    if (!(e instanceof ReportError)) return allow;
     [passed, problems, mode] = [false, [e.message], "required"];
   }
   if (passed || mode !== "required") return allow;
@@ -1873,7 +1875,7 @@ function prePush(stdinText, repo) {
     try {
       [passed, problems, mode] = verify(root, { branch, rev: localSha });
     } catch (e) {
-      if (!(e instanceof GateError) && e.code) {
+      if (!(e instanceof ReportError)) {
         process.stderr.write(`ownership gate: skipped (${e.message})
 `);
         continue;
@@ -2068,7 +2070,9 @@ function testCall(fn, a) {
     WORKFLOW: REPO_PLATFORM.ciConfig.withGateJob(null).content,
     CHECK_NAME: REPO_PLATFORM.checkName,
     REPO_GATE: GATE_REL,
-    ALWAYS_ON
+    ALWAYS_ON,
+    // Every adapter, so a per-agent test can check it covers them all.
+    AGENT_IDS: AGENTS.map((a2) => a2.id)
   };
   if (fn in consts) return consts[fn];
   switch (fn) {

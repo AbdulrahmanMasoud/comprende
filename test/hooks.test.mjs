@@ -156,6 +156,41 @@ for (const [refspec, remoteBranch] of [
   });
 }
 
+test("the git hook never blocks on a crash: a git failure during the check skips it, a broken report blocks", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  // With a report, the check has to read the change to compare it.
+  gate.save(payload(), dev);
+  commitAll(dev, "report");
+  // What git writes to the hook's stdin for this push. Git puts its own folder
+  // first on a hook's PATH, so the entry point is called directly here.
+  const prePush = (env = ENV) => {
+    const sha = out(git(dev, "rev-parse", "HEAD"));
+    const line = `refs/heads/feature/rate-limit ${sha} refs/heads/feature/rate-limit ${"0".repeat(40)}\n`;
+    return runGate(dev, ["pre-push", "origin", "../remote.git"], { input: line, env });
+  };
+  // A git that fails once the check reads the change.
+  const realGit = sh(dev, "/bin/sh", ["-c", "command -v git"]).stdout.trim();
+  const bin = join(tmp(t), "bin");
+  write(
+    bin,
+    "git",
+    `#!/bin/sh\nfor a in "$@"; do [ "$a" = diff ] && { echo "simulated git failure" >&2; exit 128; }; done\nexec "${realGit}" "$@"\n`,
+  );
+  chmodSync(join(bin, "git"), 0o755);
+  const failing = prePush({ ...ENV, PATH: `${bin}:${ENV.PATH}` });
+  assert.equal(failing.status, 0, failing.stderr);
+  assert.match(failing.stderr, /ownership gate: skipped \(git .*failed/);
+  // A report that's there but can't be read is a verdict on the change.
+  write(dev, "src/app.js", "export const app = 3;\n");
+  write(dev, gate.reportRelpath("feature/rate-limit"), "not a report\n");
+  commitAll(dev, "a broken report");
+  const broken = prePush();
+  assert.notEqual(broken.status, 0);
+  assert.match(broken.stderr, /Report is missing its data block/);
+});
+
 test("pre-push checks a push by sha refspec", (t) => {
   const { dev } = setup(t);
   write(dev, "src/app.js", "export const app = 2;\n");

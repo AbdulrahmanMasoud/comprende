@@ -13,17 +13,8 @@ import { git, repoRoot, resolveBase } from "./git.js";
 import { claimed, type HookRun, type HookSource, stepsAside } from "./hook-copies.js";
 import { decisionReply, SILENT_ALLOW, sessionContextReply } from "./hook-replies.js";
 import { isPushCommand } from "./push-detect.js";
-import { uncommittedReport } from "./report.js";
-import {
-  CONFIG_PATH,
-  GATE_ATTRIBUTES_LINE,
-  GATE_REL,
-  GateError,
-  SELF,
-  splitLines,
-  withoutBom,
-  ZERO_SHA,
-} from "./shared.js";
+import { ReportError, uncommittedReport } from "./report.js";
+import { CONFIG_PATH, GATE_ATTRIBUTES_LINE, GATE_REL, SELF, splitLines, withoutBom, ZERO_SHA } from "./shared.js";
 
 /** The hook's payload and the adapter that reads it, or no adapter when stdin
  *  isn't JSON or `--agent` names an unknown tool. Never throws. */
@@ -66,8 +57,11 @@ export function agentHook(stdinText: string, source: HookSource, requested: stri
   try {
     [passed, problems, mode] = verify(root, { assistant: agent.names.assistant });
   } catch (e) {
-    if (!(e instanceof GateError)) return allow;
-    [passed, problems, mode] = [false, [e.message], "required"]; // e.g. a broken report
+    // Only a report that's there but can't be used is a verdict. Any other failure
+    // (git, the file system, a broken config) lets the command run: a hook never
+    // blocks by accident, and CI still checks.
+    if (!(e instanceof ReportError)) return allow;
+    [passed, problems, mode] = [false, [e.message], "required"];
   }
   if (passed || mode !== "required") return allow;
   // The hook runs before the command, so `git commit … && git push` is checked
@@ -203,11 +197,13 @@ export function prePush(stdinText: string, repo?: string | null): number {
     try {
       [passed, problems, mode] = verify(root, { branch, rev: localSha });
     } catch (e) {
-      if (!(e instanceof GateError) && (e as NodeJS.ErrnoException).code) {
+      // As in the agents' hook: only an unusable report blocks. Git blocks a push
+      // on any non-zero exit, so every other failure skips this branch.
+      if (!(e instanceof ReportError)) {
         process.stderr.write(`ownership gate: skipped (${(e as Error).message})\n`);
         continue;
       }
-      [passed, problems, mode] = [false, [(e as Error).message], "required"];
+      [passed, problems, mode] = [false, [e.message], "required"];
     }
     if (passed) continue;
     const label = mode === "required" ? "blocked" : "warning";

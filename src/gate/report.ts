@@ -69,26 +69,31 @@ function extractDataBlock(text: string): string | null {
   return m ? m[1] : null;
 }
 
+/** A report that's there but can't be used: a verdict on the change, not a
+ *  crash. The hooks block on it, as on a missing report; any other error lets
+ *  the command run. */
+export class ReportError extends GateError {}
+
 export function parseReport(text: string): Report {
   if (!text.includes(DATA_MARKER))
-    throw new GateError("Report is missing its data block — run the check again to regenerate it.");
+    throw new ReportError("Report is missing its data block — run the check again to regenerate it.");
   const block = extractDataBlock(text);
-  if (block === null) throw new GateError("Report data block is malformed — run the check again to regenerate it.");
+  if (block === null) throw new ReportError("Report data block is malformed — run the check again to regenerate it.");
   let data: unknown;
   try {
     data = JSON.parse(block);
   } catch (e) {
-    throw new GateError(`Report data is not valid JSON (${(e as Error).message}) — run the check again.`);
+    throw new ReportError(`Report data is not valid JSON (${(e as Error).message}) — run the check again.`);
   }
   if (!(isRecord(data) && isRecord(data.files) && isRecord(data.verified) && typeof data.summary === "string")) {
-    throw new GateError("Report data has the wrong shape — run the check again to regenerate it.");
+    throw new ReportError("Report data has the wrong shape — run the check again to regenerate it.");
   }
   for (const v of Object.values(data.verified as Record<string, unknown>)) {
     if (!Array.isArray(v) || !v.every((x) => typeof x === "string"))
-      throw new GateError("Report data has the wrong shape — run the check again to regenerate it.");
+      throw new ReportError("Report data has the wrong shape — run the check again to regenerate it.");
   }
   if (data.version !== GATE_VERSION) {
-    throw new GateError(
+    throw new ReportError(
       `Report was made by gate v${String(data.version)}; this gate is v${GATE_VERSION}. If your branch is behind the base, merge it first; then run the check again.`,
     );
   }

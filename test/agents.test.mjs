@@ -4,7 +4,16 @@
 
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { readdirSync, readFileSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
@@ -556,4 +565,69 @@ test("a hook payload that starts with a UTF-8 BOM is read like any other", (t) =
     JSON.parse(start.stdout).hookSpecificOutput.additionalContext,
     /This repository uses the ownership gate/,
   );
+});
+
+/** A hook's reply that blocks: exit 2, or a deny in JSON. */
+const isDeny = (r) => r.status === 2 || /"(permissionDecision|decision)"\s*:\s*"(deny|block)"/.test(r.stdout);
+
+test("a usage error or bad input never produces a deny, from any hook entry point", (t) => {
+  const { dev } = unverifiedRepo(t);
+  const inputs = {
+    "not JSON": "git push",
+    "a JSON list": "[]",
+    empty: "",
+    "fields of the wrong type": JSON.stringify({ tool_name: 5, tool_input: "git push", cwd: 7 }),
+  };
+  for (const command of ["agent-hook", "claude-hook", "session-start"]) {
+    const runs = [
+      ["an unknown option", [command, "--bogus"], "{}"],
+      ["a missing value", [command, "--agent"], "{}"],
+      ["an unknown --agent", [command, "--agent", "no-such-tool"], "{}"],
+      ...Object.entries(inputs).map(([name, input]) => [`stdin ${name}`, [command], input]),
+    ];
+    for (const [name, args, input] of runs) {
+      const r = runGate(dev, args, { input });
+      assert.ok(!isDeny(r), `${command}, ${name}: exit ${r.status}, stdout ${r.stdout}`);
+    }
+  }
+});
+
+test("for every agent, only a verdict on the change blocks a push: a crash never does", (t) => {
+  const { dev } = unverifiedRepo(t);
+  const pushes = {
+    "claude-code": claudeCodePayload("pre-tool-use.bash.git-push.json", dev),
+    cursor: cursorPush(dev, "call"),
+  };
+  assert.deepEqual(Object.keys(pushes).sort(), [...gate.const("AGENT_IDS")].sort(), "a case for every adapter");
+  // A git that fails once the check reads the change, after it found the repo.
+  const realGit = sh(dev, "/bin/sh", ["-c", "command -v git"]).stdout.trim();
+  const failingGit = join(tmpDir(t), "bin");
+  mkdirSync(failingGit);
+  writeFileSync(
+    join(failingGit, "git"),
+    `#!/bin/sh\nfor a in "$@"; do [ "$a" = diff ] && { echo "simulated git failure" >&2; exit 128; }; done\nexec "${realGit}" "$@"\n`,
+  );
+  chmodSync(join(failingGit, "git"), 0o755);
+  const branch = sh(dev, "git", ["branch", "--show-current"]).stdout.trim();
+  let call = 0;
+  for (const [id, push] of Object.entries(pushes)) {
+    // A fresh tool call each time, so no run loses its claim to an earlier one.
+    const run = (input, env = ENV) =>
+      runGate(dev, ["agent-hook", "--agent", id], {
+        input: JSON.stringify({ ...JSON.parse(input), tool_use_id: `call-${++call}` }),
+        env,
+      });
+    assert.ok(isDeny(run(push)), `${id}: an unverified push is blocked`);
+    assert.ok(!isDeny(run(push.replaceAll(dev, `${dev}-missing`))), `${id}: the repo's folder is missing`);
+    assert.ok(!isDeny(run(push, { ...ENV, PATH: `${failingGit}:${ENV.PATH}` })), `${id}: git fails during the check`);
+    write(dev, ".learning/config.json", "{ not json");
+    commitAll(dev, "a broken config");
+    assert.ok(!isDeny(run(push)), `${id}: the config is broken`);
+    sh(dev, "git", ["reset", "-q", "--hard", "HEAD~1"]);
+    // A report that's there but can't be read is a verdict: the check ran.
+    write(dev, gate.reportRelpath(branch), "not a report\n");
+    commitAll(dev, "a broken report");
+    assert.ok(isDeny(run(push)), `${id}: a broken report blocks`);
+    sh(dev, "git", ["reset", "-q", "--hard", "HEAD~1"]);
+  }
 });

@@ -3,7 +3,7 @@
 // public interface.
 
 import { cursorProjectDir } from "./agents/cursor.js";
-import { PROJECT_HOOK_FILES, resolveAgent } from "./agents/index.js";
+import { AGENTS, PROJECT_HOOK_FILES, resolveAgent } from "./agents/index.js";
 import { collectChanges, isPlumbing } from "./changes.js";
 import { escapeMarkdown } from "./ci-summary.js";
 import { type Config, isSensitive } from "./config.js";
@@ -28,6 +28,8 @@ export function testCall(fn: string, a: unknown[]): unknown {
     CHECK_NAME: REPO_PLATFORM.checkName,
     REPO_GATE: GATE_REL,
     ALWAYS_ON,
+    // Every adapter, so a per-agent test can check it covers them all.
+    AGENT_IDS: AGENTS.map((a) => a.id),
   };
   if (fn in consts) return consts[fn];
   switch (fn) {

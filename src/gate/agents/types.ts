@@ -16,7 +16,9 @@ export type HookEvent = "shell" | "sessionStart";
 /** The core's verdict on a command: let it run, or block it with a reason the agent sees. */
 export type Decision = { readonly allow: true } | { readonly allow: false; readonly reason: string };
 
-/** What a hook prints, and how it exits. Only 0 and 2: a hook blocks only on a deliberate exit 2. */
+/** What a hook prints, and how it exits: 0 or 2. A hook blocks only on a
+ *  deliberate deny, a verdict on the change: exit 2, or a tool's own deny reply
+ *  from formatDecision. A crash, a usage error or bad input never produces one. */
 export interface HookReply {
   readonly stdout: string;
   readonly stderr: string;
