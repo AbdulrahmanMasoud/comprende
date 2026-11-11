@@ -126,7 +126,7 @@ Windows as a whole is tracked in [#10](https://github.com/AbdulrahmanMasoud/comp
 |---|---|---|---|
 | The skill (explain as you build) | yes | yes, the same `skills/` (tested in the CLI) | yes, the same `skills/` (tested in the CLI) |
 | Memory (the MCP server) | yes | yes, all 10 tools, once the server is approved (tested in the CLI) | yes, all 10 tools, from its own MCP config (tested in the CLI) |
-| The always-on line | at session start | at session start, from the plugin's `sessionStart` hook (tested in the CLI) | at session start, once the plugin's hooks are trusted in `/hooks` (tested in the CLI). After an update, the repo's session start says they need trusting again |
+| The always-on line | at session start | at session start, from the plugin's `sessionStart` hook (tested in the CLI) | at session start, once the plugin's hooks are trusted in `/hooks` (tested in the CLI). After an update, the repo's session start says they need trusting again (tested in the CLI) |
 | The push guard (the agent's `git push`) | the plugin, or the repo's `.claude/settings.json` | the plugin, or the repo's `.cursor/hooks.json`. Also `.claude/settings.json` and an imported Claude Code plugin, while Third-Party Imports is on (tested in the CLI) | the plugin, or the repo's `.codex/hooks.json`, each once trusted. The repo's keeps its trust across updates (tested in the CLI) |
 | The git `pre-push` hook | installed by the plugin at session start | the same (tested in unit tests, not in the CLI run) | the same, once the hooks are trusted (tested in the CLI) |
 | CI | the same check: it doesn't depend on the tool | the same | the same |
@@ -148,7 +148,7 @@ Each push is checked once, whatever mix of hook files and plugins is present ([S
 
 ## What's weaker in Codex than in Claude Code
 
-- **Hooks need trust.** Codex runs no plugin hook until it's trusted in `/hooks`, and again after every plugin update: it checks the plugin's whole folder. Until then it skips the hooks without a word, so the agent's push isn't checked by the hook (the git hook and CI still check it). The repo's `.codex/hooks.json` keeps its trust across updates, and in a gated repo its session start then tells the agent to say so (not yet confirmed in Codex).
+- **Hooks need trust.** Codex runs no plugin hook until it's trusted in `/hooks`, and again after every plugin update: it checks the plugin's whole folder. Until then it skips the hooks without a word, so the agent's push isn't checked by the hook (the git hook and CI still check it). The repo's `.codex/hooks.json` keeps its trust across updates, and in a gated repo its session start then tells the agent to say so (tested in the CLI).
 - **Project hooks need the project trusted too.** Each developer trusts the project once, then the repo's two hooks.
 - **Codex's `workspace-write` sandbox keeps `.git` read-only,** so the agent asks before it commits.
 - **The repo's hook needs a common shell.** Codex runs it with your `$SHELL`: it works in sh, bash, zsh, fish 3.4+ and PowerShell. In tcsh or nu that copy fails open, and the plugin's hook still checks.
