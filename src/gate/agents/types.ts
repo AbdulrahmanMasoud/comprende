@@ -5,7 +5,7 @@
 import type { ExistingFile } from "../files.js";
 
 /** The tools the gate has an adapter for. */
-export type AgentId = "claude-code" | "cursor";
+export type AgentId = "claude-code" | "cursor" | "codex";
 
 /** The environment a hook runs with, read-only. */
 export type HookEnv = Readonly<Record<string, string | undefined>>;
