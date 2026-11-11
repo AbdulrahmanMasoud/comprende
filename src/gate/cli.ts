@@ -13,21 +13,15 @@
 
 import { appendFileSync, readFileSync, readSync } from "node:fs";
 import { isRecord } from "../util.js";
-import { AGENTS, PROJECT_HOOK_FILES, resolveAgent } from "./agents/index.js";
-import { collectChanges, isPlumbing } from "./changes.js";
-import { escapeMarkdown, jobSummary } from "./ci-summary.js";
+import { AGENTS } from "./agents/index.js";
+import { jobSummary } from "./ci-summary.js";
 import { deleteReportInputFile, formatStatus, save, status, verify } from "./commands.js";
-import { type Config, isSensitive } from "./config.js";
-import { samePath } from "./files.js";
-import { GATE_FILES } from "./gate-files.js";
 import { currentBranch, repoRoot } from "./git.js";
-import { ALWAYS_ON, agentHook, installHooks, prePush, sessionStart } from "./hooks.js";
+import { agentHook, installHooks, prePush, sessionStart } from "./hooks.js";
 import { install } from "./install.js";
 import { type AnnotationKind, ciPlatform, REPO_PLATFORM } from "./platforms/index.js";
-import { addProjectHook } from "./project-hooks.js";
-import { isPushCommand } from "./push-detect.js";
-import { parseReport, readReport, renderReport, reportPath } from "./report.js";
-import { GATE_REL, GATE_VERSION, GateError, sorted } from "./shared.js";
+import { GATE_VERSION, GateError } from "./shared.js";
+import { testCall } from "./test-hooks.js";
 
 const HELP = `Ownership gate (comprende)
 
@@ -105,77 +99,6 @@ function parseArgs(argv: string[]): Args {
 
 class UsageError extends Error {}
 
-/** Show `messages` as annotations in the CI that's running, if it has them. */
-function annotate(kind: AnnotationKind, messages: string[]): void {
-  process.stdout.write(ciPlatform(process.env).annotations(kind, messages, process.env));
-}
-
-/** Internal functions, JSON in / JSON out, for the black-box test suite. */
-function testCall(fn: string, a: unknown[]): unknown {
-  const s = (i: number) => (a[i] === null || a[i] === undefined ? null : String(a[i]));
-  const consts: Record<string, unknown> = {
-    GATE_VERSION,
-    GATE_FILES,
-    // The text install writes into a repo with no CI config yet.
-    WORKFLOW: REPO_PLATFORM.ciConfig.withGateJob(null, REPO_PLATFORM.ciConfig.path).content,
-    CHECK_NAME: REPO_PLATFORM.checkName,
-    REPO_GATE: GATE_REL,
-    ALWAYS_ON,
-  };
-  if (fn in consts) return consts[fn];
-  switch (fn) {
-    case "collect_changes": {
-      const [c, u, mb] = collectChanges(repoRoot(s(0)), String(a[1]), s(2));
-      return [c, sorted(u), mb];
-    }
-    case "read_report":
-      return readReport(repoRoot(s(0)), String(a[1]), s(2));
-    case "merge_claude_settings": {
-      // The test suite's name for adding the hook to a .claude/settings.json at any path.
-      const file = PROJECT_HOOK_FILES.find((f) => f.path === ".claude/settings.json");
-      return file ? addProjectHook(String(a[0]), file) : null;
-    }
-    case "ci_platform": {
-      // [env]: the platform whose CI this is, and what its environment says.
-      const env = (a[0] ?? {}) as Record<string, string>;
-      const p = ciPlatform(env);
-      return { id: p.id, context: p.ciContext(env), summaryFile: p.reviewerSummaryFile(env) };
-    }
-    case "resolve_agent": {
-      // [payload JSON text, env, --agent]: which adapter runs, and what it reads.
-      const env = (a[1] ?? {}) as Record<string, string>;
-      let payload: unknown;
-      try {
-        payload = JSON.parse(String(a[0]));
-      } catch {
-        return null;
-      }
-      const agent = resolveAgent(payload, env, s(2));
-      return (
-        agent && { id: agent.id, command: agent.shellCommand(payload), projectDir: agent.projectDir(payload, env) }
-      );
-    }
-    case "is_push_command":
-      return isPushCommand(String(a[0]));
-    case "is_plumbing":
-      return isPlumbing(String(a[0]), a[1] === undefined ? undefined : String(a[1]));
-    case "is_sensitive":
-      return isSensitive(String(a[0]), String(a[1]), a[2] as Config);
-    case "md_safe":
-      return escapeMarkdown(String(a[0]));
-    case "report_relpath":
-      return reportPath(String(a[0]));
-    case "render_report":
-      return renderReport(a[0] as Parameters<typeof renderReport>[0]);
-    case "parse_report":
-      return parseReport(String(a[0]));
-    case "same_path":
-      return samePath(String(a[0]), String(a[1]), String(a[2]));
-    default:
-      throw new GateError(`unknown test function ${fn}`);
-  }
-}
-
 export function main(argv: string[]): number {
   let args: Args;
   try {
@@ -187,6 +110,10 @@ export function main(argv: string[]): number {
   const { cmd, opts, rest } = args;
   const o = (k: string) => (typeof opts[k] === "string" ? (opts[k] as string) : null);
   const out = (s: string) => process.stdout.write(`${s}\n`);
+  // The CI this runs in, if any: where annotations and the reviewer summary go.
+  const platform = ciPlatform(process.env);
+  const annotate = (kind: AnnotationKind, messages: string[]) =>
+    process.stdout.write(platform.annotations(kind, messages, process.env));
   try {
     switch (cmd) {
       case "":
@@ -217,7 +144,7 @@ export function main(argv: string[]): number {
         return 0;
       }
       case "verify": {
-        const ci = ciPlatform(process.env).ciContext(process.env);
+        const ci = platform.ciContext(process.env);
         let labels: string[] = [...(ci.labels ?? [])];
         const lj = o("labels-json");
         if (lj?.trim()) {
@@ -236,7 +163,7 @@ export function main(argv: string[]): number {
           out(JSON.stringify({ passed, messages, mode }));
           return 0;
         }
-        const summaryPath = ciPlatform(process.env).reviewerSummaryFile(process.env);
+        const summaryPath = platform.reviewerSummaryFile(process.env);
         if (summaryPath) {
           try {
             const root = repoRoot(o("repo"));

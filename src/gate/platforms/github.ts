@@ -7,6 +7,8 @@ import { type RunResult, run } from "../run.js";
 import { GATE_REL, GateError } from "../shared.js";
 import type { Platform, ProtectOptions } from "./types.js";
 
+const WORKFLOW_PATH = ".github/workflows/ownership-check.yml";
+
 const WORKFLOW = `name: Ownership check
 
 on:
@@ -171,11 +173,11 @@ export const github: Platform = {
   detects: (env) => env.GITHUB_ACTIONS === "true",
 
   ciConfig: {
-    path: ".github/workflows/ownership-check.yml",
-    withGateJob: (existing, shownPath) =>
+    path: WORKFLOW_PATH,
+    withGateJob: (existing) =>
       existing === null
-        ? { content: WORKFLOW, message: `wrote ${shownPath}` }
-        : { message: `${shownPath} exists (kept)` },
+        ? { content: WORKFLOW, message: `wrote ${WORKFLOW_PATH}` }
+        : { message: `${WORKFLOW_PATH} exists (kept)` },
   },
 
   checkName: CHECK_NAME,
@@ -190,7 +192,8 @@ export const github: Platform = {
     env.GITHUB_ACTIONS === "true" ? messages.map((m) => `::${kind} title=Ownership check::${m}\n`).join("") : "",
 
   codeowners: {
-    path: ".github/CODEOWNERS",
+    // GitHub's search order: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+    paths: [".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"],
     ownerPattern: /^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/,
     ownerHint: "a GitHub @user, @org/team, or an email",
     reviewSetting: "'Require review from Code Owners'",
@@ -199,7 +202,7 @@ export const github: Platform = {
   cli: {
     program: "gh",
     optionsWithValue: new Set(["-R", "--repo", "--hostname"]),
-    publishes: [
+    pullRequestCommands: [
       ["pr", "create"],
       ["pr", "merge"],
     ],

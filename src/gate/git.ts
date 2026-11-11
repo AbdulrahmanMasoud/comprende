@@ -6,7 +6,7 @@ import { devNull, homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { isFile } from "../util.js";
 import type { Config } from "./config.js";
-import { ciPlatform } from "./platforms/index.js";
+import { ciHeadBranch } from "./platforms/index.js";
 import { type RunResult, run } from "./run.js";
 import { GateError, sorted, splitLines } from "./shared.js";
 
@@ -113,7 +113,7 @@ export function resolveBase(root: string, cfg: Pick<Config, "base">, base?: stri
 
 export function currentBranch(root: string, branch?: string | null): string {
   if (branch) return branch;
-  const fromCi = ciPlatform(process.env).ciContext(process.env).headBranch;
+  const fromCi = ciHeadBranch(process.env);
   if (fromCi) return fromCi;
   const name = git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], { check: false }).trim();
   if (!name) throw new GateError("Detached HEAD: pass --branch <name>.");

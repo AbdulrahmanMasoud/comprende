@@ -34,7 +34,7 @@ actionlint                        # the GitHub workflows
   - `git.ts` (safe git runner, temp index, inert repo config), `config.ts` (config, validation, rules from the base)
   - `changes.ts` (fingerprints, plumbing, 3-way replay, states, small changes), `report.ts` (the report file)
   - `commands.ts` (status, save, verify), `push-detect.ts`, `hooks.ts`, `ci-summary.ts` (the reviewer summary, in markdown), `cli.ts`
-  - `install.ts` (writes the gate's files into a repo), `codeowners.ts` (CODEOWNERS entries for the gate files), `run.ts` (spawning a program without a shell)
+  - `install.ts` (writes the gate's files into a repo), `codeowners.ts` (CODEOWNERS entries for the gate files), `run.ts` (spawning a program without a shell), `test-hooks.ts` (`__test`, the internals the test suite calls)
   - `gate-files.ts` (the files that control the gate), `project-hooks.ts` (safe reads and writes of the agents' repo-level hook files)
   - `agents/`: one adapter per AI tool behind one interface. `types.ts` (the `Agent` interface), `index.ts` (the registry and the resolve step), `claude-code.ts`, `cursor.ts`, and what both use: `claude-format.ts` (the payload) and `claude-settings.ts` (the `.claude/settings.json` hook file). `hook-replies.ts` holds the core's default replies. How to add a tool: CONTRIBUTING.md, "Adding an AI tool"
   - `platforms/`: one adapter per git platform behind one interface. `types.ts` (the `Platform` interface), `index.ts` (the registry, the repo's platform and the CI's), `github.ts` (the Actions workflow, the job summary and annotations, CODEOWNERS, the ruleset through `gh`). How to add a platform: CONTRIBUTING.md, "Adding a git platform"

@@ -11,8 +11,8 @@ export type PlatformId = "github";
 export type CiEnv = Readonly<Record<string, string | undefined>>;
 
 /** What CI says about the change it's checking. A null field means CI doesn't
- *  say: the command's own flags (--base, --branch, --labels-json) decide, and
- *  they win when given. */
+ *  say. The command's own flags (--base, --branch, --labels-json) win when
+ *  they're given; an empty --labels-json counts as not given. */
 export interface CiContext {
   /** The ref to compare against, as `--base` takes it (e.g. "origin/main"). */
   readonly baseRef: string | null;
@@ -30,6 +30,10 @@ export interface ProtectOptions {
   readonly codeOwners: boolean;
 }
 
+/** The CI methods (detects, ciContext, reviewerSummaryFile, annotations) may be
+ *  called outside this platform's CI: ciPlatform falls back to the repo's
+ *  platform. Each reads only its own CI's variables, and returns null or "" when
+ *  they aren't set. */
 export interface Platform {
   /** For the registry, and later for the repo's config. */
   readonly id: PlatformId;
@@ -45,7 +49,7 @@ export interface Platform {
      *  content means leave the file alone. Pure: the core does the write. A
      *  platform whose CI lives in one shared file (GitLab's .gitlab-ci.yml)
      *  merges its job in here, instead of writing a file of its own. */
-    withGateJob(existing: ExistingFile, shownPath: string): { readonly content?: string; readonly message: string };
+    withGateJob(existing: ExistingFile): { readonly content?: string; readonly message: string };
   };
 
   /** The name CI reports the check under, which protect makes required. */
@@ -65,7 +69,9 @@ export interface Platform {
   /** CODEOWNERS: where the file goes, which owners it accepts, and the setting
    *  that makes code-owner review required. */
   readonly codeowners: {
-    readonly path: string;
+    /** Where the platform looks for the file, in its search order. install
+     *  writes to the first, for now (#33). */
+    readonly paths: readonly string[];
     readonly ownerPattern: RegExp;
     /** For the error message, e.g. "a GitHub @user, @org/team, or an email". */
     readonly ownerHint: string;
@@ -80,7 +86,7 @@ export interface Platform {
     /** Global options that take a value, which come before the subcommand. */
     readonly optionsWithValue: ReadonlySet<string>;
     /** Subcommand pairs, such as ["pr", "create"]. */
-    readonly publishes: readonly (readonly [string, string])[];
+    readonly pullRequestCommands: readonly (readonly [string, string])[];
   };
 
   /** Make the check required on the default branch, in the repo at `root`.

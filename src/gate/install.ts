@@ -56,7 +56,10 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
 
   const ci = REPO_PLATFORM.ciConfig;
   const ciPath = join(root, ci.path);
-  const { content, message } = ci.withGateJob(existsSync(ciPath) ? readExisting(ciPath) : null, ci.path);
+  // existsSync, as install always has for the workflow: a dangling symlink there
+  // counts as missing and is replaced. Repo hook files use lstat instead
+  // (project-hooks.ts), so a symlink is never written through.
+  const { content, message } = ci.withGateJob(existsSync(ciPath) ? readExisting(ciPath) : null);
   if (content !== undefined) atomicWrite(ciPath, content);
   done.push(message);
 

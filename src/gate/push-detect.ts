@@ -133,7 +133,8 @@ export function isPushCommand(command: string, depth = 0): boolean {
       if (!cli) continue;
       let j = 1;
       while (j < tokens.length && tokens[j].startsWith("-")) j += cli.optionsWithValue.has(tokens[j]) ? 2 : 1;
-      if (j + 1 < tokens.length && cli.publishes.some(([a, b]) => tokens[j] === a && tokens[j + 1] === b)) return true;
+      if (j + 1 < tokens.length && cli.pullRequestCommands.some(([a, b]) => tokens[j] === a && tokens[j + 1] === b))
+        return true;
     }
   }
   return false;

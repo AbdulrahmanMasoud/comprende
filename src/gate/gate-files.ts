@@ -10,5 +10,5 @@ export const GATE_FILES: readonly string[] = [
   GATE_REL,
   REPO_PLATFORM.ciConfig.path,
   ...PROJECT_HOOK_FILES.map((f) => f.path),
-  REPO_PLATFORM.codeowners.path,
+  REPO_PLATFORM.codeowners.paths[0],
 ];

@@ -13,4 +13,8 @@ export const REPO_PLATFORM: Platform = github;
 /** The platform whose CI is running, else the repo's platform. */
 export const ciPlatform = (env: CiEnv): Platform => PLATFORMS.find((p) => p.detects(env)) ?? REPO_PLATFORM;
 
+/** The pull or merge request's branch, when CI names it. git.ts's currentBranch
+ *  asks this, so status, save, verify and the report all see CI's branch name. */
+export const ciHeadBranch = (env: CiEnv): string | null => ciPlatform(env).ciContext(env).headBranch;
+
 export type { AnnotationKind, CiContext, CiEnv, Platform, PlatformId, ProtectOptions } from "./types.js";

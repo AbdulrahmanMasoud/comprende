@@ -10,7 +10,8 @@ import { REPO_PLATFORM } from "./platforms/index.js";
 import { GateError, splitLines } from "./shared.js";
 
 export function setUpCodeowners(root: string, owner?: string | null): string {
-  const { path: rel, ownerPattern, ownerHint, reviewSetting } = REPO_PLATFORM.codeowners;
+  const { paths, ownerPattern, ownerHint, reviewSetting } = REPO_PLATFORM.codeowners;
+  const rel = paths[0]; // #33: should be the first one that exists
   const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
   if (!owner) {
     return (
