@@ -38,7 +38,7 @@ export const codex: Agent = {
   // session start still runs, and says this, when the plugin isn't running: a
   // teammate who never installed it, or hooks skipped after an update.
   pluginNotRunningHint:
-    "Comprende's Codex plugin isn't running here: install it (`codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`), or, if it's installed, trust its hooks again in `/hooks`, since Codex skips them after every update.",
+    "install the plugin (`codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`), or, if it's installed, trust its hooks in `/hooks`: Codex skips them until trusted, and after every update.",
 
   // A tool call's id, or the session's. With two plugin copies in one session (the
   // Codex plugin, and a Claude Code copy brought over by `/import`), both detect a

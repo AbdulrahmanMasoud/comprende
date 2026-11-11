@@ -248,7 +248,7 @@ var codex = {
   // The repo's .codex/hooks.json keeps its trust across plugin updates, so its
   // session start still runs, and says this, when the plugin isn't running: a
   // teammate who never installed it, or hooks skipped after an update.
-  pluginNotRunningHint: "Comprende's Codex plugin isn't running here: install it (`codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`), or, if it's installed, trust its hooks again in `/hooks`, since Codex skips them after every update.",
+  pluginNotRunningHint: "install the plugin (`codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`), or, if it's installed, trust its hooks in `/hooks`: Codex skips them until trusted, and after every update.",
   // A tool call's id, or the session's. With two plugin copies in one session (the
   // Codex plugin, and a Claude Code copy brought over by `/import`), both detect a
   // tool call as Codex's and claim it, so a push is checked once. A session start
@@ -1915,7 +1915,7 @@ var nodeNote = (app) => `Tell the user in one line that Comprende needs Node.js 
 var PLUGIN_LINE_START = "Comprende is installed";
 var ALWAYS_ON = `${PLUGIN_LINE_START}. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.`;
 var QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
-var pluginNotRunningNote = (agent, hint) => `If this session didn't also get a note starting with "${PLUGIN_LINE_START}", Comprende's plugin isn't running in ${agent.names.app}: either it isn't installed, or its hooks were skipped. Tell the user once, in exactly this line: "${hint}"`;
+var pluginNotRunningNote = (agent, hint) => `If this session didn't also get a note starting with "${PLUGIN_LINE_START}", Comprende's plugin isn't running in ${agent.names.app}: either it isn't installed, or its hooks were skipped. Tell the user once, in one line, in their language, with both options: ${hint}`;
 var withLfEndings = (bytes) => Buffer.from(bytes.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
 function gateCopyDifference(repoCopy, pluginCopy) {
   if (repoCopy.equals(pluginCopy)) return "none";

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Codex: the repo's note no longer tells a teammate without the plugin to trust its hooks again.** In a gated repo with only the repo's `.codex/hooks.json`, a real run had the agent say "Codex skips Comprende's plugin hooks after every plugin update until they're trusted again in `/hooks`", and not how to install the plugin. The note now says the plugin isn't running, and gives the agent one line for the user: install it, or, if it's installed, trust its hooks again in `/hooks`.
+- **Codex: the repo's note no longer tells a teammate without the plugin to trust its hooks again.** In a real run with only the repo's `.codex/hooks.json`, the agent told the user to re-trust hooks they never had, and not how to install the plugin. The note now says the plugin isn't running, either not installed or its hooks skipped, and has the agent give both options in one line: install it, or trust its hooks in `/hooks`.
 
 ## 0.4.1
 

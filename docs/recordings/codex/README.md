@@ -10,7 +10,7 @@ They live in `docs/`, not `test/fixtures/`: no test reads them. Fixtures are hoo
 - **Isolation:** a throwaway `HOME` and `CODEX_HOME`, holding only a copy of the maintainer's `auth.json`, deleted when the run ended.
 - **The plugin:** this repo, installed with `codex plugin marketplace add` and `codex plugin add`, at the code of [#49](https://github.com/AbdulrahmanMasoud/comprende/pull/49) plus the install PR's branch.
 - **`0.4.1-after-update/`:** the same setup, run by the maintainer with `--only after-update`, at the code of the 0.4.1 release ([#53](https://github.com/AbdulrahmanMasoud/comprende/pull/53), with [#52](https://github.com/AbdulrahmanMasoud/comprende/pull/52) and [#54](https://github.com/AbdulrahmanMasoud/comprende/pull/54)).
-- **`0.4.1-no-plugin/`:** the same, with `--only no-plugin`, at 0.4.1: Codex without the plugin, and only the repo's `.codex/hooks.json` trusted.
+- **`0.4.1-no-plugin/`:** the 0.4.1 gate, run with the `no-plugin` scenario from the branch that fixed it: Codex without the plugin, and only the repo's `.codex/hooks.json` trusted.
 - **The hooks:** trusted the way `/hooks` does it, through Codex's app server.
 - **The demo:** a gated repo with a local bare remote, and an unverified `sum(xs)` on `feature/sum`.
 - **The replies:** each `.reply.md` holds every agent message of one turn, from `--json`. The demo's paths were replaced with `/work/…`. Nothing else was changed, and nothing personal is in them.
@@ -43,7 +43,6 @@ They live in `docs/`, not `test/fixtures/`: no test reads them. Fixtures are hoo
 `0.4.1-no-plugin/results.json`: 2 passed, 1 failed. Without the plugin, only the repo's session start ran.
 
 - **"without the plugin: the agent says how to install it" failed.** The agent told the user "Codex skips Comprende's plugin hooks after every plugin update until they're trusted again in `/hooks`". The plugin had never been installed, and the reply never said how to install it. The note now covers both cases in one line.
-- **Two more things the run shows, not fixed here:**
+- **Two more things the run shows, not fixed here (follow-ups):**
   - With no plugin, there's no skill, and the agent answered its own ownership-check questions, then saved a report with a summary it wrote. A headless run has no one to ask.
   - The gate's note points to the skill's `references/ownership-check.md`, which isn't installed. The agent searched `/tmp` and read a copy left by another tool's test run on the same machine.
-

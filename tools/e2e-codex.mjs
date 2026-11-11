@@ -463,11 +463,10 @@ function afterUpdate() {
 function noPlugin() {
   const demo = makeDemo("demo-no-plugin");
   const keys = trust(demo.app);
-  report(
-    "without the plugin: only the repo's two hooks are there to trust",
-    keys.length === 2 && keys.every((k) => k.includes(".codex/hooks.json")),
-    keys.join(", "),
-  );
+  // A reused --out keeps the plugin a full run installed: then this scenario can't show anything.
+  if (keys.some((k) => !k.includes(".codex/hooks.json")))
+    throw new Error(`the plugin is installed in ${CODEX_HOME}: run no-plugin with a fresh --out`);
+  report("without the plugin: only the repo's two hooks are there to trust", keys.length === 2, keys.join(", "));
   const from = gateRuns().length;
   const t = turn(
     "11-no-plugin-code",
@@ -485,17 +484,20 @@ function noPlugin() {
 
 // In run order. no-plugin comes first: the plugin, once installed, stays for the rest.
 const SCENARIOS = [
-  { name: "no-plugin", run: noPlugin, plugin: false },
-  { name: "main", run: main, plugin: true },
-  { name: "explain", run: explain, plugin: true },
-  { name: "repo-hook", run: repoHook, plugin: true },
-  { name: "after-update", run: afterUpdate, plugin: true },
+  { name: "no-plugin", run: noPlugin, needsPlugin: false },
+  { name: "main", run: main, needsPlugin: true },
+  { name: "explain", run: explain, needsPlugin: true },
+  { name: "repo-hook", run: repoHook, needsPlugin: true },
+  { name: "after-update", run: afterUpdate, needsPlugin: true },
 ];
 try {
+  // Inside the try, so the login copy is still deleted.
+  const unknown = ONLY?.filter((name) => !SCENARIOS.some((s) => s.name === name)) ?? [];
+  if (unknown.length) throw new Error(`no such scenario: ${unknown.join(", ")}`);
   let installed = false;
-  for (const { name, run, plugin } of SCENARIOS) {
+  for (const { name, run, needsPlugin } of SCENARIOS) {
     if (ONLY && !ONLY.includes(name)) continue;
-    if (plugin && !installed) {
+    if (needsPlugin && !installed) {
       installPlugin();
       installed = true;
     }
