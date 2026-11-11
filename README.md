@@ -6,7 +6,7 @@
 
 <p align="center"><a href="README.ar.md">Arabic</a></p>
 
-Comprende is a plugin for Claude Code and Cursor. It does two things:
+Comprende is a plugin for Claude Code, Cursor and Codex. It does two things:
 
 1. **The agent explains the code it writes**, briefly and in your language, but only the parts worth explaining: new APIs, non-obvious logic, risks. This works in every project.
 2. **The ownership check** (optional, per repo). Before your code is pushed, the agent asks you a few questions about it, and you write the PR summary. Without that, the push and the merge are blocked.
@@ -19,7 +19,7 @@ Comprende is a plugin for Claude Code and Cursor. It does two things:
 
 ## Install
 
-You need [Node.js](https://nodejs.org) 20+. Install Comprende in one place, Claude Code or Cursor, not both (Cursor already runs your Claude Code plugins).
+You need [Node.js](https://nodejs.org) 20+. Install it in each tool you use, except Cursor next to Claude Code: Cursor already runs your Claude Code plugins.
 
 ### Claude Code
 
@@ -44,9 +44,18 @@ git clone https://github.com/AbdulrahmanMasoud/comprende.git ~/.cursor/plugins/l
 
 Then restart Cursor, or run **Developer: Reload Window**. If Cursor asks, approve the **comprende** MCP server: it remembers what you already know. To update: `git -C ~/.cursor/plugins/local/comprende pull`, then reload.
 
-Already have it in Claude Code? Skip this. Cursor runs your Claude Code plugins too (its Third-Party Imports setting, on by default), so a second copy would load the skill twice. If that setting is off, install it in Cursor too. More in [Comprende in Cursor](docs/agents.md#what-works-where-030).
+Already have it in Claude Code? Skip this. Cursor runs your Claude Code plugins too (its Third-Party Imports setting, on by default), so a second copy would load the skill twice. If that setting is off, install it in Cursor too. More in [Comprende in other tools](docs/agents.md#what-works-where).
 
-On Windows, Comprende is experimental in both tools ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
+### Codex
+
+```bash
+codex plugin marketplace add AbdulrahmanMasoud/comprende
+codex plugin add comprende@comprende
+```
+
+Then open Codex in a repo, type `/hooks`, and trust Comprende's two hooks. Codex asks again after every update (`codex plugin marketplace upgrade comprende`), and runs none of its hooks until you do. So until then the agent's push isn't checked, though the git hook and CI still check it.
+
+On Windows, Comprende is experimental in all three tools ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 
 ## 1. Explanations: just use Claude
 
@@ -78,9 +87,9 @@ Claude remembers what you already know in `~/.comprende/`, on your machine only.
 ### Turn it on (team lead, once per repo)
 
 1. Open Claude in the repo and say: **"Enable the ownership gate in this repo."**
-2. Claude opens a PR that adds the gate (`.learning/`), a CI check, and hooks for Claude Code and Cursor. Review `.learning/config.json`, mainly `sensitive`: paths like auth or payments, which always get questions. Then merge it.
+2. Claude opens a PR that adds the gate (`.learning/`), a CI check, and hooks for Claude Code, Cursor and Codex. Review `.learning/config.json`, mainly `sensitive`: paths like auth or payments, which always get questions. Then merge it.
 3. Make the check required: run `node .learning/gate.mjs protect --apply`, or ask Claude to. It needs admin rights on GitHub.
-4. Ask your team to install the plugin, in Claude Code or Cursor. That's all they need: their first session in the repo sets up the rest.
+4. Ask your team to install the plugin, in Claude Code, Cursor or Codex. That's all they need: their first session in the repo sets up the rest.
 
 ### Use it (every developer)
 
@@ -126,6 +135,14 @@ A real session, shortened:
 > - Report saved: `.learning/checks/feature%2Fsum.md`
 > - Committed: `91e3afe` …
 > - Pushed: `feature/sum` → `origin/feature/sum`
+
+**In Codex**, too. A real run, shortened:
+
+> **You:** Run exactly this shell command once … `git push -u origin feature/sum`. Quote any block message word for word.
+>
+> **Codex:** … Blocked by the ownership gate:
+>
+> > No ownership report for branch 'feature/sum' (.learning/checks/feature%2Fsum.md). Ask Codex to run the ownership check ("check me"), then commit the report. …
 
 **If you skip the check**, the agent won't push, `git push` is blocked by a git hook, and CI fails the PR. This is what you see in a terminal:
 
@@ -173,7 +190,7 @@ Then, in Claude (or open `/tmp/comprende-try/app` in Cursor, with the plugin ins
 
 - [**The gate for teams**](docs/teams.md): setup by hand, settings, small changes, emergencies
 - [**How it works**](docs/how-it-works.md): requirements, fingerprints, the four layers, honest limits
-- [**Comprende in Cursor**](docs/agents.md#what-works-where-030): what works where, what's weaker, and a checklist for the IDE
+- [**Comprende in Cursor and Codex**](docs/agents.md#what-works-where): what works where, what's weaker, and checklists to try them by hand
 - [**Contributing**](CONTRIBUTING.md#contributions): pull requests from outside aren't accepted right now, but issues and feedback are welcome
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 

@@ -45,16 +45,17 @@ node <plugin>/dist/gate.mjs install --upgrade --repo .
 
 CI runs the base branch's gate. So when an upgrade brings something the older gate doesn't know yet, CI still checks the upgrade PR the old way. From 0.3.0, the upgrade also adds `.cursor/hooks.json`, and from 0.4.0 `.codex/hooks.json`. Until the base branch runs a gate that knows each as one of its own files, CI counts it as a change: one small-change question, or the skip label. For example, the `.gitattributes` line from 0.2.1 counts as a change until the upgrade is merged: a one-line small change, so one question. Or use the skip label. The local checks follow the same rule, so they never pass what CI then fails.
 
-## Mixed teams: Claude Code and Cursor
+## Mixed teams: Claude Code, Cursor and Codex
 
-One repo works for everyone. `install` writes the hooks for both tools, and the report is the same file whichever tool saved it, so CI checks it the same way.
+One repo works for everyone. `install` writes the hooks for each tool, and the report is the same file whichever tool saved it, so CI checks it the same way.
 
-- **Each developer installs the plugin in the tool they use,** in one place only ([Install](../README.md#install)). Someone with Comprende in Claude Code who also opens Cursor already has it there: Cursor runs Claude Code's plugins while its Third-Party Imports setting is on.
-- **Without the plugin,** the repo's own hook files still stop the agent's push: `.claude/settings.json` in Claude Code, `.cursor/hooks.json` in Cursor. Developers without the plugin run `node .learning/gate.mjs install-hooks` once per clone to get the git hook.
+- **Each developer installs the plugin in the tool they use** ([Install](../README.md#install)). Someone with Comprende in Claude Code who also opens Cursor already has it there: Cursor runs Claude Code's plugins while its Third-Party Imports setting is on. Codex doesn't, so it needs its own install.
+- **Without the plugin,** the repo's own hook files still stop the agent's push: `.claude/settings.json` in Claude Code, `.cursor/hooks.json` in Cursor, `.codex/hooks.json` in Codex (once trusted). Developers without the plugin run `node .learning/gate.mjs install-hooks` once per clone to get the git hook.
 - **Each push is checked once,** whichever hook files and plugins are present ([how](agents.md#step-aside-rules)).
-- **Repos set up before 0.3.0** get `.cursor/hooks.json` with `install --upgrade` ([Upgrading the gate](#upgrading-the-gate)).
+- **Codex users trust the hooks.** Once per repo, the project and its `.codex/hooks.json`, and the plugin's two hooks in `/hooks` after every plugin update. Codex skips untrusted hooks without a word.
+- **Repos set up before 0.3.0 or 0.4.0** get `.cursor/hooks.json` and `.codex/hooks.json` with `install --upgrade` ([Upgrading the gate](#upgrading-the-gate)).
 - **Cursor's agent signs its commits** with `Co-authored-by: Cursor <cursoragent@cursor.com>`. If the team doesn't want that line, each Cursor user turns off `attribution.attributeCommitsToAgent`.
-- **What's weaker in Cursor** is listed in [docs/agents.md](agents.md#whats-weaker-in-cursor-than-in-claude-code).
+- **What's weaker** in [Cursor](agents.md#whats-weaker-in-cursor-than-in-claude-code) and in [Codex](agents.md#whats-weaker-in-codex-than-in-claude-code) is listed in docs/agents.md.
 
 ## Make the check required
 

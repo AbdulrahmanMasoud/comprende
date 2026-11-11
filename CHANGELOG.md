@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.0
+
+- **Codex support** ([#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)). Comprende runs in Codex: the skill, the memory server, the always-on line and the push guard, from a Codex plugin (`.codex-plugin/`) or the repo's own `.codex/hooks.json`. To install: `codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`, then trust its hooks in `/hooks` ([README](README.md#codex)).
+  - **Trust the hooks again after every update.** Codex skips a plugin's hooks without a word until they're trusted again. The repo's `.codex/hooks.json` keeps its trust, and in a gated repo the skill tells the user when the session got no Comprende note.
+  - **Windows is experimental** ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)): PowerShell turns a block's exit 2 into 1, so in Cursor and Codex on Windows the push guard fails open. The git hook and CI still check.
+  - What works where, what's weaker in Codex, and a checklist to try it by hand: [docs/agents.md](docs/agents.md#what-works-where). Mixed teams: [docs/teams.md](docs/teams.md#mixed-teams-claude-code-cursor-and-codex).
 - **`install` writes `.codex/hooks.json` too** (part of [#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)): the gate's shell hook for teammates on Codex. Its command finds the repo's root with `git rev-parse`, since Codex may run from a subfolder, and it fails open without `git` or `node`. Each developer trusts the project and the hook once in Codex. The trust lasts across gate upgrades, since the command doesn't change. `install` merges it into an existing file, and `install --upgrade` adds it.
   - **Upgrading:** until the base branch runs a gate that knows `.codex/hooks.json` as one of its own files (the `codex-hooks` feature), CI counts the new file as a change: one small-change question, or the skip label.
   - **One check per push in Codex, too:** the plugin and `.codex/hooks.json` claim the push, and only the first checks it.
@@ -22,7 +28,7 @@
 - **Cursor support** ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)). Comprende runs in Cursor: the skill, the memory server, the always-on line and the push guard, from a Cursor plugin or from the repo's own `.cursor/hooks.json`. To install it, clone it into `~/.cursor/plugins/local/comprende` ([README](README.md#cursor)).
   - **Install it in one place.** Cursor also runs your Claude Code plugins, so with both the skill loads twice.
   - **Windows is experimental** ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)): untested in Cursor, which runs hooks in PowerShell.
-  - What works where, what's weaker in Cursor, and a checklist for the IDE: [docs/agents.md](docs/agents.md#what-works-where-030). Mixed teams: [docs/teams.md](docs/teams.md#mixed-teams-claude-code-and-cursor).
+  - What works where, what's weaker in Cursor, and a checklist for the IDE: [docs/agents.md](docs/agents.md#what-works-where). Mixed teams: [docs/teams.md](docs/teams.md#mixed-teams-claude-code-cursor-and-codex).
 - **JSON that starts with a UTF-8 BOM is read like any other**, in a hook's payload and in `save --input`. Cursor's CLI on Windows has sent a payload with one. The hook then stepped aside: the push went unchecked, and the session got no gate context. PowerShell 5.1 writes files with one, and `save --input` then refused the report as invalid JSON.
 - **`install` writes `.cursor/hooks.json` too** (part of [#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)): the gate's shell hook and session start for teammates on Cursor, as plain `node .learning/gate.mjs … --agent cursor` lines that also run in PowerShell. It merges into an existing file, keeping its hooks, and `install --upgrade` adds it to repos that already have the gate.
   - **Upgrading:** until the base branch runs a gate that knows `.cursor/hooks.json` as one of its own files (the `cursor-hooks` feature), CI counts the new file as a change. The upgrade PR needs one small-change question, or the skip label.

@@ -10,7 +10,7 @@
 
 **Comprende?** يعني "فاهم؟". وده بالظبط السؤال اللي الأداة دي بتسأله.
 
-Comprende هو plugin لـ Claude Code و Cursor، وبيعمل حاجتين:
+Comprende هو plugin لـ Claude Code و Cursor و Codex، وبيعمل حاجتين:
 
 1. **الـ agent بيشرح الكود اللي بيكتبه**، باختصار وبلغتك، بس في الحتت اللي تستاهل: APIs جديدة، logic مش واضح، أو مخاطر. ده شغال في أي مشروع.
 2. **الـ ownership check** (اختياري، لكل repo لوحده). قبل ما الكود بتاعك يتعمله push، الـ agent بيسألك كام سؤال عنه، وإنت بتكتب وصف الـ PR بنفسك. ومن غير كده، الـ push والـ merge بيتمنعوا.
@@ -23,7 +23,7 @@ Comprende هو plugin لـ Claude Code و Cursor، وبيعمل حاجتين:
 
 ## التسطيب
 
-محتاج [Node.js](https://nodejs.org) 20+. سطّب Comprende في مكان واحد بس: Claude Code أو Cursor، مش الاتنين (Cursor بيشغّل الـ plugins بتاعة Claude Code أصلاً).
+محتاج [Node.js](https://nodejs.org) 20+. سطّبه في كل أداة بتستخدمها، إلا Cursor لو عندك Claude Code: Cursor بيشغّل الـ plugins بتاعة Claude Code أصلاً.
 
 ### Claude Code
 
@@ -48,9 +48,18 @@ git clone https://github.com/AbdulrahmanMasoud/comprende.git ~/.cursor/plugins/l
 
 وبعدين اقفل Cursor وافتحه تاني، أو شغّل **Developer: Reload Window**. ولو Cursor سألك، وافق على الـ MCP server اللي اسمه **comprende**: ده اللي بيفتكر إنت عارف إيه. وعشان تعمل update: `git -C ~/.cursor/plugins/local/comprende pull`، وبعدين اعمل reload.
 
-مسطّبه في Claude Code أصلاً؟ يبقى مش محتاج الخطوة دي. Cursor بيشغّل الـ plugins بتاعة Claude Code كمان (إعداد Third-Party Imports، وهو شغّال من الأول)، فلو سطّبته تاني الـ skill هيتحمّل مرتين. ولو الإعداد ده مقفول، سطّبه في Cursor كمان. التفاصيل في [Comprende في Cursor](docs/agents.md#what-works-where-030) (بالإنجليزي).
+مسطّبه في Claude Code أصلاً؟ يبقى مش محتاج الخطوة دي. Cursor بيشغّل الـ plugins بتاعة Claude Code كمان (إعداد Third-Party Imports، وهو شغّال من الأول)، فلو سطّبته تاني الـ skill هيتحمّل مرتين. ولو الإعداد ده مقفول، سطّبه في Cursor كمان. التفاصيل في [Comprende في الأدوات التانية](docs/agents.md#what-works-where) (بالإنجليزي).
 
-على Windows، Comprende لسه experimental في الأداتين ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
+### Codex
+
+```bash
+codex plugin marketplace add AbdulrahmanMasoud/comprende
+codex plugin add comprende@comprende
+```
+
+وبعدين افتح Codex في الـ repo، واكتب `/hooks`، ووافق على الـ hooks الاتنين بتوع Comprende (trust). Codex بيطلب الموافقة دي تاني بعد كل update (`codex plugin marketplace upgrade comprende`)، ومش بيشغّل أي hook ليه لحد ما توافق. يعني لحد ساعتها الـ push بتاع الـ agent مش بيتراجع، بس الـ git hook والـ CI لسه بيراجعوه.
+
+على Windows، Comprende لسه experimental في التلات أدوات ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 
 ## 1. الشرح: استخدم Claude عادي
 
@@ -82,9 +91,9 @@ Claude بيفتكر إنت عارف إيه في `~/.comprende/`، على جها�
 ### تشغيله (الـ team lead، مرة واحدة لكل repo)
 
 1. افتح Claude في الـ repo وقوله: **"فعّل بوابة الفهم في المشروع ده"**.
-2. Claude هيفتح PR بيضيف البوابة (`.learning/`)، و CI check، و hooks لـ Claude Code و Cursor. راجع `.learning/config.json`، خصوصاً `sensitive`: دي المسارات زي auth و payments اللي لازم يتسأل عليها دايماً. وبعدين اعمل merge.
+2. Claude هيفتح PR بيضيف البوابة (`.learning/`)، و CI check، و hooks لـ Claude Code و Cursor و Codex. راجع `.learning/config.json`، خصوصاً `sensitive`: دي المسارات زي auth و payments اللي لازم يتسأل عليها دايماً. وبعدين اعمل merge.
 3. خلّي الـ check إجباري: شغّل `node .learning/gate.mjs protect --apply`، أو اطلبها من Claude. محتاجة صلاحيات admin على GitHub.
-4. خلّي التيم يسطّبوا الـ plugin، في Claude Code أو Cursor، وبس كده. أول session ليهم في الـ repo بتظبط الباقي.
+4. خلّي التيم يسطّبوا الـ plugin، في Claude Code أو Cursor أو Codex، وبس كده. أول session ليهم في الـ repo بتظبط الباقي.
 
 ### استخدامه (كل مطوّر)
 
@@ -133,6 +142,18 @@ Claude بيفتكر إنت عارف إيه في `~/.comprende/`، على جها�
 > - Committed: `91e3afe` …
 > - Pushed: `feature/sum` → `origin/feature/sum`
 
+**وفي Codex** كمان. ده run حقيقي، مختصر، و Codex رد فيه بالمصري لوحده:
+
+> **إنت:** check me
+>
+> **Codex:** … التغيير صغير: الملف الوحيد هو `math.js`، وفيه إضافة `sum(xs)` باستخدام `reduce` مع قيمة بداية `0`. سؤال واحد: ليه تمرير `0` كقيمة بداية مهم هنا، وإيه النتيجة لما تكون `xs` فاضية؟ …
+>
+> **إنت:** sum totals the list with reduce. The 0 is the starting value, so an empty list gives 0 instead of throwing a TypeError. My summary for the PR, in my own words: … starting from 0 so an empty list returns 0. …
+>
+> **Codex:** إجابتك وضّحت أثر قيمة البداية على القائمة الفارغة، وملخصك يذكر التغيير وسبب اختيار `0`. …
+>
+> اتحفظ تقرير الملكية واتعمل له commit، وبعدها اترفع الفرع `feature/sum` بنجاح على `origin`.
+
 **ولو حاولت تتخطّى الـ check**، الـ agent مش هيعمل push، والـ git hook هيمنع `git push`، والـ CI هيوقّف الـ PR. وده اللي بيبان في الـ terminal:
 
 ![في الـ terminal: push بيتمنع، وبعدين الـ ownership report بيتحفظ، وبعدين الـ push بيعدّي](docs/demo.gif)
@@ -172,7 +193,7 @@ claude   # or open this folder in Cursor
 
 - [**البوابة للتيمز**](docs/teams.md): التسطيب بالإيد، الإعدادات، التغييرات الصغيرة، الطوارئ
 - [**بيشتغل إزاي**](docs/how-it-works.md): المتطلبات، الـ fingerprints، الطبقات الأربعة، الحدود بصراحة
-- [**Comprende في Cursor**](docs/agents.md#what-works-where-030): إيه اللي شغّال فين، وإيه الأضعف، و checklist للـ IDE
+- [**Comprende في Cursor و Codex**](docs/agents.md#what-works-where): إيه اللي شغّال فين، وإيه الأضعف، و checklists تجرّبهم بيها بإيدك
 - [**المساهمة**](CONTRIBUTING.md#contributions): مش بنقبل pull requests من برّه دلوقتي، بس الـ issues والاقتراحات مرحّب بيها جدًا
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 

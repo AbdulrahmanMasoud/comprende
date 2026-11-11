@@ -12,7 +12,7 @@ Everything else counts as a bug: a way to get **unverified code merged with CI g
 
 ## The plugin in repos you don't trust
 
-The plugin runs in every repo you open in Claude Code or Cursor, including ones you just cloned. A malicious repo must not be able to run code on your machine because of it:
+The plugin runs in every repo you open in Claude Code, Cursor or Codex, including ones you just cloned. A malicious repo must not be able to run code on your machine because of it:
 
 - **No repo code in the plugin's hooks or MCP server.** They run only the plugin's own `dist/gate.mjs`. A repo's `.learning/config.json` is read as data: never through a symlink, at most 256 KB, and strictly validated.
 - **The local `pre-push` hook is pinned.** It records the SHA-256 of the `.learning/gate.mjs` it was installed for. On every push, it reads the file, checks the hash, and runs exactly those bytes as an in-memory module. That module can import only Node's `node:` built-ins, so nothing next to `gate.mjs` (no `node_modules`, no `package.json`) can stand in for anything it loads. If `gate.mjs` later changes (a pull, a checkout), the hook refuses to run it and tells you how to re-trust it.
