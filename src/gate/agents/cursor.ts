@@ -6,6 +6,7 @@
 import { isRecord } from "../../util.js";
 import { readClaudeFormat } from "./claude-format.js";
 import { CLAUDE_SETTINGS } from "./claude-settings.js";
+import { CURSOR_HOOKS } from "./cursor-hooks.js";
 import type { Agent, HookEnv } from "./types.js";
 
 /** The repo a Cursor hook is for: the payload's cwd, else its one workspace root,
@@ -50,5 +51,12 @@ export const cursor: Agent = {
   pluginUpdateHint:
     "`/plugin marketplace update comprende` in Claude Code if it's installed there, or `agent plugin marketplace update comprende` in Cursor's CLI",
 
-  projectHookFiles: [CLAUDE_SETTINGS],
+  // Cursor runs sessionStart once per chat, not again on --resume.
+  eventId: (payload, event) => {
+    const { toolUseId, sessionId } = readClaudeFormat(payload);
+    return event === "shell" ? toolUseId : sessionId;
+  },
+
+  // Its own file first: when both run the gate, the run from .claude/settings.json steps aside.
+  projectHookFiles: [CURSOR_HOOKS, CLAUDE_SETTINGS],
 };

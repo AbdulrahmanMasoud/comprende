@@ -33,7 +33,8 @@ Commands (run from inside the repo, or pass --repo):
   pre-push       Git pre-push hook entry point (reads refs from stdin)
   agent-hook     PreToolUse hook entry point for AI tools (reads JSON from stdin)   [--agent ID]
   claude-hook    The same as agent-hook. install and the plugin still call this name, which older gates know
-  session-start  SessionStart hook (plugin): the always-on note; in gated repos, the git hook   [--agent ID]
+  session-start  SessionStart hook: the always-on note; in gated repos, the git hook   [--agent ID]
+                 [--from-repo]: from the repo's own hook file, the gate's part only
   install        Add the gate, config, CI workflow, the AI tools' repo hook files and the git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
   protect        Make the check required on the default branch (GitHub: a ruleset, through gh; dry run by default)
@@ -71,7 +72,7 @@ interface Args {
   rest: string[];
 }
 
-const FLAGS = new Set(["json", "from-plugin", "upgrade", "apply", "no-code-owners", "help"]);
+const FLAGS = new Set(["json", "from-plugin", "from-repo", "upgrade", "apply", "no-code-owners", "help"]);
 
 const VALUE_OPTS = new Set(["repo", "base", "branch", "input", "rev", "labels-json", "owner", "approvals", "agent"]);
 
@@ -218,7 +219,7 @@ export function main(argv: string[]): number {
         return reply.exitCode;
       }
       case "session-start":
-        out(sessionStart(readStdin(), o("agent")));
+        out(sessionStart(readStdin(), o("agent"), Boolean(opts["from-repo"])));
         return 0;
       case "install":
       case "install-hooks":

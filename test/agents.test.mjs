@@ -56,7 +56,9 @@ test("the repo comes from the payload first: Claude Code's cwd, Cursor's workspa
 
 test("Cursor's plugin hook never takes its own folder for the repo: without a workspace it steps aside", (t) => {
   const { dev } = unverifiedRepo(t);
-  unlinkSync(join(dev, ".claude/settings.json")); // so the plugin's hook doesn't step aside for the repo's
+  // No repo hook file, so the plugin's hook doesn't step aside for the repo's.
+  unlinkSync(join(dev, ".claude/settings.json"));
+  unlinkSync(join(dev, ".cursor/hooks.json"));
   const push = JSON.parse(fixture("cursor", "pre-tool-use.shell.git-push.json"));
   const env = { ...ENV, CURSOR_PROJECT_DIR: "", CLAUDE_PROJECT_DIR: "" };
   // Run from inside the unverified repo, as if the plugin's folder were there.
@@ -87,7 +89,11 @@ test("Cursor's plugin hook never takes its own folder for the repo: without a wo
 test("each tool's messages name that tool, and CI's name none", (t) => {
   const { dev } = unverifiedRepo(t);
   const cursorPush = fixture("cursor", "pre-tool-use.shell.git-push.json").replaceAll("/work/probe-app", dev);
-  assert.match(runGate(dev, ["agent-hook"], { input: cursorPush }).stderr, /Ask Cursor to run the ownership check/);
+  // As the repo's .cursor/hooks.json runs it.
+  assert.match(
+    runGate(dev, ["agent-hook", "--agent", "cursor"], { input: cursorPush }).stderr,
+    /Ask Cursor to run the ownership check/,
+  );
   const claudePush = claudeCodePayload("pre-tool-use.bash.git-push.json", dev);
   assert.match(runGate(dev, ["agent-hook"], { input: claudePush }).stderr, /Ask Claude to run the ownership check/);
   const ci = runGate(dev, ["verify"]);
@@ -188,6 +194,7 @@ test("agent-hook --agent cursor blocks an unverified push from a Cursor payload"
 
 test("from Cursor, session start finds the repo with only CURSOR_PROJECT_DIR set", (t) => {
   const { dev } = setup(t);
+  unlinkSync(join(dev, ".cursor/hooks.json")); // else the repo's own file gives the gate's part
   const r = plugin(REPO, ["session-start"], {
     input: JSON.stringify({ ...JSON.parse(fixture("cursor", "session-start.json")), workspace_roots: [] }),
     env: { ...ENV, CURSOR_PROJECT_DIR: dev, OWNERSHIP_GATE_NO_AUTO_HOOK: "1" },
@@ -230,6 +237,7 @@ test("GATE_FILES lists the gate's own files, in a fixed order", () => {
     ".learning/config.json",
     REPO_GATE,
     ".github/workflows/ownership-check.yml",
+    ".cursor/hooks.json",
     ".claude/settings.json",
     ".github/CODEOWNERS",
   ]);
@@ -248,7 +256,9 @@ test("Cursor's repo: one workspace root, or none; several roots or none at all s
 
 test("the Cursor plugin's hooks, run as Cursor runs them, block an unverified push and stay silent otherwise", (t) => {
   const { dev } = unverifiedRepo(t);
-  unlinkSync(join(dev, ".claude/settings.json")); // no repo hook, so the plugin's checks
+  // No repo hook file, so the plugin's checks.
+  unlinkSync(join(dev, ".claude/settings.json"));
+  unlinkSync(join(dev, ".cursor/hooks.json"));
   const { hooks } = JSON.parse(readFileSync(join(REPO, "hooks/cursor-hooks.json"), "utf8"));
   // Cursor puts the plugin's folder in place of the variable, and runs the command from that folder.
   const run = (command, payload) =>

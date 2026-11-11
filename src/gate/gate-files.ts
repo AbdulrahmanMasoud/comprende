@@ -12,3 +12,8 @@ export const GATE_FILES: readonly string[] = [
   ...PROJECT_HOOK_FILES.map((f) => f.path),
   REPO_PLATFORM.codeowners.paths[0],
 ];
+
+/** The gate feature that made `path` a gate file, for the files added after the
+ *  first release: an edit to one counts as a change until the gate CI runs knows it. */
+export const gateFileFeature = (path: string): string | undefined =>
+  PROJECT_HOOK_FILES.find((f) => f.path === path)?.feature;

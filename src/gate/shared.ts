@@ -8,7 +8,8 @@ export const GATE_VERSION = 3;
 // lists it too (see features.ts).
 // - small-change: the fast path for small changes
 // - gitattributes: install's one .gitattributes line (GATE_ATTRIBUTES_LINE) needs no report
-export const GATE_FEATURES = "small-change gitattributes";
+// - cursor-hooks: .cursor/hooks.json is one of the gate's files (agents/cursor-hooks.ts)
+export const GATE_FEATURES = "small-change gitattributes cursor-hooks";
 
 const LEARNING = ".learning";
 

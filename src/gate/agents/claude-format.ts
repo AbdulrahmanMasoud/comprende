@@ -11,6 +11,10 @@ export interface ClaudeFormatPayload {
   readonly command: string;
   /** The working folder, or null when it's missing or empty (Cursor always sends ""). */
   readonly cwd: string | null;
+  /** The tool call's id, the same for every hook on one call. */
+  readonly toolUseId: string | null;
+  /** The session's id. */
+  readonly sessionId: string | null;
 }
 
 export function readClaudeFormat(payload: unknown): ClaudeFormatPayload {
@@ -20,5 +24,7 @@ export function readClaudeFormat(payload: unknown): ClaudeFormatPayload {
     toolName: p.tool_name === undefined || p.tool_name === null ? null : String(p.tool_name),
     command: String(input.command ?? ""),
     cwd: typeof p.cwd === "string" && p.cwd ? p.cwd : null,
+    toolUseId: typeof p.tool_use_id === "string" && p.tool_use_id ? p.tool_use_id : null,
+    sessionId: typeof p.session_id === "string" && p.session_id ? p.session_id : null,
   };
 }
