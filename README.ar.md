@@ -10,10 +10,10 @@
 
 **Comprende?** يعني "فاهم؟". وده بالظبط السؤال اللي الأداة دي بتسأله.
 
-Comprende هو plugin لـ Claude Code، وبيعمل حاجتين:
+Comprende هو plugin لـ Claude Code و Cursor، وبيعمل حاجتين:
 
-1. **Claude بيشرح الكود اللي بيكتبه**، باختصار وبلغتك، بس في الحتت اللي تستاهل: APIs جديدة، logic مش واضح، أو مخاطر. ده شغال في أي مشروع.
-2. **الـ ownership check** (اختياري، لكل repo لوحده). قبل ما الكود بتاعك يتعمله push، Claude بيسألك كام سؤال عنه، وإنت بتكتب وصف الـ PR بنفسك. ومن غير كده، الـ push والـ merge بيتمنعوا.
+1. **الـ agent بيشرح الكود اللي بيكتبه**، باختصار وبلغتك، بس في الحتت اللي تستاهل: APIs جديدة، logic مش واضح، أو مخاطر. ده شغال في أي مشروع.
+2. **الـ ownership check** (اختياري، لكل repo لوحده). قبل ما الكود بتاعك يتعمله push، الـ agent بيسألك كام سؤال عنه، وإنت بتكتب وصف الـ PR بنفسك. ومن غير كده، الـ push والـ merge بيتمنعوا.
 
 <p align="center">
   <a href="https://youtu.be/KeoRSyM0zu8"><img src="https://img.youtube.com/vi/KeoRSyM0zu8/maxresdefault.jpg" width="640" alt="Video: Stop Merging AI Code You Don't Understand"></a>
@@ -23,7 +23,11 @@ Comprende هو plugin لـ Claude Code، وبيعمل حاجتين:
 
 ## التسطيب
 
-شغّل الأمرين دول في الـ terminal. محتاج [Node.js](https://nodejs.org) 20+.
+محتاج [Node.js](https://nodejs.org) 20+. سطّب Comprende في مكان واحد بس: Claude Code أو Cursor، مش الاتنين (Cursor بيشغّل الـ plugins بتاعة Claude Code أصلاً).
+
+### Claude Code
+
+شغّل الأمرين دول في الـ terminal:
 
 ```bash
 claude plugin marketplace add AbdulrahmanMasoud/comprende
@@ -33,6 +37,20 @@ claude plugin install comprende@comprende
 وبعدين اقفل Claude Code وافتحه تاني. وعشان تتأكد إنه اتسطّب، اكتب `/mcp` جوه Claude: لازم تلاقي **comprende** في الليستة.
 
 كده هيشتغل في **كل مشاريعك**. ولو سطّبته من جوه Claude بـ `/plugin`، اختار الـ **user** scope، لأن الـ project scope بيشغّله في repo واحد بس.
+
+### Cursor
+
+اعمل clone للـ repo في فولدر الـ local plugins بتاع Cursor:
+
+```bash
+git clone https://github.com/AbdulrahmanMasoud/comprende.git ~/.cursor/plugins/local/comprende
+```
+
+وبعدين اقفل Cursor وافتحه تاني، أو شغّل **Developer: Reload Window**. ولو Cursor سألك، وافق على الـ MCP server اللي اسمه **comprende**: ده اللي بيفتكر إنت عارف إيه. وعشان تعمل update: `git -C ~/.cursor/plugins/local/comprende pull`، وبعدين اعمل reload.
+
+مسطّبه في Claude Code أصلاً؟ يبقى مش محتاج الخطوة دي. Cursor بيشغّل الـ plugins بتاعة Claude Code كمان (إعداد Third-Party Imports، وهو شغّال من الأول)، فلو سطّبته تاني الـ skill هيتحمّل مرتين. ولو الإعداد ده مقفول، سطّبه في Cursor كمان. التفاصيل في [Comprende في Cursor](docs/agents.md#what-works-where-030) (بالإنجليزي).
+
+على Windows، Comprende لسه experimental في الأداتين ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 
 ## 1. الشرح: استخدم Claude عادي
 
@@ -64,9 +82,9 @@ Claude بيفتكر إنت عارف إيه في `~/.comprende/`، على جها�
 ### تشغيله (الـ team lead، مرة واحدة لكل repo)
 
 1. افتح Claude في الـ repo وقوله: **"فعّل بوابة الفهم في المشروع ده"**.
-2. Claude هيفتح PR بيضيف البوابة (`.learning/`)، و CI check، و Claude hook. راجع `.learning/config.json`، خصوصاً `sensitive`: دي المسارات زي auth و payments اللي لازم يتسأل عليها دايماً. وبعدين اعمل merge.
+2. Claude هيفتح PR بيضيف البوابة (`.learning/`)، و CI check، و hooks لـ Claude Code و Cursor. راجع `.learning/config.json`، خصوصاً `sensitive`: دي المسارات زي auth و payments اللي لازم يتسأل عليها دايماً. وبعدين اعمل merge.
 3. خلّي الـ check إجباري: شغّل `node .learning/gate.mjs protect --apply`، أو اطلبها من Claude. محتاجة صلاحيات admin على GitHub.
-4. خلّي التيم يسطّبوا الـ plugin، وبس كده. أول session ليهم في الـ repo بتظبط الباقي.
+4. خلّي التيم يسطّبوا الـ plugin، في Claude Code أو Cursor، وبس كده. أول session ليهم في الـ repo بتظبط الباقي.
 
 ### استخدامه (كل مطوّر)
 
@@ -97,7 +115,25 @@ Claude بيفتكر إنت عارف إيه في `~/.comprende/`، على جها�
 >
 > **Claude:** تمام، إجابتك مظبوطة. … اتعمل commit واتعمل push على `feature/sum`. … الـ ownership report في `.learning/checks/feature%2Fsum.md`، ومعاه ملخصك زي ما كتبته بالظبط.
 
-**ولو حاولت تتخطّى الـ check**، Claude مش هيعمل push، والـ git hook هيمنع `git push`، والـ CI هيوقّف الـ PR. وده اللي بيبان في الـ terminal:
+**وفي Cursor** نفس الـ check بالظبط. ده run حقيقي، مختصر، واتسجّل بالإنجليزي:
+
+> **إنت:** Run exactly this shell command once … `git push -u origin feature/sum`. Quote any block message word for word.
+>
+> **Cursor:** Blocked by the ownership gate:
+> - No ownership report for branch 'feature/sum' (.learning/checks/feature%2Fsum.md). Ask Cursor to run the ownership check ("check me"), then commit the report.
+>
+> **إنت:** check me
+>
+> **Cursor:** … One question: why does `sum` pass `0` as the second argument to `reduce`, and what would `sum([])` return if that `0` were left out? …
+>
+> **إنت:** … The 0 is the starting value, so an empty list gives 0 instead of throwing a TypeError. My summary for the PR, in my own words: Added sum(xs), … starting from 0 so an empty list returns 0. …
+>
+> **Cursor:** … Your answer checked out on the empty-list / initial-value point.
+> - Report saved: `.learning/checks/feature%2Fsum.md`
+> - Committed: `91e3afe` …
+> - Pushed: `feature/sum` → `origin/feature/sum`
+
+**ولو حاولت تتخطّى الـ check**، الـ agent مش هيعمل push، والـ git hook هيمنع `git push`، والـ CI هيوقّف الـ PR. وده اللي بيبان في الـ terminal:
 
 ![في الـ terminal: push بيتمنع، وبعدين الـ ownership report بيتحفظ، وبعدين الـ push بيعدّي](docs/demo.gif)
 
@@ -121,10 +157,10 @@ git add -A && git commit -qm init
 node ../comprende/dist/gate.mjs install --repo . > /dev/null
 git add -A && git commit -qm "add ownership gate" && git push -q -u origin main
 git checkout -q -b feature/sum
-claude
+claude   # or open this folder in Cursor
 ```
 
-وبعدين جوه Claude:
+وبعدين جوه Claude (أو افتح `/tmp/comprende-try/app` في Cursor، والـ plugin متسطّب):
 
 1. قول: **"ضيف function اسمها sum(xs) في math.js باستخدام add، وبعدين اعمل commit و push"**.
 2. جاوب على السؤال. جرّب إجابة غلط الأول، عشان تشوف هيحصل إيه.
@@ -136,6 +172,7 @@ claude
 
 - [**البوابة للتيمز**](docs/teams.md): التسطيب بالإيد، الإعدادات، التغييرات الصغيرة، الطوارئ
 - [**بيشتغل إزاي**](docs/how-it-works.md): المتطلبات، الـ fingerprints، الطبقات الأربعة، الحدود بصراحة
+- [**Comprende في Cursor**](docs/agents.md#what-works-where-030): إيه اللي شغّال فين، وإيه الأضعف، و checklist للـ IDE
 - [**المساهمة**](CONTRIBUTING.md#contributions): مش بنقبل pull requests من برّه دلوقتي، بس الـ issues والاقتراحات مرحّب بيها جدًا
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 

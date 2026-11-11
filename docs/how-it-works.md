@@ -29,14 +29,14 @@ If the developer later merges or rebases onto a newer `main`, the gate replays `
 
 | Layer | What it stops |
 |---|---|
-| A Claude Code hook | Claude pushing unverified code |
+| An AI tool's hook (Claude Code, Cursor) | The agent pushing unverified code |
 | A git `pre-push` hook | You pushing unverified code |
 | CI on every PR | Merging unverified code |
 | A GitHub ruleset | Merging without CI |
 
 The first two catch forgetting. The last two are the lock.
 
-**In Cursor**, the first layer works too. Cursor runs Claude Code's hooks: the repo's `.claude/settings.json`, and the hooks of the Claude Code plugins you've installed. Its Third-Party Imports setting controls this, and it's on by default. Cursor names its shell tool `Shell`, not `Bash`. The hook accepts both since 0.2.2, once the repo's own copy of the gate is upgraded. Full Cursor support is tracked in [#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2).
+**In Cursor**, the first layer is the Cursor plugin's hook, or the repo's `.cursor/hooks.json`. Cursor also runs Claude Code's hooks (the repo's `.claude/settings.json`, and your Claude Code plugins) while its Third-Party Imports setting is on. However many copies of the hook run, each push is checked once. What works where, and what's weaker in Cursor: [docs/agents.md](agents.md#what-works-where-030).
 
 ### One file
 

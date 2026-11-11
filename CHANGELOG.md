@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.3.0
+
+- **Cursor support** ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)). Comprende runs in Cursor: the skill, the memory server, the always-on line and the push guard, from a Cursor plugin or from the repo's own `.cursor/hooks.json`. To install it, clone it into `~/.cursor/plugins/local/comprende` ([README](README.md#cursor)).
+  - **Install it in one place.** Cursor also runs your Claude Code plugins, so with both the skill loads twice.
+  - **Windows is experimental** ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)): untested in Cursor, which runs hooks in PowerShell.
+  - What works where, what's weaker in Cursor, and a checklist for the IDE: [docs/agents.md](docs/agents.md#what-works-where-030). Mixed teams: [docs/teams.md](docs/teams.md#mixed-teams-claude-code-and-cursor).
 - **JSON that starts with a UTF-8 BOM is read like any other**, in a hook's payload and in `save --input`. Cursor's CLI on Windows has sent a payload with one. The hook then stepped aside: the push went unchecked, and the session got no gate context. PowerShell 5.1 writes files with one, and `save --input` then refused the report as invalid JSON.
 - **`install` writes `.cursor/hooks.json` too** (part of [#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)): the gate's shell hook and session start for teammates on Cursor, as plain `node .learning/gate.mjs … --agent cursor` lines that also run in PowerShell. It merges into an existing file, keeping its hooks, and `install --upgrade` adds it to repos that already have the gate.
   - **Upgrading:** until the base branch runs a gate that knows `.cursor/hooks.json` as one of its own files (the `cursor-hooks` feature), CI counts the new file as a change. The upgrade PR needs one small-change question, or the skip label.
