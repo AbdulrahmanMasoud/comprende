@@ -28,7 +28,7 @@ actionlint                        # the GitHub workflows
 - `.claude-plugin/`: `plugin.json`, `marketplace.json` (`source: "."`), `icon.png`
 - `hooks/hooks.json`: SessionStart (`gate.mjs session-start --from-plugin`), PreToolUse on Bash (`gate.mjs claude-hook --from-plugin`)
 - `.cursor-plugin/`: `plugin.json` (the same skill and MCP server, `hooks/cursor-hooks.json`) and `marketplace.json`. `hooks/cursor-hooks.json`: Cursor's format, plain `node "${CURSOR_PLUGIN_ROOT}/dist/gate.mjs" … --agent cursor` lines with no shell syntax, since Cursor runs hooks in PowerShell on Windows
-- `.codex-plugin/`: `plugin.json` (the same skill, `hooks/codex-hooks.json`) and `mcp.json`, the same MCP server with a relative path, since Codex doesn't expand `${CLAUDE_PLUGIN_ROOT}` there. Codex reads this manifest before `.claude-plugin/`, and finds the plugin through `.claude-plugin/marketplace.json`
+- `.codex-plugin/`: `plugin.json` (the same skill, and `hooks/codex-hooks.json`: Codex's format, which is Claude Code's, with plain `node "${PLUGIN_ROOT}/dist/gate.mjs" … --agent codex` lines, since Codex also runs hooks in PowerShell on Windows) and `mcp.json`, the same MCP server with a relative path, since Codex doesn't expand `${CLAUDE_PLUGIN_ROOT}` there. Codex reads this manifest before `.claude-plugin/`, and finds the plugin through `.claude-plugin/marketplace.json`
 - `.mcp.json`: the `comprende` MCP server (`dist/server.mjs`)
 - `skills/comprende/SKILL.md` plus `references/` (signals, formats, examples, memory, ownership-check)
 - `src/gate/`: the ownership gate, bundled into `dist/gate.mjs` from `cli.ts`. One module per concern, each with a header saying what it owns:
