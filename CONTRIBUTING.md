@@ -88,7 +88,8 @@ src/gate/agents/      types.ts (the Agent interface), index.ts (the registry and
                       one module per AI tool: claude-code.ts, cursor.ts, plus what they share:
                       claude-format.ts (the payload) and claude-settings.ts (the hook file)
 src/gate/hook-replies.ts   the core's default replies, for adapters that don't format their own
-src/gate/platforms/   one module per git platform (next: the platform PR of #18)
+src/gate/platforms/   types.ts (the Platform interface), index.ts (the registry, the repo's platform
+                      and the CI's), one module per git platform: github.ts
 ```
 
 The core (`status`, `save`, `verify`, push detection, the hooks) gets typed values from an adapter. It never asks which tool or platform it runs under. So:
@@ -122,7 +123,52 @@ The interface, with a comment on each member, is in `src/gate/agents/types.ts`. 
 6. **Check it end to end** in the tool itself, with a gated demo repo: an unverified push is blocked, a verified one goes through, and the session-start message arrives.
 7. **Docs:** `docs/agents.md`, the install steps in both READMEs, and `SECURITY.md` if it adds a gate file.
 
-The Claude Code and GitHub code was written before this rule and isn't behind these interfaces yet. The end of "Clean code" in [CLAUDE.md](CLAUDE.md) lists where today's code doesn't follow the rules, and the issue for each.
+#### Adding a git platform
+
+The interface is in `src/gate/platforms/types.ts`, with a comment on each member. GitHub's adapter, `github.ts`, holds everything GitHub-specific:
+
+```ts
+export interface Platform {
+  readonly id: PlatformId;
+  detects(env: CiEnv): boolean;                    // is this the platform's CI?
+  readonly ciConfig: {                             // the CI config install writes
+    readonly path: string;
+    withGateJob(existing: ExistingFile): { readonly content?: string; readonly message: string };
+  };
+  readonly checkName: string;                      // the status protect makes required
+  ciContext(env: CiEnv): CiContext;                // { baseRef, headBranch, labels }, null = CI doesn't say
+  reviewerSummaryFile(env: CiEnv): string | null;  // where the markdown summary goes
+  annotations(kind: AnnotationKind, messages: readonly string[], env: CiEnv): string;  // stdout, "" for none
+  readonly codeowners: { readonly paths: readonly string[]; readonly ownerPattern: RegExp; readonly ownerHint: string; readonly reviewSetting: string };
+  readonly cli: { readonly program: string; readonly optionsWithValue: ReadonlySet<string>; readonly pullRequestCommands: readonly (readonly [string, string])[] };
+  protect(root: string, options: ProtectOptions): string[];  // dry run unless options.apply
+}
+```
+
+The CI methods may be called outside the platform's CI, because `ciPlatform` falls back to the repo's platform. Each one reads only its own CI's variables, and returns null or `""` when they aren't set.
+
+1. **Capture a real CI run.** Record the environment a merge-request job gets, and save it, cleaned of tokens and names, in `test/fixtures/<platform>/`.
+2. **Write `src/gate/platforms/<platform>.ts`.** Check each method against what the platform really does. For GitLab, from its docs:
+   - **`ciConfig`:** a merge-request job's `rules:` must be in `.gitlab-ci.yml` itself, not an `include:`. So `withGateJob` merges a job into that file, and keeps the rest. That makes `.gitlab-ci.yml` a gate file, though, so every CI edit would skip the check and need the lead's review. Decide that before building it.
+   - **The base branch's gate:** a merge request can edit its own pipeline. Running the base branch's gate is only binding with the CI config in another project (`ci_config_path`) or a pipeline execution policy (Ultimate). `install` and `protect` must say so.
+   - **`ciContext`:**
+     - The base comes from `CI_MERGE_REQUEST_TARGET_BRANCH_NAME`, returned as `origin/<name>`, which is what `--base` takes. The job has to fetch it, because the clone is shallow.
+     - The head branch comes from `CI_MERGE_REQUEST_SOURCE_BRANCH_NAME`.
+     - The labels come from the comma-separated `CI_MERGE_REQUEST_LABELS`, which is missing when there are none. A label change doesn't start a pipeline, so adding the skip label needs a manual rerun.
+   - **`reviewerSummaryFile`:** a file the job exposes with `artifacts:expose_as`, with `when: always`, or a failed check loses its summary. There's no inline job summary. Markdown isn't previewed, so reviewers download it.
+   - **`annotations`:** none (`""`). Code Quality reports are the closest thing.
+   - **`codeowners`:** `paths` in GitLab's search order: `CODEOWNERS`, `docs/CODEOWNERS`, `.gitlab/CODEOWNERS`. Code-owner approval is Premium. On Free, nothing stops a merge request from editing the gate's files, which is one more reason for `ci_config_path` above.
+   - **`cli`:** `glab`, with `mr create` and `mr merge`.
+   - **`protect`:** "Pipelines must succeed" (`only_allow_merge_if_pipeline_succeeds`, through `glab api`) is free but covers the whole pipeline. There's no required check for a single job; Ultimate's external status checks are a different thing. Approval counts and code-owner approval are Premium. Say which parts were applied and which need a higher tier.
+3. **Register it in `src/gate/platforms/index.ts`.**
+   - With two platforms, the repo's config has to name its platform.
+   - `REPO_PLATFORM` and `GATE_FILES` are module constants today, and become functions of the repo's config.
+   - The base branch's gate still has to agree with the local one about which files are gate files, the way features do (`features.ts`).
+4. **Tests** in `test/platforms.test.mjs` and `test/ci.test.mjs`, from the captured environment.
+5. **Check it end to end** on a real merge request: an unverified change fails the pipeline, the skip label passes, a verified one passes, and the summary is there for reviewers.
+6. **Docs:** `docs/teams.md`, and both READMEs.
+
+Some user-facing text in the core still names Claude Code (the "check me" hint, the Node.js note). It changes with Cursor support (#2), since changing it is a behavior change. The end of "Clean code" in [CLAUDE.md](CLAUDE.md) lists where today's code doesn't follow the rules yet.
 
 ## CI
 

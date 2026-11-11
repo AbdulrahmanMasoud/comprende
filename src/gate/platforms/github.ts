@@ -1,10 +1,64 @@
-// protect: the GitHub ruleset that makes the ownership check required, created
-// through the GitHub CLI (gh). A dry run by default.
+// GitHub: the Actions workflow install writes, the PR's branch from the Actions
+// environment, the job summary and annotations reviewers see, CODEOWNERS, and the
+// repository ruleset that protect creates through the GitHub CLI (gh).
 
-import { isRecord } from "../util.js";
-import { CHECK_NAME } from "./ci-workflow.js";
-import { type RunResult, repoRoot, run } from "./git.js";
-import { GateError } from "./shared.js";
+import { isRecord } from "../../util.js";
+import { type RunResult, run } from "../run.js";
+import { GATE_REL, GateError } from "../shared.js";
+import type { Platform, ProtectOptions } from "./types.js";
+
+const WORKFLOW_PATH = ".github/workflows/ownership-check.yml";
+
+const WORKFLOW = `name: Ownership check
+
+on:
+  pull_request:
+    # 'edited' re-runs the check when a PR is retargeted to another base branch.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    name: Ownership check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Check the PR's own commit (not GitHub's merge commit) with full history,
+          # so fingerprints match what the developer verified.
+          ref: \${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          # The gate needs no dependencies; a restored cache is only a way in.
+          package-manager-cache: false
+
+      - name: Verify ownership report
+        env:
+          BASE_REF: \${{ github.base_ref }}
+          HEAD_REF: \${{ github.head_ref }}
+          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
+          NODE_OPTIONS: ""
+        run: |
+          # Run the gate as it exists on the base branch, so a PR can't weaken it
+          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
+          # doesn't have the gate yet (the PR that installs it); the rules then
+          # are the strict defaults, not the PR's own config.
+          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
+            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
+          else
+            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
+          fi
+          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
+            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
+`;
+
+// The workflow job's name, which is also the status check's name.
+const CHECK_NAME = "Ownership check";
 
 const RULESET_NAME = "Ownership gate";
 
@@ -71,8 +125,7 @@ function runGh(root: string, args: string[], input?: string): string {
 /** Create the GitHub ruleset that makes the gate binding: PRs required, the
  *  'Ownership check' status required, code-owner review for gate files.
  *  Without apply it only shows what it would do. */
-export function protect(repo?: string | null, apply = false, approvals = 1, codeOwners = true): string[] {
-  const root = repoRoot(repo);
+function protect(root: string, { apply, approvals, codeOwners }: ProtectOptions): string[] {
   if (!Number.isInteger(approvals) || approvals < 0 || approvals > 10)
     throw new GateError("--approvals must be between 0 and 10.");
   const nwo = runGh(root, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).trim();
@@ -113,3 +166,47 @@ export function protect(repo?: string | null, apply = false, approvals = 1, code
   }
   return [...plan, `Created: https://github.com/${nwo}/rules/${String(isRecord(created) ? created.id : undefined)}`];
 }
+
+export const github: Platform = {
+  id: "github",
+
+  detects: (env) => env.GITHUB_ACTIONS === "true",
+
+  ciConfig: {
+    path: WORKFLOW_PATH,
+    withGateJob: (existing) =>
+      existing === null
+        ? { content: WORKFLOW, message: `wrote ${WORKFLOW_PATH}` }
+        : { message: `${WORKFLOW_PATH} exists (kept)` },
+  },
+
+  checkName: CHECK_NAME,
+
+  // The workflow passes the base branch and the labels as flags; only the head
+  // branch also comes from the environment.
+  ciContext: (env) => ({ baseRef: null, headBranch: env.GITHUB_HEAD_REF || null, labels: null }),
+
+  reviewerSummaryFile: (env) => env.GITHUB_STEP_SUMMARY || null,
+
+  annotations: (kind, messages, env) =>
+    env.GITHUB_ACTIONS === "true" ? messages.map((m) => `::${kind} title=Ownership check::${m}\n`).join("") : "",
+
+  codeowners: {
+    // GitHub's search order: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+    paths: [".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"],
+    ownerPattern: /^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/,
+    ownerHint: "a GitHub @user, @org/team, or an email",
+    reviewSetting: "'Require review from Code Owners'",
+  },
+
+  cli: {
+    program: "gh",
+    optionsWithValue: new Set(["-R", "--repo", "--hostname"]),
+    pullRequestCommands: [
+      ["pr", "create"],
+      ["pr", "merge"],
+    ],
+  },
+
+  protect,
+};

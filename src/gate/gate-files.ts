@@ -2,12 +2,13 @@
 // understand" and protected by CODEOWNERS review instead.
 
 import { PROJECT_HOOK_FILES } from "./agents/index.js";
+import { REPO_PLATFORM } from "./platforms/index.js";
 import { CONFIG_PATH, GATE_REL } from "./shared.js";
 
 export const GATE_FILES: readonly string[] = [
   CONFIG_PATH,
   GATE_REL,
-  ".github/workflows/ownership-check.yml",
+  REPO_PLATFORM.ciConfig.path,
   ...PROJECT_HOOK_FILES.map((f) => f.path),
-  ".github/CODEOWNERS",
+  REPO_PLATFORM.codeowners.paths[0],
 ];

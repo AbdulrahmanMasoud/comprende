@@ -21,7 +21,6 @@ import {
   gitEnv,
   readBlob,
   refExists,
-  run,
   splitNul,
   WORKTREE_SAFE,
   withWorktreeIndex,
@@ -29,6 +28,7 @@ import {
 import { matches } from "./glob.js";
 import { isInstallLineEdit } from "./install-lines.js";
 import type { Report } from "./report.js";
+import { run } from "./run.js";
 import { GateError, REGULAR_MODES, REPORT_INPUT, sorted, splitLines, ZERO_SHA } from "./shared.js";
 
 // Exact shapes only (no subfolders, markdown only), so nothing executable can hide here.

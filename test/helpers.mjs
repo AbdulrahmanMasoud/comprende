@@ -133,6 +133,8 @@ export const gate = {
   isSensitive: (path, mode, cfg) => testFn("is_sensitive", path, mode, cfg),
   collectChanges: (root, baseRef, rev = null) => testFn("collect_changes", root, baseRef, rev),
   mergeClaudeSettings: (path) => testFn("merge_claude_settings", path),
+  /** The platform whose CI this environment is, and what it reads from it. */
+  ciPlatform: (env = {}) => testFn("ci_platform", env),
   /** Which adapter the hook resolves to for this payload text, and what it reads. */
   resolveAgent: (payloadText, env = {}, agent = null) => testFn("resolve_agent", payloadText, env, agent),
   mdSafe: (text) => testFn("md_safe", text),

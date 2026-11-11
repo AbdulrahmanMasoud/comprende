@@ -162,11 +162,6 @@ function resolveAgent(payload, env, requested) {
 }
 var PROJECT_HOOK_FILES = [...new Set(AGENTS.flatMap((a) => a.projectHookFiles))];
 
-// src/gate/changes.ts
-import { mkdtempSync as mkdtempSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { tmpdir as tmpdir2 } from "node:os";
-import { join as join6 } from "node:path";
-
 // src/gate/config.ts
 import { join as join3 } from "node:path";
 
@@ -242,20 +237,12 @@ function samePath(a, b, platform = process.platform) {
 }
 
 // src/gate/git.ts
-import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync as statSync3, utimesSync } from "node:fs";
 import { devNull, homedir, tmpdir } from "node:os";
 import { dirname as dirname2, isAbsolute, join as join2, resolve } from "node:path";
-function gitEnv(extra) {
-  const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
-  delete env.GIT_DIFF_OPTS;
-  let n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
-  if (!Number.isFinite(n) || n < 0) n = 0;
-  env.GIT_CONFIG_COUNT = String(n + 1);
-  env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
-  env[`GIT_CONFIG_VALUE_${n}`] = "false";
-  return { ...env, ...extra ?? {} };
-}
+
+// src/gate/run.ts
+import { spawnSync } from "node:child_process";
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, {
     cwd: opts.cwd,
@@ -271,6 +258,198 @@ function run(cmd, args, opts = {}) {
     throw err;
   }
   return { status: r.status ?? 1, stdout: r.stdout ?? Buffer.alloc(0), stderr: r.stderr ?? Buffer.alloc(0) };
+}
+
+// src/gate/platforms/github.ts
+var WORKFLOW_PATH = ".github/workflows/ownership-check.yml";
+var WORKFLOW = `name: Ownership check
+
+on:
+  pull_request:
+    # 'edited' re-runs the check when a PR is retargeted to another base branch.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    name: Ownership check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Check the PR's own commit (not GitHub's merge commit) with full history,
+          # so fingerprints match what the developer verified.
+          ref: \${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          # The gate needs no dependencies; a restored cache is only a way in.
+          package-manager-cache: false
+
+      - name: Verify ownership report
+        env:
+          BASE_REF: \${{ github.base_ref }}
+          HEAD_REF: \${{ github.head_ref }}
+          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
+          NODE_OPTIONS: ""
+        run: |
+          # Run the gate as it exists on the base branch, so a PR can't weaken it
+          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
+          # doesn't have the gate yet (the PR that installs it); the rules then
+          # are the strict defaults, not the PR's own config.
+          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
+            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
+          else
+            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
+          fi
+          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
+            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
+`;
+var CHECK_NAME = "Ownership check";
+var RULESET_NAME = "Ownership gate";
+var REQUIRE_BY_HAND = "https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#make-the-check-required";
+function rulesetBody(approvals = 1, codeOwners = true) {
+  return {
+    name: RULESET_NAME,
+    target: "branch",
+    enforcement: "active",
+    conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+    rules: [
+      {
+        type: "pull_request",
+        parameters: {
+          required_approving_review_count: approvals,
+          require_code_owner_review: codeOwners,
+          dismiss_stale_reviews_on_push: false,
+          require_last_push_approval: false,
+          required_review_thread_resolution: false
+        }
+      },
+      {
+        type: "required_status_checks",
+        parameters: { strict_required_status_checks_policy: false, required_status_checks: [{ context: CHECK_NAME }] }
+      }
+    ]
+  };
+}
+function runGh(root, args, input) {
+  let r;
+  try {
+    r = run("gh", args, { cwd: root, input });
+  } catch (e) {
+    if (e.code === "ENOENT") {
+      throw new GateError(
+        `The GitHub CLI (gh) isn't installed. Install it and run \`gh auth login\`, or make the check required by hand: ${REQUIRE_BY_HAND}`
+      );
+    }
+    throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${e.message}`);
+  }
+  if (r.status !== 0) {
+    const err = (r.stderr.toString("utf8") || r.stdout.toString("utf8")).trim();
+    const low = err.toLowerCase();
+    if (err.includes("Upgrade to GitHub Pro") || low.includes("upgrade") && low.includes("plan")) {
+      throw new GateError(
+        `Rulesets aren't available for private repos on GitHub's free plan. Use Settings \u2192 Branches \u2192 branch protection instead: ${REQUIRE_BY_HAND}`
+      );
+    }
+    if (err.includes("403") || err.includes("Must have admin rights") || err.includes("Resource not accessible")) {
+      throw new GateError("GitHub refused: creating rules needs admin access to this repository.");
+    }
+    throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${err}`);
+  }
+  return r.stdout.toString("utf8");
+}
+function protect(root, { apply, approvals, codeOwners }) {
+  if (!Number.isInteger(approvals) || approvals < 0 || approvals > 10)
+    throw new GateError("--approvals must be between 0 and 10.");
+  const nwo = runGh(root, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).trim();
+  if (!/^[\w.-]+\/[\w.-]+$/.test(nwo))
+    throw new GateError(`Couldn't tell which GitHub repo this is (got ${JSON.stringify(nwo)}).`);
+  let existing = [];
+  try {
+    existing = JSON.parse(runGh(root, ["api", `repos/${nwo}/rulesets`]) || "[]");
+  } catch (e) {
+    if (e instanceof GateError) throw e;
+  }
+  for (const r of Array.isArray(existing) ? existing : []) {
+    if (isRecord(r) && r.name === RULESET_NAME)
+      return [`Ruleset '${RULESET_NAME}' already exists on ${nwo}: https://github.com/${nwo}/rules/${String(r.id)}`];
+  }
+  const body = rulesetBody(approvals, codeOwners);
+  const plan = [
+    `Ruleset for ${nwo} (default branch): require a pull request with ${approvals} approval(s)` + (codeOwners ? " incl. code owners" : "") + `, and the '${CHECK_NAME}' status check.`,
+    "It adds to existing branch protection; it doesn't replace it."
+  ];
+  if (codeOwners)
+    plan.push("Note: a code owner can't approve their own PR. On a one-person repo, use --no-code-owners.");
+  if (!apply)
+    return [
+      ...plan,
+      "Dry run \u2014 nothing changed. Rerun with --apply (needs admin) to create it.",
+      JSON.stringify(body, null, 2)
+    ];
+  let created = {};
+  try {
+    created = JSON.parse(
+      runGh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}"
+    );
+  } catch (e) {
+    if (e instanceof GateError) throw e;
+  }
+  return [...plan, `Created: https://github.com/${nwo}/rules/${String(isRecord(created) ? created.id : void 0)}`];
+}
+var github = {
+  id: "github",
+  detects: (env) => env.GITHUB_ACTIONS === "true",
+  ciConfig: {
+    path: WORKFLOW_PATH,
+    withGateJob: (existing) => existing === null ? { content: WORKFLOW, message: `wrote ${WORKFLOW_PATH}` } : { message: `${WORKFLOW_PATH} exists (kept)` }
+  },
+  checkName: CHECK_NAME,
+  // The workflow passes the base branch and the labels as flags; only the head
+  // branch also comes from the environment.
+  ciContext: (env) => ({ baseRef: null, headBranch: env.GITHUB_HEAD_REF || null, labels: null }),
+  reviewerSummaryFile: (env) => env.GITHUB_STEP_SUMMARY || null,
+  annotations: (kind, messages, env) => env.GITHUB_ACTIONS === "true" ? messages.map((m) => `::${kind} title=Ownership check::${m}
+`).join("") : "",
+  codeowners: {
+    // GitHub's search order: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+    paths: [".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"],
+    ownerPattern: /^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/,
+    ownerHint: "a GitHub @user, @org/team, or an email",
+    reviewSetting: "'Require review from Code Owners'"
+  },
+  cli: {
+    program: "gh",
+    optionsWithValue: /* @__PURE__ */ new Set(["-R", "--repo", "--hostname"]),
+    pullRequestCommands: [
+      ["pr", "create"],
+      ["pr", "merge"]
+    ]
+  },
+  protect
+};
+
+// src/gate/platforms/index.ts
+var PLATFORMS = [github];
+var REPO_PLATFORM = github;
+var ciPlatform = (env) => PLATFORMS.find((p) => p.detects(env)) ?? REPO_PLATFORM;
+var ciHeadBranch = (env) => ciPlatform(env).ciContext(env).headBranch;
+
+// src/gate/git.ts
+function gitEnv(extra) {
+  const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
+  delete env.GIT_DIFF_OPTS;
+  let n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  env.GIT_CONFIG_COUNT = String(n + 1);
+  env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
+  env[`GIT_CONFIG_VALUE_${n}`] = "false";
+  return { ...env, ...extra ?? {} };
 }
 function gitBytes(root, args, opts = {}) {
   let r;
@@ -343,7 +522,8 @@ function resolveBase(root, cfg, base) {
 }
 function currentBranch(root, branch) {
   if (branch) return branch;
-  if (process.env.GITHUB_HEAD_REF) return process.env.GITHUB_HEAD_REF;
+  const fromCi = ciHeadBranch(process.env);
+  if (fromCi) return fromCi;
   const name = git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], { check: false }).trim();
   if (!name) throw new GateError("Detached HEAD: pass --branch <name>.");
   return name;
@@ -603,11 +783,212 @@ function isSensitive(path, mode, cfg) {
 }
 var needsNoQuestions = (path, mode, cfg) => matches(path, cfg.ignore) && !isSensitive(path, mode, cfg);
 
-// src/gate/features.ts
+// src/gate/report.ts
 import { join as join4 } from "node:path";
+var DATA_MARKER = "<!-- ownership-data: generated by the ownership gate; do not edit by hand -->";
+function sortedKeysJson(value, indent) {
+  const sortDeep = (v) => Array.isArray(v) ? v.map(sortDeep) : isRecord(v) ? Object.fromEntries(sorted(Object.keys(v)).map((k) => [k, sortDeep(v[k])])) : v;
+  return JSON.stringify(sortDeep(value), null, indent);
+}
+function percentEncode(s) {
+  return encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+var reportPath = (branch) => `${CHECKS_DIR}/${percentEncode(branch)}.md`;
+function renderReport(data) {
+  const lines = [
+    `# Ownership check \u2014 ${data.branch}`,
+    `Date: ${data.date} \xB7 Base: ${data.base} \xB7 Gate v${data.version}`,
+    "",
+    "## Summary (in the developer's own words)",
+    data.summary.trim(),
+    "",
+    "## Verified understanding"
+  ];
+  for (const path of sorted(Object.keys(data.verified)))
+    lines.push(`- \`${path}\` \u2014 ${(get(data.verified, path) ?? []).join("; ")}`);
+  const unverified = sorted(Object.keys(data.files).filter((p) => !own(data.verified, p)));
+  if (unverified.length)
+    lines.push(
+      "",
+      `Also in this change (reviewed, no specific questions): ${unverified.map((p) => `\`${p}\``).join(", ")}`
+    );
+  lines.push("", DATA_MARKER, "```json", sortedKeysJson(data, 1), "```", "");
+  return lines.join("\n");
+}
+function extractDataBlock(text) {
+  const after = text.split(DATA_MARKER).slice(1).join(DATA_MARKER);
+  const m = /```json\r?\n([\s\S]*?)\r?\n```/.exec(after);
+  return m ? m[1] : null;
+}
+function parseReport(text) {
+  if (!text.includes(DATA_MARKER))
+    throw new GateError("Report is missing its data block \u2014 run the check again to regenerate it.");
+  const block = extractDataBlock(text);
+  if (block === null) throw new GateError("Report data block is malformed \u2014 run the check again to regenerate it.");
+  let data;
+  try {
+    data = JSON.parse(block);
+  } catch (e) {
+    throw new GateError(`Report data is not valid JSON (${e.message}) \u2014 run the check again.`);
+  }
+  if (!(isRecord(data) && isRecord(data.files) && isRecord(data.verified) && typeof data.summary === "string")) {
+    throw new GateError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
+  }
+  for (const v of Object.values(data.verified)) {
+    if (!Array.isArray(v) || !v.every((x) => typeof x === "string"))
+      throw new GateError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
+  }
+  if (data.version !== GATE_VERSION) {
+    throw new GateError(
+      `Report was made by gate v${String(data.version)}; this gate is v${GATE_VERSION}. If your branch is behind the base, merge it first; then run the check again.`
+    );
+  }
+  return data;
+}
+function readReport(root, branch, rev) {
+  const rel = reportPath(branch);
+  if (rev) {
+    if (!revHasFile(root, rev, rel)) return null;
+    return parseReport(readFileAtRev(root, rev, rel, MAX_REPORT_BYTES));
+  }
+  const path = join4(root, rel);
+  return lstat(path) ? parseReport(readRepoFile(path, MAX_REPORT_BYTES)) : null;
+}
+var unusableReport = (e) => [
+  { files: {}, verified: {}, summary: "", _outdated: true },
+  `Existing report can't be used (${e.message}); its files need verifying again.`
+];
+function parseReportLeniently(text) {
+  try {
+    return [parseReport(text), null];
+  } catch (e) {
+    let files = {};
+    if (text.includes(DATA_MARKER)) {
+      try {
+        const data = JSON.parse(extractDataBlock(text) ?? "null");
+        if (isRecord(data) && isRecord(data.files)) files = data.files;
+      } catch {
+      }
+    }
+    return [
+      { files, verified: {}, summary: "", _outdated: true },
+      `Existing report can't be used (${e.message}); its files need verifying again.`
+    ];
+  }
+}
+function previousReport(root, branch, baseRef) {
+  const rel = reportPath(branch);
+  const path = join4(root, rel);
+  if (lstat(path)) {
+    try {
+      return parseReportLeniently(readRepoFile(path, MAX_REPORT_BYTES));
+    } catch (e) {
+      return unusableReport(e);
+    }
+  }
+  const mb = git(root, ["merge-base", baseRef, "HEAD"], { check: false }).trim();
+  if (mb) {
+    for (const commit of git(root, ["rev-list", `${mb}..HEAD`, "--", rel], { check: false }).split(/\s+/).filter(Boolean)) {
+      for (const rev of [commit, `${commit}^`]) {
+        if (revHasFile(root, rev, rel)) {
+          const [report, note] = parseReportLeniently(readFileAtRev(root, rev, rel, MAX_REPORT_BYTES));
+          return [report, note ?? "Using the last committed report (the file was removed)."];
+        }
+      }
+    }
+  }
+  return [null, null];
+}
+function uncommittedReport(root) {
+  try {
+    const rel = reportPath(currentBranch(root));
+    const saved = sortedKeysJson(parseReport(readRepoFile(join4(root, rel), MAX_REPORT_BYTES)));
+    if (!revHasFile(root, "HEAD", rel)) return rel;
+    let committed = null;
+    try {
+      committed = sortedKeysJson(parseReport(readFileAtRev(root, "HEAD", rel, MAX_REPORT_BYTES)));
+    } catch {
+    }
+    return saved === committed ? null : rel;
+  } catch {
+    return null;
+  }
+}
+
+// src/gate/ci-summary.ts
+function escapeMarkdown(text) {
+  let t = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  for (const ch of ["\\", "[", "]", "|", "`", "*", "_"]) t = t.split(ch).join(`\\${ch}`);
+  return t;
+}
+function jobSummary(root, branch, rev, base, passed, messages, mode) {
+  const icon = passed ? "\u2705" : mode === "required" ? "\u274C" : "\u26A0\uFE0F";
+  const title = mode === "off" ? "Ownership check is off" : mode === "skipped" ? "Ownership check skipped by label" : passed ? "Ownership check passed" : "Ownership check failed";
+  const out = [`## ${icon} ${title}`, ""];
+  if (messages.length) out.push(...messages.map((m) => `- ${escapeMarkdown(m)}`), "");
+  let report = null;
+  try {
+    report = readReport(root, branch, rev);
+  } catch {
+    report = null;
+  }
+  if (report) {
+    let cfg = DEFAULT_CONFIG;
+    try {
+      cfg = rulesFromBase(root, resolveBase(root, loadConfig(root, rev), base));
+    } catch {
+    }
+    out.push(
+      "### The developer's summary",
+      "",
+      ...splitLines(report.summary.trim()).map((l) => `> ${escapeMarkdown(l)}`),
+      "",
+      "### Verified understanding",
+      "",
+      "| File | Concepts the developer explained |",
+      "|---|---|"
+    );
+    for (const path of sorted(Object.keys(report.verified))) {
+      const entry = get(report.files, path);
+      const mode2 = isRecord(entry) && typeof entry.mode === "string" ? entry.mode : "100644";
+      const tag = isSensitive(path, mode2, cfg) ? " \u{1F512}" : "";
+      out.push(
+        `| ${escapeMarkdown(path)}${tag} | ${(get(report.verified, path) ?? []).map(escapeMarkdown).join("; ")} |`
+      );
+    }
+    const rest = sorted(Object.keys(report.files).filter((p) => !own(report.verified, p)));
+    if (rest.length)
+      out.push(
+        "",
+        `<details><summary>Also in this change, no specific questions (${rest.length})</summary>`,
+        "",
+        ...rest.map((p) => `- ${escapeMarkdown(p)}`),
+        "",
+        "</details>"
+      );
+    out.push(
+      "",
+      `<sub>\u{1F512} sensitive \xB7 report: \`${reportPath(branch)}\` \xB7 gate v${GATE_VERSION}. The report shows what was verified, never scores or mistakes.</sub>`
+    );
+  }
+  return `${out.join("\n")}
+`.slice(0, 6e4);
+}
+
+// src/gate/commands.ts
+import { existsSync as existsSync2, unlinkSync as unlinkSync2 } from "node:fs";
+import { basename as basename2, dirname as dirname3, join as join8, resolve as resolve2 } from "node:path";
+
+// src/gate/changes.ts
+import { mkdtempSync as mkdtempSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { tmpdir as tmpdir2 } from "node:os";
+import { join as join7 } from "node:path";
+
+// src/gate/features.ts
+import { join as join5 } from "node:path";
 function gateHeader(root, rev) {
   try {
-    if (rev === null) return readRepoFile(join4(root, GATE_REL), MAX_GATE_BYTES).slice(0, 4096);
+    if (rev === null) return readRepoFile(join5(root, GATE_REL), MAX_GATE_BYTES).slice(0, 4096);
     if (!revHasFile(root, rev, GATE_REL)) return "";
     return readFileAtRev(root, rev, GATE_REL, MAX_GATE_BYTES).slice(0, 4096);
   } catch {
@@ -623,14 +1004,14 @@ function ciGateHasFeature(root, baseRef, rev, feature) {
 var GATE_FILES = [
   CONFIG_PATH,
   GATE_REL,
-  ".github/workflows/ownership-check.yml",
+  REPO_PLATFORM.ciConfig.path,
   ...PROJECT_HOOK_FILES.map((f) => f.path),
-  ".github/CODEOWNERS"
+  REPO_PLATFORM.codeowners.paths[0]
 ];
 
 // src/gate/install-lines.ts
 import { readFileSync } from "node:fs";
-import { join as join5 } from "node:path";
+import { join as join6 } from "node:path";
 var INSTALL_LINES = [
   { file: ".gitignore", line: REPORT_INPUT },
   { file: ".gitattributes", line: GATE_ATTRIBUTES_LINE, feature: "gitattributes" }
@@ -641,7 +1022,7 @@ function withLine(text, line) {
 `)]);
 }
 function addInstallLine(root, file, line) {
-  const path = join5(root, file);
+  const path = join6(root, file);
   const st = lstat(path);
   if (st && (st.isSymbolicLink() || !st.isFile()))
     return `SKIPPED ${file}: not a regular file; add ${line} to it by hand.`;
@@ -712,14 +1093,14 @@ function collectChanges(root, base, rev) {
   return [Object.fromEntries(sorted(Object.keys(changes)).map((k) => [k, changes[k]])), untracked, mb];
 }
 function threeWayMerge(ours, base, theirs) {
-  const dir = mkdtempSync2(join6(tmpdir2(), "ownership-gate-merge-"));
+  const dir = mkdtempSync2(join7(tmpdir2(), "ownership-gate-merge-"));
   try {
     const paths = [
       ["ours", ours],
       ["base", base],
       ["theirs", theirs]
     ].map(([name, data]) => {
-      const p = join6(dir, name);
+      const p = join7(dir, name);
       writeFileSync2(p, data);
       return p;
     });
@@ -825,256 +1206,7 @@ function smallChange(root, baseRef, mb, rev, changes, cfg) {
   return { small: true, lines, note: null };
 }
 
-// src/gate/report.ts
-import { join as join7 } from "node:path";
-var DATA_MARKER = "<!-- ownership-data: generated by the ownership gate; do not edit by hand -->";
-function sortedKeysJson(value, indent) {
-  const sortDeep = (v) => Array.isArray(v) ? v.map(sortDeep) : isRecord(v) ? Object.fromEntries(sorted(Object.keys(v)).map((k) => [k, sortDeep(v[k])])) : v;
-  return JSON.stringify(sortDeep(value), null, indent);
-}
-function percentEncode(s) {
-  return encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-}
-var reportPath = (branch) => `${CHECKS_DIR}/${percentEncode(branch)}.md`;
-function renderReport(data) {
-  const lines = [
-    `# Ownership check \u2014 ${data.branch}`,
-    `Date: ${data.date} \xB7 Base: ${data.base} \xB7 Gate v${data.version}`,
-    "",
-    "## Summary (in the developer's own words)",
-    data.summary.trim(),
-    "",
-    "## Verified understanding"
-  ];
-  for (const path of sorted(Object.keys(data.verified)))
-    lines.push(`- \`${path}\` \u2014 ${(get(data.verified, path) ?? []).join("; ")}`);
-  const unverified = sorted(Object.keys(data.files).filter((p) => !own(data.verified, p)));
-  if (unverified.length)
-    lines.push(
-      "",
-      `Also in this change (reviewed, no specific questions): ${unverified.map((p) => `\`${p}\``).join(", ")}`
-    );
-  lines.push("", DATA_MARKER, "```json", sortedKeysJson(data, 1), "```", "");
-  return lines.join("\n");
-}
-function extractDataBlock(text) {
-  const after = text.split(DATA_MARKER).slice(1).join(DATA_MARKER);
-  const m = /```json\r?\n([\s\S]*?)\r?\n```/.exec(after);
-  return m ? m[1] : null;
-}
-function parseReport(text) {
-  if (!text.includes(DATA_MARKER))
-    throw new GateError("Report is missing its data block \u2014 run the check again to regenerate it.");
-  const block = extractDataBlock(text);
-  if (block === null) throw new GateError("Report data block is malformed \u2014 run the check again to regenerate it.");
-  let data;
-  try {
-    data = JSON.parse(block);
-  } catch (e) {
-    throw new GateError(`Report data is not valid JSON (${e.message}) \u2014 run the check again.`);
-  }
-  if (!(isRecord(data) && isRecord(data.files) && isRecord(data.verified) && typeof data.summary === "string")) {
-    throw new GateError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
-  }
-  for (const v of Object.values(data.verified)) {
-    if (!Array.isArray(v) || !v.every((x) => typeof x === "string"))
-      throw new GateError("Report data has the wrong shape \u2014 run the check again to regenerate it.");
-  }
-  if (data.version !== GATE_VERSION) {
-    throw new GateError(
-      `Report was made by gate v${String(data.version)}; this gate is v${GATE_VERSION}. If your branch is behind the base, merge it first; then run the check again.`
-    );
-  }
-  return data;
-}
-function readReport(root, branch, rev) {
-  const rel = reportPath(branch);
-  if (rev) {
-    if (!revHasFile(root, rev, rel)) return null;
-    return parseReport(readFileAtRev(root, rev, rel, MAX_REPORT_BYTES));
-  }
-  const path = join7(root, rel);
-  return lstat(path) ? parseReport(readRepoFile(path, MAX_REPORT_BYTES)) : null;
-}
-var unusableReport = (e) => [
-  { files: {}, verified: {}, summary: "", _outdated: true },
-  `Existing report can't be used (${e.message}); its files need verifying again.`
-];
-function parseReportLeniently(text) {
-  try {
-    return [parseReport(text), null];
-  } catch (e) {
-    let files = {};
-    if (text.includes(DATA_MARKER)) {
-      try {
-        const data = JSON.parse(extractDataBlock(text) ?? "null");
-        if (isRecord(data) && isRecord(data.files)) files = data.files;
-      } catch {
-      }
-    }
-    return [
-      { files, verified: {}, summary: "", _outdated: true },
-      `Existing report can't be used (${e.message}); its files need verifying again.`
-    ];
-  }
-}
-function previousReport(root, branch, baseRef) {
-  const rel = reportPath(branch);
-  const path = join7(root, rel);
-  if (lstat(path)) {
-    try {
-      return parseReportLeniently(readRepoFile(path, MAX_REPORT_BYTES));
-    } catch (e) {
-      return unusableReport(e);
-    }
-  }
-  const mb = git(root, ["merge-base", baseRef, "HEAD"], { check: false }).trim();
-  if (mb) {
-    for (const commit of git(root, ["rev-list", `${mb}..HEAD`, "--", rel], { check: false }).split(/\s+/).filter(Boolean)) {
-      for (const rev of [commit, `${commit}^`]) {
-        if (revHasFile(root, rev, rel)) {
-          const [report, note] = parseReportLeniently(readFileAtRev(root, rev, rel, MAX_REPORT_BYTES));
-          return [report, note ?? "Using the last committed report (the file was removed)."];
-        }
-      }
-    }
-  }
-  return [null, null];
-}
-function uncommittedReport(root) {
-  try {
-    const rel = reportPath(currentBranch(root));
-    const saved = sortedKeysJson(parseReport(readRepoFile(join7(root, rel), MAX_REPORT_BYTES)));
-    if (!revHasFile(root, "HEAD", rel)) return rel;
-    let committed = null;
-    try {
-      committed = sortedKeysJson(parseReport(readFileAtRev(root, "HEAD", rel, MAX_REPORT_BYTES)));
-    } catch {
-    }
-    return saved === committed ? null : rel;
-  } catch {
-    return null;
-  }
-}
-
-// src/gate/ci-summary.ts
-function escapeMarkdown(text) {
-  let t = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  for (const ch of ["\\", "[", "]", "|", "`", "*", "_"]) t = t.split(ch).join(`\\${ch}`);
-  return t;
-}
-function jobSummary(root, branch, rev, base, passed, messages, mode) {
-  const icon = passed ? "\u2705" : mode === "required" ? "\u274C" : "\u26A0\uFE0F";
-  const title = mode === "off" ? "Ownership check is off" : mode === "skipped" ? "Ownership check skipped by label" : passed ? "Ownership check passed" : "Ownership check failed";
-  const out = [`## ${icon} ${title}`, ""];
-  if (messages.length) out.push(...messages.map((m) => `- ${escapeMarkdown(m)}`), "");
-  let report = null;
-  try {
-    report = readReport(root, branch, rev);
-  } catch {
-    report = null;
-  }
-  if (report) {
-    let cfg = DEFAULT_CONFIG;
-    try {
-      cfg = rulesFromBase(root, resolveBase(root, loadConfig(root, rev), base));
-    } catch {
-    }
-    out.push(
-      "### The developer's summary",
-      "",
-      ...splitLines(report.summary.trim()).map((l) => `> ${escapeMarkdown(l)}`),
-      "",
-      "### Verified understanding",
-      "",
-      "| File | Concepts the developer explained |",
-      "|---|---|"
-    );
-    for (const path of sorted(Object.keys(report.verified))) {
-      const entry = get(report.files, path);
-      const mode2 = isRecord(entry) && typeof entry.mode === "string" ? entry.mode : "100644";
-      const tag = isSensitive(path, mode2, cfg) ? " \u{1F512}" : "";
-      out.push(
-        `| ${escapeMarkdown(path)}${tag} | ${(get(report.verified, path) ?? []).map(escapeMarkdown).join("; ")} |`
-      );
-    }
-    const rest = sorted(Object.keys(report.files).filter((p) => !own(report.verified, p)));
-    if (rest.length)
-      out.push(
-        "",
-        `<details><summary>Also in this change, no specific questions (${rest.length})</summary>`,
-        "",
-        ...rest.map((p) => `- ${escapeMarkdown(p)}`),
-        "",
-        "</details>"
-      );
-    out.push(
-      "",
-      `<sub>\u{1F512} sensitive \xB7 report: \`${reportPath(branch)}\` \xB7 gate v${GATE_VERSION}. The report shows what was verified, never scores or mistakes.</sub>`
-    );
-  }
-  return `${out.join("\n")}
-`.slice(0, 6e4);
-}
-function annotate(kind, messages) {
-  if (process.env.GITHUB_ACTIONS === "true")
-    for (const m of messages) process.stdout.write(`::${kind} title=Ownership check::${m}
-`);
-}
-
-// src/gate/ci-workflow.ts
-var WORKFLOW = `name: Ownership check
-
-on:
-  pull_request:
-    # 'edited' re-runs the check when a PR is retargeted to another base branch.
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
-
-permissions:
-  contents: read
-
-jobs:
-  ownership:
-    name: Ownership check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          # Check the PR's own commit (not GitHub's merge commit) with full history,
-          # so fingerprints match what the developer verified.
-          ref: \${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          # The gate needs no dependencies; a restored cache is only a way in.
-          package-manager-cache: false
-
-      - name: Verify ownership report
-        env:
-          BASE_REF: \${{ github.base_ref }}
-          HEAD_REF: \${{ github.head_ref }}
-          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
-          NODE_OPTIONS: ""
-        run: |
-          # Run the gate as it exists on the base branch, so a PR can't weaken it
-          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
-          # doesn't have the gate yet (the PR that installs it); the rules then
-          # are the strict defaults, not the PR's own config.
-          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
-            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
-          else
-            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
-          fi
-          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
-            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
-`;
-var CHECK_NAME = "Ownership check";
-
 // src/gate/commands.ts
-import { existsSync as existsSync2, unlinkSync as unlinkSync2 } from "node:fs";
-import { basename as basename2, dirname as dirname3, join as join8, resolve as resolve2 } from "node:path";
 var CHECK_ME_HINT = 'Ask Claude to run the ownership check ("check me"), then commit the report.';
 var BLANK = "[\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
 var BLANK_ENDS = new RegExp(`^${BLANK}+|${BLANK}+$`, "gu");
@@ -1292,7 +1424,6 @@ var WRAPPERS = /* @__PURE__ */ new Set(["sudo", "doas", "env", "command", "built
 var WRAPPER_ARG_OPTS = /* @__PURE__ */ new Set(["-u", "-g", "-C", "-h", "-p", "-n", "-f", "-o", "-i", "-e"]);
 var SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "zsh", "dash", "ksh"]);
 var GIT_ARG_OPTS = /* @__PURE__ */ new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"]);
-var GH_ARG_OPTS = /* @__PURE__ */ new Set(["-R", "--repo", "--hostname"]);
 var PUNCT = "();<>|&";
 function tokenize(command) {
   const tokens = [];
@@ -1396,10 +1527,13 @@ function isPushCommand(command, depth = 0) {
       let j = 1;
       while (j < tokens.length && tokens[j].startsWith("-")) j += GIT_ARG_OPTS.has(tokens[j]) ? 2 : 1;
       if (j < tokens.length && tokens[j] === "push") return true;
-    } else if (prog === "gh") {
+    } else {
+      const cli = PLATFORMS.map((p) => p.cli).find((c) => c.program === prog);
+      if (!cli) continue;
       let j = 1;
-      while (j < tokens.length && tokens[j].startsWith("-")) j += GH_ARG_OPTS.has(tokens[j]) ? 2 : 1;
-      if (tokens[j] === "pr" && j + 1 < tokens.length && ["create", "merge"].includes(tokens[j + 1])) return true;
+      while (j < tokens.length && tokens[j].startsWith("-")) j += cli.optionsWithValue.has(tokens[j]) ? 2 : 1;
+      if (j + 1 < tokens.length && cli.pullRequestCommands.some(([a, b]) => tokens[j] === a && tokens[j + 1] === b))
+        return true;
     }
   }
   return false;
@@ -1611,13 +1745,15 @@ import { dirname as dirname4, join as join11, resolve as resolve4 } from "node:p
 import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:fs";
 import { join as join10 } from "node:path";
 function setUpCodeowners(root, owner) {
+  const { paths, ownerPattern, ownerHint, reviewSetting } = REPO_PLATFORM.codeowners;
+  const rel = paths[0];
   const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
   if (!owner) {
-    return "MANUAL STEP 2: add to .github/CODEOWNERS (or rerun install with --owner @handle) and turn on 'Require review from Code Owners' \u2014 otherwise a PR could edit the workflow to skip the check:\n  " + lines.join("\n  ");
+    return `MANUAL STEP 2: add to ${rel} (or rerun install with --owner @handle) and turn on ${reviewSetting} \u2014 otherwise a PR could edit the workflow to skip the check:
+  ` + lines.join("\n  ");
   }
-  if (!/^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/.test(owner))
-    throw new GateError(`--owner must be a GitHub @user, @org/team, or an email; got ${JSON.stringify(owner)}.`);
-  const path = join10(root, ".github", "CODEOWNERS");
+  if (!ownerPattern.test(owner)) throw new GateError(`--owner must be ${ownerHint}; got ${JSON.stringify(owner)}.`);
+  const path = join10(root, rel);
   const existing = existsSync4(path) ? readFileSync3(path, "utf8") : "";
   const have = new Set(
     splitLines(existing).filter((l) => l.trim() && !l.trimStart().startsWith("#")).map((l) => l.trim().split(/\s+/)[0])
@@ -1632,7 +1768,7 @@ ${fresh.join("\n")}
 `
     );
   }
-  return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on 'Require review from Code Owners' in branch protection.`;
+  return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on ${reviewSetting} in branch protection.`;
 }
 
 // src/gate/install.ts
@@ -1671,116 +1807,80 @@ function install(repo, upgrade = false, owner) {
 `);
     done.push(`wrote ${CONFIG_PATH} (base: ${cfg.base}, mode: required)`);
   }
-  const wf = join11(root, ".github", "workflows", "ownership-check.yml");
-  const wfRel = ".github/workflows/ownership-check.yml";
-  if (existsSync5(wf)) done.push(`${wfRel} exists (kept)`);
-  else {
-    atomicWrite(wf, WORKFLOW);
-    done.push(`wrote ${wfRel}`);
-  }
+  const ci = REPO_PLATFORM.ciConfig;
+  const ciPath = join11(root, ci.path);
+  const { content, message } = ci.withGateJob(existsSync5(ciPath) ? readExisting(ciPath) : null);
+  if (content !== void 0) atomicWrite(ciPath, content);
+  done.push(message);
   for (const file of PROJECT_HOOK_FILES) done.push(addProjectHook(join11(root, file.path), file));
   for (const { file, line } of INSTALL_LINES) done.push(addInstallLine(root, file, line));
   done.push(...installHooks(root));
   done.push(
-    `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch \u2014 without it CI only warns.`
+    `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${REPO_PLATFORM.checkName}' status on the default branch \u2014 without it CI only warns.`
   );
   done.push(setUpCodeowners(root, owner));
   return done;
 }
 
-// src/gate/protect.ts
-var RULESET_NAME = "Ownership gate";
-var REQUIRE_BY_HAND = "https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#make-the-check-required";
-function rulesetBody(approvals = 1, codeOwners = true) {
-  return {
-    name: RULESET_NAME,
-    target: "branch",
-    enforcement: "active",
-    conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
-    rules: [
-      {
-        type: "pull_request",
-        parameters: {
-          required_approving_review_count: approvals,
-          require_code_owner_review: codeOwners,
-          dismiss_stale_reviews_on_push: false,
-          require_last_push_approval: false,
-          required_review_thread_resolution: false
-        }
-      },
-      {
-        type: "required_status_checks",
-        parameters: { strict_required_status_checks_policy: false, required_status_checks: [{ context: CHECK_NAME }] }
-      }
-    ]
+// src/gate/test-hooks.ts
+function testCall(fn, a) {
+  const s = (i) => a[i] === null || a[i] === void 0 ? null : String(a[i]);
+  const consts = {
+    GATE_VERSION,
+    GATE_FILES,
+    // The text install writes into a repo with no CI config yet.
+    WORKFLOW: REPO_PLATFORM.ciConfig.withGateJob(null).content,
+    CHECK_NAME: REPO_PLATFORM.checkName,
+    REPO_GATE: GATE_REL,
+    ALWAYS_ON
   };
-}
-function runGh(root, args, input) {
-  let r;
-  try {
-    r = run("gh", args, { cwd: root, input });
-  } catch (e) {
-    if (e.code === "ENOENT") {
-      throw new GateError(
-        `The GitHub CLI (gh) isn't installed. Install it and run \`gh auth login\`, or make the check required by hand: ${REQUIRE_BY_HAND}`
-      );
+  if (fn in consts) return consts[fn];
+  switch (fn) {
+    case "collect_changes": {
+      const [c, u, mb] = collectChanges(repoRoot(s(0)), String(a[1]), s(2));
+      return [c, sorted(u), mb];
     }
-    throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${e.message}`);
-  }
-  if (r.status !== 0) {
-    const err = (r.stderr.toString("utf8") || r.stdout.toString("utf8")).trim();
-    const low = err.toLowerCase();
-    if (err.includes("Upgrade to GitHub Pro") || low.includes("upgrade") && low.includes("plan")) {
-      throw new GateError(
-        `Rulesets aren't available for private repos on GitHub's free plan. Use Settings \u2192 Branches \u2192 branch protection instead: ${REQUIRE_BY_HAND}`
-      );
+    case "read_report":
+      return readReport(repoRoot(s(0)), String(a[1]), s(2));
+    case "merge_claude_settings": {
+      const file = PROJECT_HOOK_FILES.find((f) => f.path === ".claude/settings.json");
+      return file ? addProjectHook(String(a[0]), file) : null;
     }
-    if (err.includes("403") || err.includes("Must have admin rights") || err.includes("Resource not accessible")) {
-      throw new GateError("GitHub refused: creating rules needs admin access to this repository.");
+    case "ci_platform": {
+      const env = a[0] ?? {};
+      const p = ciPlatform(env);
+      return { id: p.id, context: p.ciContext(env), summaryFile: p.reviewerSummaryFile(env) };
     }
-    throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${err}`);
+    case "resolve_agent": {
+      const env = a[1] ?? {};
+      let payload;
+      try {
+        payload = JSON.parse(String(a[0]));
+      } catch {
+        return null;
+      }
+      const agent = resolveAgent(payload, env, s(2));
+      return agent && { id: agent.id, command: agent.shellCommand(payload), projectDir: agent.projectDir(payload, env) };
+    }
+    case "is_push_command":
+      return isPushCommand(String(a[0]));
+    case "is_plumbing":
+      return isPlumbing(String(a[0]), a[1] === void 0 ? void 0 : String(a[1]));
+    case "is_sensitive":
+      return isSensitive(String(a[0]), String(a[1]), a[2]);
+    case "md_safe":
+      return escapeMarkdown(String(a[0]));
+    case "report_relpath":
+      return reportPath(String(a[0]));
+    case "render_report":
+      return renderReport(a[0]);
+    case "parse_report":
+      return parseReport(String(a[0]));
+    case "same_path":
+      return samePath(String(a[0]), String(a[1]), String(a[2]));
+    default:
+      throw new GateError(`unknown test function ${fn}`);
   }
-  return r.stdout.toString("utf8");
-}
-function protect(repo, apply = false, approvals = 1, codeOwners = true) {
-  const root = repoRoot(repo);
-  if (!Number.isInteger(approvals) || approvals < 0 || approvals > 10)
-    throw new GateError("--approvals must be between 0 and 10.");
-  const nwo = runGh(root, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).trim();
-  if (!/^[\w.-]+\/[\w.-]+$/.test(nwo))
-    throw new GateError(`Couldn't tell which GitHub repo this is (got ${JSON.stringify(nwo)}).`);
-  let existing = [];
-  try {
-    existing = JSON.parse(runGh(root, ["api", `repos/${nwo}/rulesets`]) || "[]");
-  } catch (e) {
-    if (e instanceof GateError) throw e;
-  }
-  for (const r of Array.isArray(existing) ? existing : []) {
-    if (isRecord(r) && r.name === RULESET_NAME)
-      return [`Ruleset '${RULESET_NAME}' already exists on ${nwo}: https://github.com/${nwo}/rules/${String(r.id)}`];
-  }
-  const body = rulesetBody(approvals, codeOwners);
-  const plan = [
-    `Ruleset for ${nwo} (default branch): require a pull request with ${approvals} approval(s)` + (codeOwners ? " incl. code owners" : "") + `, and the '${CHECK_NAME}' status check.`,
-    "It adds to existing branch protection; it doesn't replace it."
-  ];
-  if (codeOwners)
-    plan.push("Note: a code owner can't approve their own PR. On a one-person repo, use --no-code-owners.");
-  if (!apply)
-    return [
-      ...plan,
-      "Dry run \u2014 nothing changed. Rerun with --apply (needs admin) to create it.",
-      JSON.stringify(body, null, 2)
-    ];
-  let created = {};
-  try {
-    created = JSON.parse(
-      runGh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}"
-    );
-  } catch (e) {
-    if (e instanceof GateError) throw e;
-  }
-  return [...plan, `Created: https://github.com/${nwo}/rules/${String(isRecord(created) ? created.id : void 0)}`];
 }
 
 // src/gate/cli.ts
@@ -1797,7 +1897,7 @@ Commands (run from inside the repo, or pass --repo):
   session-start  SessionStart hook (plugin): the always-on note; in gated repos, the git hook   [--agent ID]
   install        Add the gate, config, CI workflow, the AI tools' repo hook files and the git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
-  protect        Create the GitHub ruleset that makes the check required (gh; dry run by default)
+  protect        Make the check required on the default branch (GitHub: a ruleset, through gh; dry run by default)
   version        Print the gate version
 
 Common options: --repo PATH  --base REF  --branch NAME
@@ -1849,59 +1949,6 @@ function parseArgs(argv) {
 }
 var UsageError = class extends Error {
 };
-function testCall(fn, a) {
-  const s = (i) => a[i] === null || a[i] === void 0 ? null : String(a[i]);
-  const consts = {
-    GATE_VERSION,
-    GATE_FILES,
-    WORKFLOW,
-    CHECK_NAME,
-    REPO_GATE: GATE_REL,
-    ALWAYS_ON
-  };
-  if (fn in consts) return consts[fn];
-  switch (fn) {
-    case "collect_changes": {
-      const [c, u, mb] = collectChanges(repoRoot(s(0)), String(a[1]), s(2));
-      return [c, sorted(u), mb];
-    }
-    case "read_report":
-      return readReport(repoRoot(s(0)), String(a[1]), s(2));
-    case "merge_claude_settings": {
-      const file = PROJECT_HOOK_FILES.find((f) => f.path === ".claude/settings.json");
-      return file ? addProjectHook(String(a[0]), file) : null;
-    }
-    case "resolve_agent": {
-      const env = a[1] ?? {};
-      let payload;
-      try {
-        payload = JSON.parse(String(a[0]));
-      } catch {
-        return null;
-      }
-      const agent = resolveAgent(payload, env, s(2));
-      return agent && { id: agent.id, command: agent.shellCommand(payload), projectDir: agent.projectDir(payload, env) };
-    }
-    case "is_push_command":
-      return isPushCommand(String(a[0]));
-    case "is_plumbing":
-      return isPlumbing(String(a[0]), a[1] === void 0 ? void 0 : String(a[1]));
-    case "is_sensitive":
-      return isSensitive(String(a[0]), String(a[1]), a[2]);
-    case "md_safe":
-      return escapeMarkdown(String(a[0]));
-    case "report_relpath":
-      return reportPath(String(a[0]));
-    case "render_report":
-      return renderReport(a[0]);
-    case "parse_report":
-      return parseReport(String(a[0]));
-    case "same_path":
-      return samePath(String(a[0]), String(a[1]), String(a[2]));
-    default:
-      throw new GateError(`unknown test function ${fn}`);
-  }
-}
 function main(argv) {
   let args;
   try {
@@ -1916,6 +1963,8 @@ ${HELP}`);
   const o = (k) => typeof opts[k] === "string" ? opts[k] : null;
   const out = (s) => process.stdout.write(`${s}
 `);
+  const platform = ciPlatform(process.env);
+  const annotate = (kind, messages) => process.stdout.write(platform.annotations(kind, messages, process.env));
   try {
     switch (cmd) {
       case "":
@@ -1946,7 +1995,8 @@ ${HELP}`);
         return 0;
       }
       case "verify": {
-        let labels = [];
+        const ci = platform.ciContext(process.env);
+        let labels = [...ci.labels ?? []];
         const lj = o("labels-json");
         if (lj?.trim()) {
           try {
@@ -1958,18 +2008,19 @@ ${HELP}`);
           }
         }
         const rev = o("rev") ?? "HEAD";
-        const [passed, messages, mode] = verify(o("repo"), o("base"), o("branch"), rev, labels);
+        const base = o("base") ?? ci.baseRef;
+        const [passed, messages, mode] = verify(o("repo"), base, o("branch"), rev, labels);
         if (opts.json) {
           out(JSON.stringify({ passed, messages, mode }));
           return 0;
         }
-        const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+        const summaryPath = platform.reviewerSummaryFile(process.env);
         if (summaryPath) {
           try {
             const root = repoRoot(o("repo"));
             appendFileSync(
               summaryPath,
-              jobSummary(root, currentBranch(root, o("branch")), rev, o("base"), passed, messages, mode),
+              jobSummary(root, currentBranch(root, o("branch")), rev, base, passed, messages, mode),
               "utf8"
             );
           } catch {
@@ -2008,7 +2059,11 @@ ${HELP}`);
           const n = o("approvals");
           if (n !== null && !/^\d+$/.test(n)) throw new GateError("--approvals must be between 0 and 10.");
           const approvals = n === null ? 1 : Number(n);
-          lines = protect(o("repo"), Boolean(opts.apply), approvals, !opts["no-code-owners"]);
+          lines = REPO_PLATFORM.protect(repoRoot(o("repo")), {
+            apply: Boolean(opts.apply),
+            approvals,
+            codeOwners: !opts["no-code-owners"]
+          });
         }
         out(opts.json ? JSON.stringify(lines) : lines.join("\n"));
         return 0;

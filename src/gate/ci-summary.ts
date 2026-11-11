@@ -1,5 +1,6 @@
-// What CI shows reviewers: the job summary and annotations. Only what was verified,
-// never scores, wrong answers or attempts, and PR-author text is escaped.
+// What CI shows reviewers: the summary, in markdown, which the platform puts where
+// reviewers see it. Only what was verified, never scores, wrong answers or attempts,
+// and PR-author text is escaped.
 import { get, isRecord, own } from "../util.js";
 import { type Config, DEFAULT_CONFIG, isSensitive, loadConfig, rulesFromBase } from "./config.js";
 import { resolveBase } from "./git.js";
@@ -81,9 +82,4 @@ export function jobSummary(
     );
   }
   return `${out.join("\n")}\n`.slice(0, 60_000);
-}
-
-export function annotate(kind: string, messages: string[]): void {
-  if (process.env.GITHUB_ACTIONS === "true")
-    for (const m of messages) process.stdout.write(`::${kind} title=Ownership check::${m}\n`);
 }

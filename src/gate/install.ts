@@ -5,13 +5,13 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { PROJECT_HOOK_FILES } from "./agents/index.js";
-import { CHECK_NAME, WORKFLOW } from "./ci-workflow.js";
 import { setUpCodeowners } from "./codeowners.js";
 import { DEFAULT_CONFIG } from "./config.js";
-import { atomicWrite } from "./files.js";
+import { atomicWrite, readExisting } from "./files.js";
 import { repoRoot, resolveBase } from "./git.js";
 import { type GateCopyDifference, gateCopyDifference, installHooks } from "./hooks.js";
 import { addInstallLine, INSTALL_LINES } from "./install-lines.js";
+import { REPO_PLATFORM } from "./platforms/index.js";
 import { addProjectHook } from "./project-hooks.js";
 import { CONFIG_PATH, GATE_REL, GateError, SELF } from "./shared.js";
 
@@ -54,19 +54,20 @@ export function install(repo?: string | null, upgrade = false, owner?: string | 
     done.push(`wrote ${CONFIG_PATH} (base: ${cfg.base}, mode: required)`);
   }
 
-  const wf = join(root, ".github", "workflows", "ownership-check.yml");
-  const wfRel = ".github/workflows/ownership-check.yml";
-  if (existsSync(wf)) done.push(`${wfRel} exists (kept)`);
-  else {
-    atomicWrite(wf, WORKFLOW);
-    done.push(`wrote ${wfRel}`);
-  }
+  const ci = REPO_PLATFORM.ciConfig;
+  const ciPath = join(root, ci.path);
+  // existsSync, as install always has for the workflow: a dangling symlink there
+  // counts as missing and is replaced. Repo hook files use lstat instead
+  // (project-hooks.ts), so a symlink is never written through.
+  const { content, message } = ci.withGateJob(existsSync(ciPath) ? readExisting(ciPath) : null);
+  if (content !== undefined) atomicWrite(ciPath, content);
+  done.push(message);
 
   for (const file of PROJECT_HOOK_FILES) done.push(addProjectHook(join(root, file.path), file));
   for (const { file, line } of INSTALL_LINES) done.push(addInstallLine(root, file, line));
   done.push(...installHooks(root));
   done.push(
-    `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch — without it CI only warns.`,
+    `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${REPO_PLATFORM.checkName}' status on the default branch — without it CI only warns.`,
   );
   done.push(setUpCodeowners(root, owner));
   return done;

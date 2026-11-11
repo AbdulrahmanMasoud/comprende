@@ -1,5 +1,8 @@
 // Does a shell command push? A small shell tokenizer, so `git stash push` or a quoted
 // "git push" in a commit message don't count, while `sudo git push` and `bash -c "git push"` do.
+// A platform CLI's commands that open or merge a pull request count too (platforms/).
+
+import { PLATFORMS } from "./platforms/index.js";
 
 const WRAPPERS = new Set(["sudo", "doas", "env", "command", "builtin", "exec", "time", "nohup", "nice", "stdbuf"]);
 
@@ -8,8 +11,6 @@ const WRAPPER_ARG_OPTS = new Set(["-u", "-g", "-C", "-h", "-p", "-n", "-f", "-o"
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
 
 const GIT_ARG_OPTS = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"]);
-
-const GH_ARG_OPTS = new Set(["-R", "--repo", "--hostname"]);
 
 const PUNCT = "();<>|&";
 
@@ -95,7 +96,8 @@ function commandSegments(command: string): string[][] {
 /** "git" for "/usr/bin/git": the program a token names. */
 const programName = (t: string) => t.split("/").pop() ?? t;
 
-/** True if a shell command runs `git push` or `gh pr create/merge`. Tokenises
+/** True if a shell command runs `git push`, or a platform CLI's command that opens
+ *  or merges a pull request (`gh pr create`, `gh pr merge`). Tokenises
  *  like a shell (quotes respected), so `git stash push` or
  *  `git commit -m "then git push"` don't count, while `git -C repo push`,
  *  `sudo git push`, `bash -c "git push"` and `(git push)` do. */
@@ -126,10 +128,13 @@ export function isPushCommand(command: string, depth = 0): boolean {
       let j = 1;
       while (j < tokens.length && tokens[j].startsWith("-")) j += GIT_ARG_OPTS.has(tokens[j]) ? 2 : 1;
       if (j < tokens.length && tokens[j] === "push") return true;
-    } else if (prog === "gh") {
+    } else {
+      const cli = PLATFORMS.map((p) => p.cli).find((c) => c.program === prog);
+      if (!cli) continue;
       let j = 1;
-      while (j < tokens.length && tokens[j].startsWith("-")) j += GH_ARG_OPTS.has(tokens[j]) ? 2 : 1;
-      if (tokens[j] === "pr" && j + 1 < tokens.length && ["create", "merge"].includes(tokens[j + 1])) return true;
+      while (j < tokens.length && tokens[j].startsWith("-")) j += cli.optionsWithValue.has(tokens[j]) ? 2 : 1;
+      if (j + 1 < tokens.length && cli.pullRequestCommands.some(([a, b]) => tokens[j] === a && tokens[j + 1] === b))
+        return true;
     }
   }
   return false;
