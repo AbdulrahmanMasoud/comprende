@@ -17,7 +17,7 @@ claude plugin validate ./.claude-plugin/plugin.json
 
 `dist/` is committed, because that's what the plugin runs. CI fails if `dist/` doesn't match a fresh build of `src/`, so run `npm run build` before committing.
 
-To try your local copy: `claude --plugin-dir .`, or `claude plugin marketplace add ./` from the repo root.
+To try your local copy: `claude --plugin-dir .`, or `claude plugin marketplace add ./` from the repo root. In Cursor's CLI: `cursor-agent --plugin-dir .`.
 
 ## Workflow: branch → PR → CI → release
 
@@ -230,6 +230,8 @@ skills/comprende/
   references/         signals, formats, examples, memory, the ownership-check protocol
   scripts/            gate.mjs and learning.mjs (copies of the built files, for the skill on its own)
 hooks/hooks.json      SessionStart (auto-setup) and PreToolUse (block unverified pushes)
+.cursor-plugin/       the Cursor plugin and marketplace manifests (same skill, same MCP server)
+hooks/cursor-hooks.json  the Cursor plugin's hooks, in Cursor's format
 .mcp.json             the memory server
 src/gate/             the ownership gate, one module per concern (bundled into dist/gate.mjs)
 src/store/            the memory store: learner profile and project notes

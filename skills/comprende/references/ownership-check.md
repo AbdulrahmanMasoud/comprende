@@ -120,7 +120,7 @@ When the user asks to set it up ("enable the ownership gate here", in any langua
 4. **After it's merged**, run `node .learning/gate.mjs protect`. It is a dry run that shows the GitHub ruleset it would create: a required PR, the required "Ownership check" status, and code-owner review. If they agree, run it again with `--apply`, which needs admin access. Rulesets add to existing branch protection and don't replace it. Add `--no-code-owners` for one-person repos. On a private repo on the free plan, rulesets aren't available, so walk them through Settings → Branches instead.
 5. **Tell them about open PRs.** Branches created before the gate won't report the check until they merge the base branch in.
 
-Teammates who install the plugin need nothing else. When they open Claude in the repo, the plugin installs their local pre-push hook and reminds Claude that the repo is gated. Teammates without the plugin can run `node .learning/gate.mjs install-hooks` once per clone.
+Teammates who install the plugin need nothing else. When they open the repo in Claude Code or Cursor, the plugin installs their local pre-push hook and reminds the agent that the repo is gated. Teammates without the plugin can run `node .learning/gate.mjs install-hooks` once per clone.
 
 Without a `.learning/config.json`, the gate counts as `suggested` locally. CI and the hooks always take their rules from the **base** branch, so a PR can't switch off its own check.
 

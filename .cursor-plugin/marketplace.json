@@ -1,0 +1,16 @@
+{
+  "name": "comprende",
+  "owner": {
+    "name": "Abdulrahman Masoud"
+  },
+  "metadata": {
+    "description": "Proof of understanding for AI-written code: learn while the agent builds, and make sure every developer owns the code they ship."
+  },
+  "plugins": [
+    {
+      "name": "comprende",
+      "source": "./",
+      "description": "Proof of understanding for AI-written code. The agent explains the code it writes, briefly and only where it matters, and an optional ownership gate makes sure the developer who ships a change actually understands it."
+    }
+  ]
+}

@@ -235,3 +235,45 @@ test("dist/ and the skill's scripts are checked out byte for byte, whatever core
   const attrs = git(REPO, "check-attr", "text", "--", ...built).stdout;
   for (const file of built) assert.ok(attrs.includes(`${file}: text: unset`), attrs);
 });
+
+test("the Cursor plugin shares the skill and the MCP server, and its manifest's paths exist", () => {
+  const cursor = json(".cursor-plugin/plugin.json");
+  assert.equal(cursor.name, json(".claude-plugin/plugin.json").name);
+  assert.equal(cursor.skills, "./skills/");
+  assert.equal(cursor.mcpServers, "./.mcp.json");
+  for (const rel of [cursor.skills, cursor.hooks, cursor.mcpServers, cursor.logo, "skills/comprende/SKILL.md"])
+    assert.ok(existsSync(join(REPO, rel)), rel);
+  const market = json(".cursor-plugin/marketplace.json");
+  assert.deepEqual(
+    market.plugins.map((p) => [p.name, p.source]),
+    [["comprende", "./"]],
+  );
+});
+
+test("the Cursor plugin's hook commands are plain node lines that PowerShell can run too", () => {
+  const { hooks } = json(json(".cursor-plugin/plugin.json").hooks);
+  const entries = Object.entries(hooks).flatMap(([event, list]) => list.map((h) => ({ event, ...h })));
+  assert.deepEqual(entries.map((h) => h.event).sort(), ["preToolUse", "sessionStart"]);
+  for (const h of entries) {
+    // One program and its arguments: no ;, |, &, $(…), backticks, redirects or "command -v".
+    assert.match(
+      h.command,
+      /^node "\$\{CURSOR_PLUGIN_ROOT\}\/dist\/gate\.mjs" (session-start|agent-hook) --from-plugin --agent cursor$/,
+    );
+    assert.equal(h.failClosed, false, "a hook blocks only on a deliberate exit 2");
+    assert.ok(h.timeout > 0);
+  }
+  assert.equal(entries.find((h) => h.event === "preToolUse").matcher, "Shell");
+});
+
+test("without node, the Cursor plugin's hooks fail open", (t) => {
+  const { hooks } = json(json(".cursor-plugin/plugin.json").hooks);
+  const emptyPath = tmp(t);
+  for (const [event, [h]] of Object.entries(hooks)) {
+    // Cursor puts the plugin's folder in place of the variable before the shell runs.
+    const command = h.command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO);
+    const r = sh(REPO, "/bin/sh", ["-c", command], { check: false, input: "{}", env: { PATH: emptyPath } });
+    assert.notEqual(r.status, 2, `${event}: ${r.stderr}`);
+    assert.equal(r.stdout, "", event);
+  }
+});

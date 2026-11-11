@@ -26,6 +26,7 @@ actionlint                        # the GitHub workflows
 
 - `.claude-plugin/`: `plugin.json`, `marketplace.json` (`source: "."`), `icon.png`
 - `hooks/hooks.json`: SessionStart (`gate.mjs session-start`), PreToolUse on Bash (`gate.mjs claude-hook --from-plugin`)
+- `.cursor-plugin/`: `plugin.json` (the same skill and MCP server, `hooks/cursor-hooks.json`) and `marketplace.json`. `hooks/cursor-hooks.json`: Cursor's format, plain `node "${CURSOR_PLUGIN_ROOT}/dist/gate.mjs" … --agent cursor` lines with no shell syntax, since Cursor runs hooks in PowerShell on Windows
 - `.mcp.json`: the `comprende` MCP server (`dist/server.mjs`)
 - `skills/comprende/SKILL.md` plus `references/` (signals, formats, examples, memory, ownership-check)
 - `src/gate/`: the ownership gate, bundled into `dist/gate.mjs` from `cli.ts`. One module per concern, each with a header saying what it owns:
