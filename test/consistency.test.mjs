@@ -6,7 +6,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { test } from "node:test";
 import { parse as parseYaml } from "yaml";
-import { commitAll, ENV, git, NODE, REPO, SUMMARY, setup, sh, tmp, write } from "./helpers.mjs";
+import { commitAll, ENV, gate, git, NODE, REPO, SUMMARY, setup, sh, tmp, write } from "./helpers.mjs";
 
 const read = (rel) => readFileSync(join(REPO, rel));
 
@@ -223,11 +223,16 @@ test("the Claude hook in docs/teams.md is the one install writes", (t) => {
   assert.ok(read("docs/teams.md").toString("utf8").includes(JSON.stringify(command)), "update the snippet");
 });
 
-test("the Codex hook in docs/teams.md is the one install writes", (t) => {
+test("the Codex hooks in docs/teams.md are the ones install writes", (t) => {
   const { dev } = setup(t);
-  const { command } = JSON.parse(readFileSync(join(dev, ".codex/hooks.json"), "utf8")).hooks.PreToolUse[0].hooks[0];
-  assert.match(command, /agent-hook --agent codex$/);
-  assert.ok(read("docs/teams.md").toString("utf8").includes(JSON.stringify(command)), "update the snippet");
+  const { hooks } = JSON.parse(readFileSync(join(dev, ".codex/hooks.json"), "utf8"));
+  const shell = hooks.PreToolUse[0].hooks[0].command;
+  const session = hooks.SessionStart[0].hooks[0].command;
+  assert.match(shell, /agent-hook --agent codex$/);
+  assert.match(session, /session-start --from-repo --agent codex$/);
+  const teams = read("docs/teams.md").toString("utf8");
+  for (const command of [shell, session])
+    assert.ok(teams.includes(JSON.stringify(command)), `update the snippet: ${command}`);
 });
 
 const skill = () => read("skills/comprende/SKILL.md").toString("utf8");
@@ -241,6 +246,12 @@ test("the skill loads on any code change, not only where an agent's file search 
   assert.ok(description.includes("whenever you write, change, or walk through code"), description);
   assert.ok(!description.includes("the user wants to learn"), "no condition on the user's wish to learn");
   assert.ok(!description.includes(".learning"), "loading it must not depend on finding the hidden folder");
+});
+
+test("the skill's rule looks for the line every plugin session start begins with", () => {
+  const start = gate.const("PLUGIN_LINE_START");
+  assert.ok(skill().includes(`a note that begins "${start}"`), `the skill must quote "${start}"`);
+  for (const line of [gate.const("ALWAYS_ON"), gate.const("QUIET_MODE")]) assert.ok(line.startsWith(start), line);
 });
 
 test("the skill's description fits the Agent Skills limit of 1024 characters", () => {

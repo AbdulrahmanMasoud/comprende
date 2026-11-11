@@ -98,6 +98,14 @@ var EVENT_KEY = { shell: "PreToolUse", sessionStart: "SessionStart" };
 var listsGateHook = (groups, event) => groups.some(
   (g) => isRecord(g) && Array.isArray(g.hooks) && g.hooks.some((h) => isRecord(h) && isGateCommand(h.command, event))
 );
+function gateGroups(spec) {
+  const groups = [
+    ["shell", { matcher: "Bash", hooks: [{ type: "command", command: spec.shellCommand, timeout: 60 }] }]
+  ];
+  if (spec.sessionStartCommand)
+    groups.push(["sessionStart", { hooks: [{ type: "command", command: spec.sessionStartCommand, timeout: 30 }] }]);
+  return groups;
+}
 function claudeFormatHookFile(spec) {
   const { label, byHand } = spec;
   return {
@@ -131,15 +139,23 @@ function claudeFormatHookFile(spec) {
         return { message: `SKIPPED ${label}: "hooks" in ${shownPath} is not an object; ${byHand}` };
       file.hooks ??= {};
       const hooks = file.hooks;
-      if (hooks.PreToolUse !== void 0 && !Array.isArray(hooks.PreToolUse))
-        return { message: `SKIPPED ${label}: "hooks.PreToolUse" in ${shownPath} is not a list; ${byHand}` };
-      hooks.PreToolUse ??= [];
-      const groups = hooks.PreToolUse;
-      if (listsGateHook(groups, "shell")) return { message: `${label} already present (${shownPath})` };
-      groups.push({ matcher: "Bash", hooks: [{ type: "command", command: spec.command, timeout: 60 }] });
+      const gate = gateGroups(spec);
+      const notAList = gate.map(([event]) => EVENT_KEY[event]).find((key) => hooks[key] !== void 0 && !Array.isArray(hooks[key]));
+      if (notAList)
+        return { message: `SKIPPED ${label}: "hooks.${notAList}" in ${shownPath} is not a list; ${byHand}` };
+      const added = [];
+      for (const [event, group] of gate) {
+        const key = EVENT_KEY[event];
+        const groups = hooks[key] ?? [];
+        if (listsGateHook(groups, event)) continue;
+        hooks[key] = [...groups, group];
+        added.push(key);
+      }
+      if (!added.length) return { message: `${label} already present (${shownPath})` };
+      const hooksAdded = added.length === 1 ? `a ${spec.tool} ${added[0]} hook` : `${spec.tool} ${added.join(" and ")} hooks`;
       return {
         content: spec.format(file),
-        message: `merged a ${spec.tool} PreToolUse hook into ${shownPath} (other ${spec.keeps} kept)`
+        message: `merged ${hooksAdded} into ${shownPath} (other ${spec.keeps} kept)`
       };
     }
   };
@@ -155,7 +171,7 @@ var CLAUDE_SETTINGS = claudeFormatHookFile({
   tool: "Claude Code",
   byHand: HOOK_BY_HAND,
   keeps: "settings",
-  command: HOOK_COMMAND,
+  shellCommand: HOOK_COMMAND,
   format: (settings) => `${JSON.stringify(settings, null, 2)}
 `
 });
@@ -195,16 +211,17 @@ ${top.join(",\n")}
 }
 
 // src/gate/agents/codex-hooks.ts
-var HOOK_COMMAND2 = `node "$(git rev-parse --show-toplevel)/${GATE_REL}" agent-hook --agent codex`;
+var GATE = `node "$(git rev-parse --show-toplevel)/${GATE_REL}"`;
 var CODEX_HOOKS = claudeFormatHookFile({
   path: ".codex/hooks.json",
   agentFlag: "codex",
   feature: "codex-hooks",
-  label: "Codex hook",
+  label: "Codex hooks",
   tool: "Codex",
-  byHand: "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-codex-hook-by-hand",
+  byHand: "add the hooks by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-codex-hook-by-hand",
   keeps: "hooks",
-  command: HOOK_COMMAND2,
+  shellCommand: `${GATE} agent-hook --agent codex`,
+  sessionStartCommand: `${GATE} session-start --from-repo --agent codex`,
   format: compactHooksJson
 });
 
@@ -228,6 +245,9 @@ var codex = {
   // Codex skips a plugin's hooks after any change to its files, until they're
   // trusted again, so an update needs both steps.
   pluginUpdateHint: "`codex plugin marketplace upgrade comprende`, then trust Comprende's hooks again in `/hooks`",
+  // The repo's .codex/hooks.json keeps its trust across plugin updates, so its
+  // session start still runs, and says this, when the plugin's hooks are skipped.
+  skippedPluginHooksHint: "Codex skips them after every plugin update until they're trusted again in `/hooks`. If the plugin isn't installed: `codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`.",
   // A tool call's id, or the session's. With two plugin copies in one session (the
   // Codex plugin, and a Claude Code copy brought over by `/import`), both detect a
   // tool call as Codex's and claim it, so a push is checked once. A session start
@@ -1703,9 +1723,14 @@ function stepsAside(run2, root) {
   return files.slice(0, Math.max(own2, 0)).some((h) => h.alwaysRuns && projectHookRunsGate(join10(root, h.file.path), h.file, run2.event));
 }
 function claimed(run2, payload, where) {
+  return claim(run2, payload, where, run2.event === "sessionStart" ? run2.source : "check");
+}
+function claimedGateContext(run2, payload, where) {
+  return claim(run2, payload, where, "gate-context");
+}
+function claim(run2, payload, where, topic) {
   const id = run2.agent.eventId(payload, run2.event);
-  const speaker = run2.event === "sessionStart" ? run2.source : "check";
-  return id === null || claimHookRun([run2.agent.id, run2.event, speaker, id, where].join(":"));
+  return id === null || claimHookRun([run2.agent.id, run2.event, topic, id, where].join(":"));
 }
 
 // src/gate/hook-replies.ts
@@ -1886,8 +1911,10 @@ function agentHook(stdinText, source, requested) {
 }
 var MIN_NODE = 20;
 var nodeNote = (app) => `Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of ${app}.`;
-var ALWAYS_ON = "Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
-var QUIET_MODE = "Comprende is installed, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.";
+var PLUGIN_LINE_START = "Comprende is installed";
+var ALWAYS_ON = `${PLUGIN_LINE_START}. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.`;
+var QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
+var skippedPluginHooksNote = (agent, hint) => `If this session didn't also get a note starting with "${PLUGIN_LINE_START}", ${agent.names.app} skipped Comprende's plugin hooks. Tell the user once, in one line: ${hint}`;
 var withLfEndings = (bytes) => Buffer.from(bytes.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
 function gateCopyDifference(repoCopy, pluginCopy) {
   if (repoCopy.equals(pluginCopy)) return "none";
@@ -1922,9 +1949,12 @@ function gatedRepoContext(run2, payload) {
     if (!lstat(join11(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];
-    const lines = stepsAside(run2, root) ? [] : [
+    const givesGateContext = !stepsAside(run2, root) && claimedGateContext(run2, payload, dir);
+    const lines = givesGateContext ? [
       `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`
-    ];
+    ] : [];
+    const hint = run2.agent.skippedPluginHooksHint;
+    if (run2.source === "repo" && hint) lines.push(skippedPluginHooksNote(run2.agent, hint));
     if (run2.source === "plugin") lines.push(...autoInstallGitHook(run2.agent, root));
     return lines;
   } catch {
@@ -2158,6 +2188,7 @@ function testCall(fn, a) {
     REPO_GATE: GATE_REL,
     ALWAYS_ON,
     QUIET_MODE,
+    PLUGIN_LINE_START,
     // Every adapter, so a per-agent test can check it covers them all.
     AGENT_IDS: AGENTS.map((a2) => a2.id)
   };

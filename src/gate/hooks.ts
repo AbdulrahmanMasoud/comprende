@@ -10,7 +10,7 @@ import { type Agent, type HookEnv, type HookReply, resolveAgent, UNKNOWN_AGENT_N
 import { checkForHook } from "./commands.js";
 import { loadConfig } from "./config.js";
 import { git, repoRoot, resolveBase } from "./git.js";
-import { claimed, type HookRun, type HookSource, stepsAside } from "./hook-copies.js";
+import { claimed, claimedGateContext, type HookRun, type HookSource, stepsAside } from "./hook-copies.js";
 import { decisionReply, SILENT_ALLOW, sessionContextReply } from "./hook-replies.js";
 import { isPushCommand } from "./push-detect.js";
 import { uncommittedReport } from "./report.js";
@@ -79,17 +79,25 @@ const MIN_NODE = 20;
 const nodeNote = (app: string) =>
   `Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of ${app}.`;
 
+// How the line a plugin's session start always gives begins. A session without it
+// had the plugin's hooks skipped: the skill and the repo hook's note look for it.
+export const PLUGIN_LINE_START = "Comprende is installed";
+
 // Every session, so explanations don't depend on the request sounding like a
 // wish to learn. Fixed text on purpose: nothing read from the repo goes into it.
 export const ALWAYS_ON =
-  "Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: " +
+  `${PLUGIN_LINE_START}. Whenever you write or change code in this session, follow the comprende skill: ` +
   "explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
 
 // COMPRENDE_QUIET=1 still sends a line, not nothing: the skill now loads for any
 // code change, so it needs telling to stay quiet, and a session with no note at
 // all reads to the skill as hooks that didn't run.
-export const QUIET_MODE =
-  "Comprende is installed, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.";
+export const QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
+
+/** What the repo's hook file says at session start, in a tool that may skip the
+ *  plugin's hooks without a word: how the agent tells, and the tool's advice. */
+const skippedPluginHooksNote = (agent: Agent, hint: string) =>
+  `If this session didn't also get a note starting with "${PLUGIN_LINE_START}", ${agent.names.app} skipped Comprende's plugin hooks. Tell the user once, in one line: ${hint}`;
 
 const withLfEndings = (bytes: Buffer) => Buffer.from(bytes.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
 
@@ -115,8 +123,8 @@ const untrustedGateNote = (agent: Agent): Record<Exclude<GateCopyDifference, "no
 /** SessionStart hook: the stdout that adds context for the agent, in the
  *  adapter's format. A plugin's run gives the always-on line and, unless the
  *  repo's own hook file starts the session, the gate's context. A run from the
- *  repo's hook file gives only the gate's context. Never throws — a session
- *  must always start. */
+ *  repo's hook file gives the gate's context, and the tool's note for skipped
+ *  plugin hooks if it has one. Never throws — a session must always start. */
 export function sessionStart(stdinText: string, source: HookSource, requested: string | null): string {
   const { payload, agent } = readHookInput(stdinText, requested);
   const run: HookRun | null = agent && { agent, event: "sessionStart", source, requested };
@@ -134,8 +142,9 @@ export function sessionStart(stdinText: string, source: HookSource, requested: s
 }
 
 /** In a repo that uses the gate: tell the agent the repo is gated so the
- *  ownership-check protocol is followed, and, from a plugin, install the local
- *  pre-push hook if this clone lacks it. Elsewhere: nothing. */
+ *  ownership-check protocol is followed (once, whichever copy claims it first),
+ *  from the repo's hook file how to notice skipped plugin hooks, and, from a
+ *  plugin, install the local pre-push hook if this clone lacks it. Elsewhere: nothing. */
 function gatedRepoContext(run: HookRun, payload: unknown): string[] {
   try {
     const dir = run.agent.projectDir(payload, process.env);
@@ -144,11 +153,16 @@ function gatedRepoContext(run: HookRun, payload: unknown): string[] {
     if (!lstat(join(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];
-    const lines = stepsAside(run, root)
-      ? []
-      : [
+    // Step aside before claiming: a copy that stepped aside but took the claim
+    // would leave the copy it stepped aside for without the gate's context.
+    const givesGateContext = !stepsAside(run, root) && claimedGateContext(run, payload, dir);
+    const lines = givesGateContext
+      ? [
           `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`,
-        ];
+        ]
+      : [];
+    const hint = run.agent.skippedPluginHooksHint;
+    if (run.source === "repo" && hint) lines.push(skippedPluginHooksNote(run.agent, hint));
     // A run from the repo's hook file is the repo's own gate.mjs: it can't vouch
     // for itself, so only a plugin's copy may set up the git hook.
     if (run.source === "plugin") lines.push(...autoInstallGitHook(run.agent, root));

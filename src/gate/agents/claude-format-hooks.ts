@@ -1,7 +1,8 @@
 // A repo-level hook file in Claude Code's format, which Codex uses too:
 // {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", …}]}]}}.
-// Whether it runs the gate, and merging the gate's shell hook in, for
-// .claude/settings.json (claude-settings.ts) and .codex/hooks.json (codex-hooks.ts).
+// Whether it runs the gate, and merging the gate's hooks in, for .claude/settings.json
+// (claude-settings.ts: the shell hook) and .codex/hooks.json (codex-hooks.ts: the
+// shell hook and a session start).
 
 import { isRecord } from "../../util.js";
 import { isGateCommand } from "./gate-command.js";
@@ -28,10 +29,22 @@ export interface ClaudeFormatHookFileSpec {
   readonly keeps: string;
   /** What to do when the file can't be merged: a link to the by-hand steps. */
   readonly byHand: string;
-  /** The shell command the gate's hook runs. */
-  readonly command: string;
+  /** The command the gate's hook runs before a shell command. */
+  readonly shellCommand: string;
+  /** The command for a session start, for a file that has one. */
+  readonly sessionStartCommand?: string;
   /** The file's text, as install writes it. */
   readonly format: (file: Record<string, unknown>) => string;
+}
+
+/** The gate's hook group for each event the file has, as install adds it. */
+function gateGroups(spec: ClaudeFormatHookFileSpec): [HookEvent, Record<string, unknown>][] {
+  const groups: [HookEvent, Record<string, unknown>][] = [
+    ["shell", { matcher: "Bash", hooks: [{ type: "command", command: spec.shellCommand, timeout: 60 }] }],
+  ];
+  if (spec.sessionStartCommand)
+    groups.push(["sessionStart", { hooks: [{ type: "command", command: spec.sessionStartCommand, timeout: 30 }] }]);
+  return groups;
 }
 
 export function claudeFormatHookFile(spec: ClaudeFormatHookFileSpec): ProjectHookFile {
@@ -70,15 +83,28 @@ export function claudeFormatHookFile(spec: ClaudeFormatHookFileSpec): ProjectHoo
         return { message: `SKIPPED ${label}: "hooks" in ${shownPath} is not an object; ${byHand}` };
       file.hooks ??= {};
       const hooks = file.hooks as Record<string, unknown>;
-      if (hooks.PreToolUse !== undefined && !Array.isArray(hooks.PreToolUse))
-        return { message: `SKIPPED ${label}: "hooks.PreToolUse" in ${shownPath} is not a list; ${byHand}` };
-      hooks.PreToolUse ??= [];
-      const groups = hooks.PreToolUse as unknown[];
-      if (listsGateHook(groups, "shell")) return { message: `${label} already present (${shownPath})` };
-      groups.push({ matcher: "Bash", hooks: [{ type: "command", command: spec.command, timeout: 60 }] });
+      // All or nothing, like Cursor's: a file with a list we don't understand is
+      // left for the user to fix by hand, not half merged.
+      const gate = gateGroups(spec);
+      const notAList = gate
+        .map(([event]) => EVENT_KEY[event])
+        .find((key) => hooks[key] !== undefined && !Array.isArray(hooks[key]));
+      if (notAList)
+        return { message: `SKIPPED ${label}: "hooks.${notAList}" in ${shownPath} is not a list; ${byHand}` };
+      const added: string[] = [];
+      for (const [event, group] of gate) {
+        const key = EVENT_KEY[event];
+        const groups = (hooks[key] as unknown[] | undefined) ?? [];
+        if (listsGateHook(groups, event)) continue;
+        hooks[key] = [...groups, group];
+        added.push(key);
+      }
+      if (!added.length) return { message: `${label} already present (${shownPath})` };
+      const hooksAdded =
+        added.length === 1 ? `a ${spec.tool} ${added[0]} hook` : `${spec.tool} ${added.join(" and ")} hooks`;
       return {
         content: spec.format(file),
-        message: `merged a ${spec.tool} PreToolUse hook into ${shownPath} (other ${spec.keeps} kept)`,
+        message: `merged ${hooksAdded} into ${shownPath} (other ${spec.keeps} kept)`,
       };
     },
   };

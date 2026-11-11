@@ -34,6 +34,11 @@ export const codex: Agent = {
   // trusted again, so an update needs both steps.
   pluginUpdateHint: "`codex plugin marketplace upgrade comprende`, then trust Comprende's hooks again in `/hooks`",
 
+  // The repo's .codex/hooks.json keeps its trust across plugin updates, so its
+  // session start still runs, and says this, when the plugin's hooks are skipped.
+  skippedPluginHooksHint:
+    "Codex skips them after every plugin update until they're trusted again in `/hooks`. If the plugin isn't installed: `codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`.",
+
   // A tool call's id, or the session's. With two plugin copies in one session (the
   // Codex plugin, and a Claude Code copy brought over by `/import`), both detect a
   // tool call as Codex's and claim it, so a push is checked once. A session start

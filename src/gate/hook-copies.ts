@@ -41,7 +41,18 @@ export function stepsAside(run: HookRun, root: string): boolean {
  *  same id in two repos counts twice. Events without an id aren't claimed, and
  *  every copy speaks. */
 export function claimed(run: HookRun, payload: unknown, where: string): boolean {
+  return claim(run, payload, where, run.event === "sessionStart" ? run.source : "check");
+}
+
+/** Did this run claim the gate's context at session start first? Both sources give
+ *  it in a tool whose repo hook file the plugin can't count on (Codex runs it only
+ *  once trusted), so they share one claim, and the session gets it once. */
+export function claimedGateContext(run: HookRun, payload: unknown, where: string): boolean {
+  return claim(run, payload, where, "gate-context");
+}
+
+/** `topic` is what the copies would say: a check, a source's session lines, the gate's context. */
+function claim(run: HookRun, payload: unknown, where: string, topic: string): boolean {
   const id = run.agent.eventId(payload, run.event);
-  const speaker = run.event === "sessionStart" ? run.source : "check";
-  return id === null || claimHookRun([run.agent.id, run.event, speaker, id, where].join(":"));
+  return id === null || claimHookRun([run.agent.id, run.event, topic, id, where].join(":"));
 }
