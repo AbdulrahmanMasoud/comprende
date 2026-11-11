@@ -482,7 +482,9 @@ test("install --upgrade adds .cursor/hooks.json, which needs no report only once
   assert.deepEqual(gate.verify(dev), [true, [], "required"]);
 });
 
-test("install writes .codex/hooks.json with a command that finds the repo, keeps other hooks, and adds it once", (t) => {
+const CODEX_GATE = 'node "$(git rev-parse --show-toplevel)/.learning/gate.mjs"';
+
+test("install writes .codex/hooks.json with commands that find the repo, keeps other hooks, and adds them once", (t) => {
   const { dev } = setup(t);
   const fresh = read(dev, ".codex/hooks.json");
   assert.deepEqual(JSON.parse(fresh), {
@@ -490,48 +492,79 @@ test("install writes .codex/hooks.json with a command that finds the repo, keeps
       PreToolUse: [
         {
           matcher: "Bash",
-          hooks: [
-            {
-              type: "command",
-              command: 'node "$(git rev-parse --show-toplevel)/.learning/gate.mjs" agent-hook --agent codex',
-              timeout: 60,
-            },
-          ],
+          hooks: [{ type: "command", command: `${CODEX_GATE} agent-hook --agent codex`, timeout: 60 }],
         },
+      ],
+      // The session start keeps its trust across plugin updates, so it can say when the plugin's hooks were skipped.
+      SessionStart: [
+        { hooks: [{ type: "command", command: `${CODEX_GATE} session-start --from-repo --agent codex`, timeout: 30 }] },
       ],
     },
   });
   // Short enough that adding it is a small change.
   assert.ok(fresh.trim().split("\n").length <= 10, fresh);
-  // A file with the team's own hooks: they stay, and the gate's is added after them.
+  // A file with the team's own hooks: they stay, and the gate's are added after them.
   const theirs = {
     hooks: {
       PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "./lint.sh" }] }],
+      SessionStart: [{ hooks: [{ type: "command", command: "./hello.sh" }] }],
       Stop: [{ hooks: [{ type: "command", command: "./notify.sh" }] }],
     },
   };
   write(dev, ".codex/hooks.json", JSON.stringify(theirs));
   const lines = gate.install(dev);
   assert.ok(
-    lines.some((l) => l.startsWith("merged a Codex PreToolUse hook into")),
+    lines.some((l) => l.startsWith("merged Codex PreToolUse and SessionStart hooks into")),
     lines.join("\n"),
   );
   const merged = JSON.parse(read(dev, ".codex/hooks.json"));
   assert.deepEqual(merged.hooks.Stop, theirs.hooks.Stop);
   assert.equal(merged.hooks.PreToolUse[0].hooks[0].command, "./lint.sh");
   assert.equal(merged.hooks.PreToolUse.length, 2);
+  assert.deepEqual(merged.hooks.SessionStart[0], theirs.hooks.SessionStart[0]);
+  assert.equal(merged.hooks.SessionStart.length, 2);
   // Again: nothing to add.
   const again = read(dev, ".codex/hooks.json");
-  assert.ok(gate.install(dev).some((l) => l.startsWith("Codex hook already present")));
+  assert.ok(gate.install(dev).some((l) => l.startsWith("Codex hooks already present")));
   assert.equal(read(dev, ".codex/hooks.json"), again);
+});
+
+// Codex trusts each hook by its own definition, so the shell hook a teammate already
+// trusted must stay exactly as it was: only the new session start needs trusting.
+test("install --upgrade adds the session start to a .codex/hooks.json from 0.4.0, keeps its shell hook as it was, and needs no report", (t) => {
+  const { dev } = setup(t);
+  const shellHook = JSON.parse(read(dev, ".codex/hooks.json")).hooks.PreToolUse;
+  // main as 0.4.0 left it: only the shell hook, and a gate that knows .codex/hooks.json.
+  git(dev, "checkout", "-q", "main");
+  write(dev, ".codex/hooks.json", `${JSON.stringify({ hooks: { PreToolUse: shellHook } }, null, 2)}\n`);
+  commitAll(dev, "the Codex hook as 0.4.0 wrote it");
+  git(dev, "push", "-q", "--no-verify", "origin", "main");
+  git(dev, "checkout", "-q", "-B", "chore/upgrade-gate");
+  const lines = gate.install(dev, { upgrade: true });
+  assert.ok(
+    lines.some((l) => l.startsWith("merged a Codex SessionStart hook into")),
+    lines.join("\n"),
+  );
+  const upgraded = JSON.parse(read(dev, ".codex/hooks.json"));
+  assert.deepEqual(upgraded.hooks.PreToolUse, shellHook);
+  assert.match(upgraded.hooks.SessionStart[0].hooks[0].command, /session-start --from-repo --agent codex$/);
+  // CI runs main's gate, which already knows the file as one of its own: no question.
+  commitAll(dev, "upgrade the gate");
+  assert.deepEqual(gate.verify(dev), [true, [], "required"]);
 });
 
 test("install leaves a .codex/hooks.json of a shape it doesn't know untouched", (t) => {
   const { dev } = setup(t);
-  for (const body of ['{"hooks": []}', '{"hooks": {"PreToolUse": {"matcher": "Bash"}}}', "not json", "[]"]) {
+  for (const body of [
+    '{"hooks": []}',
+    '{"hooks": {"PreToolUse": {"matcher": "Bash"}}}',
+    '{"hooks": {"SessionStart": {"hooks": []}}}',
+    "not json",
+    "[]",
+  ]) {
     write(dev, ".codex/hooks.json", body);
-    const line = gate.install(dev).find((l) => l.includes("Codex hook"));
-    assert.match(line ?? "", /^SKIPPED Codex hook: .*add the hook by hand/, body);
+    const line = gate.install(dev).find((l) => l.includes("Codex hooks"));
+    assert.match(line ?? "", /^SKIPPED Codex hooks: .*add the hooks by hand/, body);
     assert.equal(read(dev, ".codex/hooks.json"), body);
   }
 });

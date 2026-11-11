@@ -24,7 +24,7 @@ node <plugin>/dist/gate.mjs install --repo . --owner @your-org/leads
 - `.github/workflows/ownership-check.yml`: the CI check
 - `.claude/settings.json`: a hook that stops Claude Code from pushing unverified code (other settings kept)
 - `.cursor/hooks.json`: the same for Cursor, plus its session start, as plain `node .learning/gate.mjs … --agent cursor` lines that also run in PowerShell (other hooks kept)
-- `.codex/hooks.json`: the same for Codex: a shell hook that finds the repo's root with `git rev-parse`, since Codex may run from a subfolder (other hooks kept). Codex runs it once each developer trusts the project and the hook in `/hooks`
+- `.codex/hooks.json`: the same for Codex: a shell hook that finds the repo's root with `git rev-parse`, since Codex may run from a subfolder, and a session start that tells the agent when Codex skipped the plugin's hooks (other hooks kept). Codex runs them once each developer trusts the project and the hooks in `/hooks`
 - `.gitignore`: one line, `.learning/report.local.json`
 - `.gitattributes`: one line, `.learning/gate.mjs -text`, so git never rewrites the gate's line endings (on Windows, `core.autocrlf` would)
 - CODEOWNERS (with `--owner`): the gate's files need the lead's review.
@@ -43,7 +43,7 @@ After the plugin updates, upgrade the repo's copy in its own PR:
 node <plugin>/dist/gate.mjs install --upgrade --repo .
 ```
 
-CI runs the base branch's gate. So when an upgrade brings something the older gate doesn't know yet, CI still checks the upgrade PR the old way. From 0.3.0, the upgrade also adds `.cursor/hooks.json`, and from 0.4.0 `.codex/hooks.json`. Until the base branch runs a gate that knows each as one of its own files, CI counts it as a change: one small-change question, or the skip label. For example, the `.gitattributes` line from 0.2.1 counts as a change until the upgrade is merged: a one-line small change, so one question. Or use the skip label. The local checks follow the same rule, so they never pass what CI then fails.
+CI runs the base branch's gate. So when an upgrade brings something the older gate doesn't know yet, CI still checks the upgrade PR the old way. From 0.3.0, the upgrade also adds `.cursor/hooks.json`, and from 0.4.0 `.codex/hooks.json`. Until the base branch runs a gate that knows each as one of its own files, CI counts it as a change: one small-change question, or the skip label. For example, the `.gitattributes` line from 0.2.1 counts as a change until the upgrade is merged: a one-line small change, so one question. Or use the skip label. The local checks follow the same rule, so they never pass what CI then fails. From 0.4.1 the upgrade also adds a session start to `.codex/hooks.json`. A 0.4.0 base already knows that file, so it needs no question, but each Codex user trusts the new hook once in `/hooks`.
 
 ## Mixed teams: Claude Code, Cursor and Codex
 
@@ -52,7 +52,7 @@ One repo works for everyone. `install` writes the hooks for each tool, and the r
 - **Each developer installs the plugin in the tool they use** ([Install](../README.md#install)). Someone with Comprende in Claude Code who also opens Cursor already has it there: Cursor runs Claude Code's plugins while its Third-Party Imports setting is on. Codex doesn't, so it needs its own install.
 - **Without the plugin,** the repo's own hook files still stop the agent's push: `.claude/settings.json` in Claude Code, `.cursor/hooks.json` in Cursor, `.codex/hooks.json` in Codex (once trusted). Developers without the plugin run `node .learning/gate.mjs install-hooks` once per clone to get the git hook.
 - **Each push is checked once,** whichever hook files and plugins are present ([how](agents.md#step-aside-rules)).
-- **Codex users trust the hooks.** Once per repo: the project and its `.codex/hooks.json`. And the plugin's two hooks in `/hooks`, after installing and after every update. Codex skips untrusted hooks without a word.
+- **Codex users trust the hooks.** Once per repo: the project and the two hooks in its `.codex/hooks.json`. And the plugin's two hooks in `/hooks`, after installing and after every update. Codex skips untrusted hooks without a word, but the repo's session start keeps its trust, so after an update the agent tells you.
 - **Repos set up before 0.3.0 or 0.4.0** get `.cursor/hooks.json` and `.codex/hooks.json` with `install --upgrade` ([Upgrading the gate](#upgrading-the-gate)).
 - **Cursor's agent signs its commits** with `Co-authored-by: Cursor <cursoragent@cursor.com>`. If the team doesn't want that line, each Cursor user turns off `attribution.attributeCommitsToAgent`.
 - **What's weaker** in [Cursor](agents.md#whats-weaker-in-cursor-than-in-claude-code) and in [Codex](agents.md#whats-weaker-in-codex-than-in-claude-code) is listed in docs/agents.md.
@@ -113,7 +113,7 @@ The ruleset applies to the default branch. It requires a pull request with 1 app
 
 ## Add the Codex hook by hand
 
-`install` merges a hook into `.codex/hooks.json`. If that file has a shape it doesn't understand, it prints `SKIPPED Codex hook` and leaves the file alone. Then add this entry under `hooks.PreToolUse` yourself:
+`install` merges two hooks into `.codex/hooks.json`. If that file has a shape it doesn't understand, it prints `SKIPPED Codex hook` and leaves the file alone. Then add this entry under `hooks.PreToolUse` yourself:
 
 ```json
 {
@@ -128,7 +128,21 @@ The ruleset applies to the default branch. It requires a pull request with 1 app
 }
 ```
 
-Codex runs it once you trust the project, and then the hook in `/hooks`. The trust lasts across gate upgrades, since the command doesn't change.
+And this one under `hooks.SessionStart`:
+
+```json
+{
+  "hooks": [
+    {
+      "type": "command",
+      "command": "node \"$(git rev-parse --show-toplevel)/.learning/gate.mjs\" session-start --from-repo --agent codex",
+      "timeout": 30
+    }
+  ]
+}
+```
+
+Codex runs them once you trust the project, and then the hooks in `/hooks`. The trust lasts across gate and plugin upgrades, since the commands don't change.
 
 ## What the developer experiences
 

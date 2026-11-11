@@ -14,7 +14,7 @@
 //   repo-hook    the plugin and the repo's .codex/hooks.json both trusted: both run,
 //                one checks
 //   after-update a file changed in the installed plugin: Codex skips its hooks, the
-//                repo's trusted hook still checks, and the skill says to trust again
+//                repo's trusted hooks still check and say to trust the plugin's again
 // This repo is installed as the plugin (`codex plugin marketplace add <this repo>`),
 // and hooks are trusted the way /hooks does it, through Codex's app server. Every
 // gate.mjs run is logged (a NODE_OPTIONS preload). It prints one line per step,
@@ -278,6 +278,12 @@ function makeDemo(name) {
   return { app, remote: join(dir, "origin.git") };
 }
 
+/** The repo's session-start runs since `from` (the plugin's pass --from-plugin). @param {number} from */
+const repoSessionStarts = (from) =>
+  gateRuns()
+    .slice(from)
+    .filter((r) => r.argv.includes("session-start") && r.argv.includes("--from-repo")).length;
+
 /** @param {string} remote @param {string} branch */
 const remoteHas = (remote, branch) =>
   spawnSync("git", ["rev-parse", "--verify", "-q", branch], { cwd: remote }).status === 0;
@@ -402,8 +408,8 @@ function repoHook() {
   const demo = makeDemo("demo-repo-hook");
   const keys = trust(demo.app);
   report(
-    "the repo's .codex/hooks.json is trusted too",
-    keys.some((k) => k.includes(".codex/hooks.json")),
+    "the repo's .codex/hooks.json is trusted too: its shell hook and its session start",
+    keys.filter((k) => k.includes(".codex/hooks.json")).length === 2,
     keys.join(", "),
   );
   const from = gateRuns().length;
@@ -430,18 +436,20 @@ function afterUpdate() {
     turn("9-after-update-push", demo.app, PUSH);
     const runs = hookRuns(from);
     report("after an update: Codex skips the plugin's hooks", runs.plugin === 0, `${runs.plugin} plugin hook run(s)`);
+    const starts = repoSessionStarts(from);
+    report("after an update: the repo's session start still runs", starts >= 1, `${starts} run(s)`);
     report(
       "after an update: the repo's trusted hook still checks the push",
       runs.repo === 1 && runs.checks === 1 && !remoteHas(demo.remote, "feature/sum"),
       `${runs.repo} repo run, ${runs.checks} check(s)`,
     );
-    // The skill loads for code work, and with no session-start note it says why.
+    // The repo's session start still runs, and tells the agent the plugin's hooks were skipped.
     const t = turn(
       "10-after-update-code",
       demo.app,
       "Add a function mul(a, b) to math.js that multiplies two numbers. Don't commit.",
     );
-    report("after an update: the skill says to trust the hooks again", /\/hooks/.test(t.said), "read its reply");
+    report("after an update: the agent says to trust the hooks again", /\/hooks/.test(t.said), "read its reply");
   } finally {
     rmSync(marker, { force: true });
   }

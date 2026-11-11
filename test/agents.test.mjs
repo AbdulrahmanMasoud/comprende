@@ -480,7 +480,25 @@ test("exactly one copy of the gate checks each push, whatever hook files and plu
   }
 });
 
-test("each session starts with the always-on line once, and the gate's context once", (t) => {
+/** How many copies give each session line in `combo`: the always-on line, the
+ *  gate's context, and Codex's note for skipped plugin hooks. */
+function expectedSessionLines(tool, combo) {
+  const plugins = ["claudePlugin", "cursorPlugin", "codexPlugin"].some((copy) => runs(tool, combo, copy));
+  const repoStarts = runs(tool, combo, "cursorHooks") || runs(tool, combo, "codexHooks");
+  // Only Codex may skip the plugin's hooks, so only its repo hook says how to tell.
+  const note = runs(tool, combo, "codexHooks") ? 1 : 0;
+  // A known limit (docs/agents.md, "Codex: the design"): a Claude Code plugin copy in
+  // a Codex session. A Codex session start has no turn_id, so that copy reads it as
+  // Claude Code's, which claims no session start, and it speaks whatever else runs.
+  // The Codex copies (the plugin and the repo's hook) share their claims.
+  if (tool === "codex" && runs(tool, combo, "claudePlugin")) {
+    const codexCopies = ["codexPlugin", "codexHooks"].some((copy) => runs(tool, combo, copy));
+    return { alwaysOn: runs(tool, combo, "codexPlugin") ? 2 : 1, gateContext: codexCopies ? 2 : 1, note };
+  }
+  return { alwaysOn: plugins ? 1 : 0, gateContext: plugins || repoStarts ? 1 : 0, note };
+}
+
+test("each session gets the always-on line, the gate's context and Codex's skipped-hooks note once each", (t) => {
   const { dev } = setup(t);
   const files = readRepoHookFiles(dev);
   let session = 0;
@@ -492,21 +510,11 @@ test("each session starts with the always-on line once, and the gate's context o
         (r) => JSON.parse(r.stdout).hookSpecificOutput?.additionalContext ?? "",
       );
       const count = (re) => contexts.filter((c) => re.test(c)).length;
-      const plugins = ["claudePlugin", "cursorPlugin", "codexPlugin"].some((copy) => runs(tool, combo, copy));
-      // A known limit (docs/agents.md, "Codex: the design"): two plugin copies in one
-      // Codex session. A Codex session start has no turn_id, so the Claude-format copy
-      // reads it as Claude Code's and claims nothing, and both speak. The push is
-      // still checked once (above).
-      const twoCopies = tool === "codex" && runs(tool, combo, "codexPlugin") && runs(tool, combo, "claudePlugin");
-      const once = twoCopies ? 2 : 1;
+      const expected = expectedSessionLines(tool, combo);
       const label = `${tool} ${JSON.stringify(combo)}`;
-      assert.equal(count(/Comprende is installed\./), plugins ? once : 0, `always-on: ${label}`);
-      const repoStarts = runs(tool, combo, "cursorHooks");
-      assert.equal(
-        count(/This repository uses the ownership gate/),
-        plugins ? once : repoStarts ? 1 : 0,
-        `gate: ${label}`,
-      );
+      assert.equal(count(/Comprende is installed\./), expected.alwaysOn, `always-on: ${label}`);
+      assert.equal(count(/This repository uses the ownership gate/), expected.gateContext, `gate: ${label}`);
+      assert.equal(count(/Codex skipped Comprende's plugin hooks/), expected.note, `note: ${label}`);
     }
   }
 });
@@ -747,6 +755,42 @@ test("a report from another gate version blocks the git hook, but not the agents
 
 // GitHub's runners have pwsh, so the PowerShell case runs in CI. Locally it's skipped without it.
 const PWSH = spawnSync("/bin/sh", ["-c", "command -v pwsh"], { encoding: "utf8" }).stdout.trim();
+
+// After a plugin update Codex skips the plugin's hooks without a word, but the
+// repo's session start keeps its trust, so it's the one that can say so.
+test("the repo's .codex/hooks.json session start, from a subfolder, gives the gate's context and how to tell the plugin's hooks were skipped", {
+  skip: process.platform === "win32",
+}, (t) => {
+  const { dev } = setup(t);
+  const [{ hooks }] = JSON.parse(readFileSync(join(dev, ".codex/hooks.json"), "utf8")).hooks.SessionStart;
+  const sub = join(dev, "src");
+  mkdirSync(sub, { recursive: true });
+  let session = 0;
+  const start = () => {
+    const input = JSON.stringify({
+      ...JSON.parse(codexPayload("session-start.json", sub)),
+      session_id: `s-${++session}`,
+    });
+    const r = sh(sub, "/bin/sh", ["-c", hooks[0].command], { check: false, input, env: ENV });
+    assert.equal(r.status, 0, r.stderr);
+    return JSON.parse(r.stdout).hookSpecificOutput?.additionalContext ?? "";
+  };
+  const context = start();
+  assert.match(context, /This repository uses the ownership gate/);
+  assert.match(
+    context,
+    /didn't also get a note starting with "Comprende is installed", Codex skipped Comprende's plugin hooks/,
+  );
+  assert.match(context, /trusted again in `\/hooks`/);
+  assert.doesNotMatch(context, /Comprende is installed\./, "the always-on line is the plugin's to give");
+  assert.ok(context.includes(`"${gate.const("PLUGIN_LINE_START")}"`), "the note quotes how the plugin's line starts");
+
+  // With the gate off, nothing: the note is only for a gated repo.
+  const config = JSON.parse(readFileSync(join(dev, ".learning/config.json"), "utf8"));
+  config.ownership_check.mode = "off";
+  writeFileSync(join(dev, ".learning/config.json"), JSON.stringify(config));
+  assert.equal(start(), "", "mode off");
+});
 
 test("the repo's .codex/hooks.json blocks an unverified push from a subfolder, and fails open without git or node", {
   skip: process.platform === "win32",

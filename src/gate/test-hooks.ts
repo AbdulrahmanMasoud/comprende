@@ -11,7 +11,7 @@ import { samePath } from "./files.js";
 import { GATE_FILES } from "./gate-files.js";
 import { repoRoot } from "./git.js";
 import { decisionReply } from "./hook-replies.js";
-import { ALWAYS_ON, QUIET_MODE } from "./hooks.js";
+import { ALWAYS_ON, PLUGIN_LINE_START, QUIET_MODE } from "./hooks.js";
 import { ciPlatform, REPO_PLATFORM } from "./platforms/index.js";
 import { addProjectHook } from "./project-hooks.js";
 import { isPushCommand } from "./push-detect.js";
@@ -30,6 +30,7 @@ export function testCall(fn: string, a: unknown[]): unknown {
     REPO_GATE: GATE_REL,
     ALWAYS_ON,
     QUIET_MODE,
+    PLUGIN_LINE_START,
     // Every adapter, so a per-agent test can check it covers them all.
     AGENT_IDS: AGENTS.map((a) => a.id),
   };

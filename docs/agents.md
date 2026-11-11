@@ -126,7 +126,7 @@ Windows as a whole is tracked in [#10](https://github.com/AbdulrahmanMasoud/comp
 |---|---|---|---|
 | The skill (explain as you build) | yes | yes, the same `skills/` (tested in the CLI) | yes, the same `skills/` (tested in the CLI) |
 | Memory (the MCP server) | yes | yes, all 10 tools, once the server is approved (tested in the CLI) | yes, all 10 tools, from its own MCP config (tested in the CLI) |
-| The always-on line | at session start | at session start, from the plugin's `sessionStart` hook (tested in the CLI) | at session start, once the plugin's hooks are trusted in `/hooks` (tested in the CLI) |
+| The always-on line | at session start | at session start, from the plugin's `sessionStart` hook (tested in the CLI) | at session start, once the plugin's hooks are trusted in `/hooks` (tested in the CLI). After an update, the repo's session start says they need trusting again |
 | The push guard (the agent's `git push`) | the plugin, or the repo's `.claude/settings.json` | the plugin, or the repo's `.cursor/hooks.json`. Also `.claude/settings.json` and an imported Claude Code plugin, while Third-Party Imports is on (tested in the CLI) | the plugin, or the repo's `.codex/hooks.json`, each once trusted. The repo's keeps its trust across updates (tested in the CLI) |
 | The git `pre-push` hook | installed by the plugin at session start | the same (tested in unit tests, not in the CLI run) | the same, once the hooks are trusted (tested in the CLI) |
 | CI | the same check: it doesn't depend on the tool | the same | the same |
@@ -148,8 +148,8 @@ Each push is checked once, whatever mix of hook files and plugins is present ([S
 
 ## What's weaker in Codex than in Claude Code
 
-- **Hooks need trust.** Codex runs no plugin hook until it's trusted in `/hooks`, and again after every plugin update: it checks the plugin's whole folder. Until then it skips the hooks without a word, so the agent's push isn't checked by the hook (the git hook and CI still check it). The repo's `.codex/hooks.json` keeps its trust across updates. When a session got no Comprende note, the agent checks for the gate and tells you to trust the hooks again (not yet confirmed in Codex).
-- **Project hooks need the project trusted too.** Each developer trusts the project once, then the repo's hook.
+- **Hooks need trust.** Codex runs no plugin hook until it's trusted in `/hooks`, and again after every plugin update: it checks the plugin's whole folder. Until then it skips the hooks without a word, so the agent's push isn't checked by the hook (the git hook and CI still check it). The repo's `.codex/hooks.json` keeps its trust across updates, and in a gated repo its session start then tells the agent to say so (not yet confirmed in Codex).
+- **Project hooks need the project trusted too.** Each developer trusts the project once, then the repo's two hooks.
 - **Codex's `workspace-write` sandbox keeps `.git` read-only,** so the agent asks before it commits.
 - **The repo's hook needs a common shell.** Codex runs it with your `$SHELL`: it works in sh, bash, zsh, fish 3.4+ and PowerShell. In tcsh or nu that copy fails open, and the plugin's hook still checks.
 - **Two plugin copies** (the Codex plugin, and a Claude Code copy brought over by `/import`) check a push once, but give the session lines twice. Install it once ([Codex: the design](#codex-the-design)).
@@ -161,7 +161,7 @@ Each push is checked once, whatever mix of hook files and plugins is present ([S
 `tools/e2e-codex.mjs` covers the CLI headless. Check these by hand, in a gated demo repo (the README's "Try it in 5 minutes"), in the CLI and in the IDE extension (OpenAI's extension for VS Code and Cursor, which runs the same `codex` with the same `~/.codex`):
 
 1. **Install:** `codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`.
-2. **Trust:** open Codex in the demo, trust the project, then type `/hooks` and trust Comprende's two hooks, and the repo's `.codex/hooks.json`.
+2. **Trust:** open Codex in the demo, trust the project, then type `/hooks` and trust Comprende's two hooks, and the two in the repo's `.codex/hooks.json`.
 3. **Memory:** `/mcp` lists **comprende** with its 10 tools.
 4. **Session start:** start a session, and ask what Comprende said at session start. Expect the always-on line and the gate's message.
 5. **An ordinary command:** ask it to run `ls`. It runs, with no hook message.
@@ -623,12 +623,12 @@ So each push is checked once, and each session gets each line once. `test/agents
 - **Against:**
   - Each developer has to trust the project, and then each hook, once.
   - Codex runs hooks in the session's folder, which may be a subfolder. So the command can't be a plain relative path: it's `node "$(git rev-parse --show-toplevel)/.learning/gate.mjs" agent-hook --agent codex`, and `$(…)` works in PowerShell too, so it needs no `commandWindows`. Tested: from a subfolder it blocks an unverified push, and without `git` or `node` it fails open.
-  - Only the shell hook. A session start there would give the gate's message a second time: see below.
+  - The shell hook, and since 0.4.1 a session start: its trust lasts across plugin updates, so after one it still runs, and tells the agent the plugin's hooks were skipped. See below.
 
 **No double runs:**
 - The plugin and `.codex/hooks.json` both run when both are trusted. Neither can count on the other, so both claim the `tool_use_id`, and only the first checks.
-- **Session start comes from the plugin only.** Unlike Cursor's `.cursor/hooks.json`, `.codex/hooks.json` isn't sure to run (`alwaysRuns: false`), so the plugin never steps aside for it, and a plugin's claim and a repo file's claim use different keys. A session start in both would give the gate's message twice. Without the plugin there's no skill either, so the message would have nothing to point to.
-- **A known limit: two plugin copies in one Codex session.** `/import` from Claude Code can bring over Claude Code's copy of Comprende as a second plugin. For a push, both copies detect Codex from `turn_id` and claim the tool call, so it's checked once. A session start has no `turn_id`, so the Claude Code copy reads it as Claude Code's and claims nothing: the always-on line and the gate's message come twice, one naming Claude Code. Install it in one place. The matrix test asserts both.
+- **Session start comes from both, each line once.** Unlike Cursor's `.cursor/hooks.json`, `.codex/hooks.json` isn't sure to run (`alwaysRuns: false`), so the plugin never steps aside for it. The plugin gives the always-on line, the repo's file gives Codex's note for skipped plugin hooks (`skippedPluginHooksNote`), and both claim the gate's message under one key, so it comes once.
+- **A known limit: two plugin copies in one Codex session.** `/import` from Claude Code can bring over Claude Code's copy of Comprende as a second plugin. For a push, both copies detect Codex from `turn_id` and claim the tool call, so it's checked once. A session start has no `turn_id`, so the Claude Code copy reads it as Claude Code's and claims nothing: the always-on line and the gate's message come twice, one naming Claude Code. And its always-on line hides the repo's note when the Codex plugin's hooks were skipped. Install it in one place. The matrix test asserts the counts.
 - The matrix test gains a Codex column, trusted and not.
 
 **The user's install steps:**
@@ -699,7 +699,7 @@ The adapter, `src/gate/agents/antigravity.ts`:
 
 **No double runs:**
 - The plugin and `.agents/hooks.json` claim `conversationId` with `stepIdx`.
-- Session start comes from the plugin only, for the same reason as in Codex: `.agents/hooks.json` isn't sure to run.
+- Session start comes from the plugin only: `.agents/hooks.json` isn't sure to run. (Codex's repo file has its own since 0.4.1, for re-trust after plugin updates; whether Antigravity needs that is for the signed-in run.)
 - A Claude Code plugin converted by `agy plugin install` or `agy plugin import claude` is also detected from the payload, and claims with the same key.
 - Two plugins named `comprende` can't both be installed in Antigravity's plugin folder (to confirm).
 
@@ -781,7 +781,7 @@ The maintainer settled the open questions on 2026-11-11:
 ### Open questions for 0.4.0
 
 1. **Codex: should `install` write `.codex/hooks.json`?** Decided: yes, and built in 0.4.0. It survives plugin updates and works without the plugin. But each developer trusts the project and the hooks once, and the command needs `git rev-parse` to find the gate from a subfolder.
-2. **Codex: re-trusting after every update.** There's no way around it short of `--dangerously-bypass-hook-trust`, which is for automation, not users. A session-start message can't say so, since untrusted hooks don't run. The skill loads without trust, so proposal: the skill and the README say "after an update, trust Comprende's hooks again in `/hooks`". Decided: yes, and the skill now says so when a gated repo's session got no session-start note. In 0.4.0 that never fired in Codex: the agent searched for `.learning/config.json` with `rg --files`, which skips hidden folders, so it didn't open the skill. Now the skill loads for any code change and checks for the gate with one exact command. Found since: `codex plugin marketplace upgrade` updates the installed plugin too (tested). Still to find out: whether the MCP server needs approval again after an update.
+2. **Codex: re-trusting after every update.** There's no way around it short of `--dangerously-bypass-hook-trust`, which is for automation, not users. The plugin's session start can't say so, since its hooks are the ones skipped. The skill loads without trust, so proposal: the skill and the README say "after an update, trust Comprende's hooks again in `/hooks`". Decided: yes, and the skill now says so when a gated repo's session got no session-start note. In 0.4.0 that never fired in Codex: the agent searched for `.learning/config.json` with `rg --files`, which skips hidden folders, so it didn't open the skill. With the skill loading for any code change, a rerun failed the same way: Codex listed the new description, but its agent didn't open the skill for a small edit. So the note now comes from the repo's `.codex/hooks.json`, whose session start keeps its trust across plugin updates. Found since: `codex plugin marketplace upgrade` updates the installed plugin too (tested). Still to find out: whether the MCP server needs approval again after an update.
 3. **Antigravity: plugin files at this repo's root.** A `hooks.json` and an `mcp_config.json`, maybe a `rules/` folder: Antigravity reads them only there.
 4. **Antigravity: the always-on line from a plugin rule** (`rules/AGENTS.md`) instead of `SessionStart`? A rule doesn't depend on hooks running, which is disputed in the IDE.
 5. **Antigravity: the CLI first?** We can test only the CLI, and the IDE may not run hooks.
