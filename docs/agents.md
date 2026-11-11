@@ -1,6 +1,6 @@
 # Comprende in other AI tools
 
-Comprende runs in Claude Code. This page collects what we know about running it in other tools, starting with Cursor ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)), and the design for supporting them. The adapter interface is built ([#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18)). Cursor support itself hasn't shipped yet, apart from the 0.2.2 fix noted below.
+Comprende runs in Claude Code and, from 0.3.0, in Cursor ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)). Start with [What works where](#what-works-where-030), [What's weaker in Cursor](#whats-weaker-in-cursor-than-in-claude-code) and the [checklist for the IDE](#checking-it-in-the-cursor-ide). The rest of the page is the research behind it, and the design for other tools on the same adapter interface ([#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18)).
 
 - **Cursor:** tested on 2026-11-11 with the Cursor CLI (`cursor-agent`) `2026.11.10-731fb78` on macOS, plus the official docs.
 - **Codex:** from its docs only, to check that the design fits a third tool.
@@ -116,29 +116,44 @@ The docs say: "the desktop app runs hook commands through PowerShell and pipes t
 
 Windows as a whole is tracked in [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10).
 
-## Comprende in Cursor today (0.2.2)
+## What works where (0.3.0)
 
 | | Claude Code | Cursor |
 |---|---|---|
-| The skill | yes | yes, imported from the Claude Code plugin |
-| The session-start message | yes | yes |
-| The pre-push hook, installed at session start | yes | yes |
-| The agent's `git push` blocked by the Claude hook | yes | yes, since 0.2.2, once the repo's gate is upgraded |
-| `git push --no-verify` blocked | yes | the same as the line above |
-| Without the plugin | the repo's `.claude/settings.json` hook | the same, while Third-Party Imports is on |
-| On Windows | Git Bash | no agent-side check ([Windows](#windows)) |
+| The skill (explain as you build) | yes | yes, the same `skills/` (tested in the CLI) |
+| Memory (the MCP server) | yes | yes, all 10 tools, once the server is approved (tested in the CLI) |
+| The always-on line | at session start | at session start, from the plugin's `sessionStart` hook (tested in the CLI) |
+| The push guard (the agent's `git push`) | the plugin, or the repo's `.claude/settings.json` | the plugin, or the repo's `.cursor/hooks.json`. Also `.claude/settings.json` and an imported Claude Code plugin, while Third-Party Imports is on (tested in the CLI) |
+| The git `pre-push` hook | installed by the plugin at session start | the same (tested in unit tests, not in the CLI run) |
+| CI | the same check: it doesn't depend on the tool | the same |
+| Windows | experimental: hooks run in Git Bash | experimental and untested: hooks run in PowerShell, and the commands are plain `node` lines ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)) |
+
+Each push is checked once, whatever mix of hook files and plugins is present ([Step-aside rules](#step-aside-rules)).
 
 ## What's weaker in Cursor than in Claude Code
 
-- **It depends on a setting we don't control.** The Claude hook runs only while Third-Party Imports is on. A person or an admin can turn it off, and Enterprise accounts start with it off. Then nothing blocks the agent's push except the git hook and CI.
-- **Windows has no agent-side check** ([Windows](#windows)).
+- **No marketplace listing yet.** You install from a local folder, and update with `git pull`. On Enterprise, **Allow Local Plugin Imports** is off by default, and then a local plugin doesn't load. The repo's `.cursor/hooks.json`, the git hook and CI still check.
+- **Windows is untested** ([Windows](#windows)).
 - **Stdout is stricter.** One stray line on stdout blocks every shell command, where in Claude Code it's harmless. Our hook prints nothing when it allows, and a test checks that.
 - **Session context is less reliable.** In the Agents window it arrives late. A resumed chat keeps the first turn's context, but the `env` set at session start is gone.
-- **Hooks can run more than once.** Cursor can run up to four copies of Comprende's hook (see [Step-aside rules](#step-aside-rules)).
+- **Several copies of the hook can run.** Up to four, on one command. They agree on one check, but a copy from before 0.3.0 doesn't, and may check a second time ([Step-aside rules](#step-aside-rules)).
 - **A JSON deny can't send a separate note to the agent.** Only `user_message` reaches it. Exit 2 with stderr is the same for everyone.
-- **MCP servers need approval** (`--approve-mcps` in headless runs). Until then, the memory tools aren't there.
+- **The MCP server needs approval** (`--approve-mcps` in headless runs). Until then, the memory tools aren't there, and "check me" saves the report with `gate.mjs save --input` instead.
+- **The skill can load twice.** Cursor also runs the Claude Code plugins you've installed. Install Comprende in one place.
+- **Cursor's agent signs its commits.** It adds `Co-authored-by: Cursor <cursoragent@cursor.com>` to the commits it makes. Turn that off in Cursor's settings if you don't want it.
 
-None of this weakens the lock: CI and the ruleset are the same for every tool.
+## Checking it in the Cursor IDE
+
+The CLI run (`tools/e2e-cursor.mjs`) can't see the IDE. Check these by hand, in a gated demo repo (the README's "Try it in 5 minutes"):
+
+1. **Install:** `git clone https://github.com/AbdulrahmanMasoud/comprende.git ~/.cursor/plugins/local/comprende`, then **Developer: Reload Window**. Comprende shows in **Customize**.
+2. **Memory:** approve the **comprende** MCP server if Cursor asks. Its 10 tools are listed.
+3. **Session start:** open the demo, trust the workspace, start a chat, and ask what Comprende said at session start. Expect the always-on line and the gate's message, in the Agents window too.
+4. **An ordinary command:** ask it to run `ls`. It runs, with no hook message.
+5. **The push guard:** ask it to add `sum(xs)` to `math.js`, commit and push. The push is blocked, and the chat shows why.
+6. **Check me:** say "check me", answer, and write a summary. The report is saved and committed, then a separate push goes through.
+7. **One check:** with Comprende also in Claude Code (so Cursor imports it), push an unverified change. The chat shows one block message, not two.
+8. **Third-Party Imports off:** turn it off, reload, and push an unverified change. It's still blocked.
 
 ## Codex, from its docs
 
@@ -403,7 +418,7 @@ So each push is checked once, and each session gets each line once. `test/agents
 - Cursor starts the MCP server from `.mcp.json`, through the manifest
 - `agent plugin marketplace add` works on this repo
 
-**An end-to-end script you can rerun,** `tools/cursor-e2e.mjs`, added in the Cursor adapter PR:
+**An end-to-end script you can rerun,** [`tools/e2e-cursor.mjs`](../tools/e2e-cursor.mjs), as planned here. How to run it, and what it covers today: CONTRIBUTING.md, [Testing in Cursor](../CONTRIBUTING.md#testing-in-cursor). The plan:
 - **Setup:**
   - It needs a logged-in `cursor-agent`, and isn't part of CI.
   - It runs `cursor-agent -p --output-format stream-json --trust --force` with a temporary `HOME`. On macOS, that `HOME` links `~/Library/Keychains`, so the login works and no personal config or plugins load.

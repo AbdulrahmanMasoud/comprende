@@ -6,10 +6,10 @@
 
 <p align="center"><a href="README.ar.md">Arabic</a></p>
 
-Comprende is a plugin for Claude Code. It does two things:
+Comprende is a plugin for Claude Code and Cursor. It does two things:
 
-1. **Claude explains the code it writes**, briefly and in your language, but only the parts worth explaining: new APIs, non-obvious logic, risks. This works in every project.
-2. **The ownership check** (optional, per repo). Before your code is pushed, Claude asks you a few questions about it, and you write the PR summary. Without that, the push and the merge are blocked.
+1. **The agent explains the code it writes**, briefly and in your language, but only the parts worth explaining: new APIs, non-obvious logic, risks. This works in every project.
+2. **The ownership check** (optional, per repo). Before your code is pushed, the agent asks you a few questions about it, and you write the PR summary. Without that, the push and the merge are blocked.
 
 <p align="center">
   <a href="https://youtu.be/KeoRSyM0zu8"><img src="https://img.youtube.com/vi/KeoRSyM0zu8/maxresdefault.jpg" width="640" alt="Video: Stop Merging AI Code You Don't Understand"></a>
@@ -19,7 +19,11 @@ Comprende is a plugin for Claude Code. It does two things:
 
 ## Install
 
-Run these two commands in your terminal. You need [Node.js](https://nodejs.org) 20+.
+You need [Node.js](https://nodejs.org) 20+. Install Comprende in one place, Claude Code or Cursor, not both.
+
+### Claude Code
+
+Run these two commands in your terminal:
 
 ```bash
 claude plugin marketplace add AbdulrahmanMasoud/comprende
@@ -29,6 +33,20 @@ claude plugin install comprende@comprende
 Then restart Claude Code. To check it worked, type `/mcp` in Claude: **comprende** should be in the list.
 
 This turns it on for **all your projects**. If you install from inside Claude with `/plugin` instead, pick the **user** scope: the project scope turns it on for one repo only.
+
+### Cursor
+
+Clone it into Cursor's folder for local plugins:
+
+```bash
+git clone https://github.com/AbdulrahmanMasoud/comprende.git ~/.cursor/plugins/local/comprende
+```
+
+Then restart Cursor, or run **Developer: Reload Window**. If Cursor asks, approve the **comprende** MCP server: it remembers what you already know. To update: `git -C ~/.cursor/plugins/local/comprende pull`, then reload.
+
+Already have it in Claude Code? Skip this. Cursor runs your Claude Code plugins too (its Third-Party Imports setting, on by default), so a second copy would load the skill twice. More in [Comprende in Cursor](docs/agents.md#what-works-where-030).
+
+On Windows, Comprende is experimental in both tools ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 
 ## 1. Explanations: just use Claude
 
@@ -60,9 +78,9 @@ Claude remembers what you already know in `~/.comprende/`, on your machine only.
 ### Turn it on (team lead, once per repo)
 
 1. Open Claude in the repo and say: **"Enable the ownership gate in this repo."**
-2. Claude opens a PR that adds the gate (`.learning/`), a CI check and a Claude hook. Review `.learning/config.json`, mainly `sensitive`: paths like auth or payments, which always get questions. Then merge it.
+2. Claude opens a PR that adds the gate (`.learning/`), a CI check, and hooks for Claude Code and Cursor. Review `.learning/config.json`, mainly `sensitive`: paths like auth or payments, which always get questions. Then merge it.
 3. Make the check required: run `node .learning/gate.mjs protect --apply`, or ask Claude to. It needs admin rights on GitHub.
-4. Ask your team to install the plugin. That's all they need: their first session in the repo sets up the rest.
+4. Ask your team to install the plugin, in Claude Code or Cursor. That's all they need: their first session in the repo sets up the rest.
 
 ### Use it (every developer)
 
@@ -91,7 +109,30 @@ A real session, shortened:
 >
 > **Claude:** `sum` is committed as `5740db1` and pushed to `origin/feature/sum`. … The report is in `.learning/checks/feature%2Fsum.md`, included in the same commit, so the CI check can match it to this code.
 
-**If you skip the check**, Claude won't push, `git push` is blocked by a git hook, and CI fails the PR. This is what you see in a terminal:
+**In Cursor**, it's the same check. A real run, shortened:
+
+> **You:** run `git push -u origin feature/sum` …
+>
+> **Cursor:** Blocked by the ownership gate:
+> - No ownership report for branch 'feature/sum' (.learning/checks/feature%2Fsum.md). Ask Cursor to run the ownership check ("check me"), then commit the report.
+>
+> **You:** check me
+>
+> **Cursor:** … Ownership check for `feature/sum` — small change (`math.js`: new `sum`).
+>
+> One question: why does `sum` pass `0` as the second argument to `reduce`, and what would `sum([])` return if that `0` were left out?
+>
+> Answer that, then write a short PR summary in your own words (what changed, why, what could break) …
+>
+> **You:** sum totals the list with reduce. The 0 is the starting value, so an empty list gives 0 instead of throwing a TypeError. My summary for the PR, in my own words: Added sum(xs), which adds up a list of numbers with reduce, starting from 0 so an empty list returns 0. …
+>
+> **Cursor:** … Your answer checked out on the empty-list / initial-value point.
+>
+> - Report saved: `.learning/checks/feature%2Fsum.md`
+> - Committed: `91e3afe` — Add ownership check report for feature/sum.
+> - Pushed: `feature/sum` → `origin/feature/sum`
+
+**If you skip the check**, the agent won't push, `git push` is blocked by a git hook, and CI fails the PR. This is what you see in a terminal:
 
 ![In a terminal: a push is blocked, the ownership report is saved, then the push goes through](docs/demo.gif)
 
@@ -127,7 +168,7 @@ git checkout -q -b feature/sum
 claude
 ```
 
-Then, in Claude:
+Then, in Claude (or open `/tmp/comprende-try/app` in Cursor, with the plugin installed):
 
 1. Say: **"add a sum(xs) function to math.js using add, then commit and push it"**.
 2. Answer its question. Try a wrong answer first, to see what happens.
@@ -137,6 +178,7 @@ Then, in Claude:
 
 - [**The gate for teams**](docs/teams.md): setup by hand, settings, small changes, emergencies
 - [**How it works**](docs/how-it-works.md): requirements, fingerprints, the four layers, honest limits
+- [**Comprende in Cursor**](docs/agents.md#what-works-where-030): what works where, what's weaker, and a checklist for the IDE
 - [**Contributing**](CONTRIBUTING.md#contributions): pull requests from outside aren't accepted right now, but issues and feedback are welcome
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
