@@ -513,6 +513,7 @@ test("a usage error in a hook entry point fails open with one short line, never 
     [["claude-hook", "--bogus"], AI_TOOL],
     [["session-start", "--bogus"], AI_TOOL],
     [["agent-hook", "--agent"], AI_TOOL], // a missing value
+    [["agent-hook", "stray"], AI_TOOL], // an argument it doesn't take
     [["agent-hook", "--agent", "cursor", "--format", "json"], AI_TOOL], // an option a later version might add
     [["session-start", "--from-plugin", "--format", "json"], AI_TOOL],
     [["agent-hook-v2"], AI_TOOL], // a command a later version might add
@@ -524,4 +525,6 @@ test("a usage error in a hook entry point fails open with one short line, never 
     assert.equal(r.stdout, "", args.join(" "));
     assert.match(r.stderr, /^ownership gate: .+\n$/, args.join(" "));
   }
+  // Commands people run by hand keep exit 2 for a usage error.
+  assert.equal(runGate(dev, ["status", "--bogus"]).status, 2);
 });
