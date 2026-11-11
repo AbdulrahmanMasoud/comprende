@@ -1,8 +1,8 @@
 {
   "name": "comprende",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "Claude Code and Cursor plugin: explain code while building it, and an ownership gate for teams.",
+  "description": "Claude Code, Cursor and Codex plugin: explain code while building it, and an ownership gate for teams.",
   "license": "MIT",
   "type": "module",
   "engines": {

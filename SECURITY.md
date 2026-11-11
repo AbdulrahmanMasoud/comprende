@@ -12,7 +12,7 @@ Everything else counts as a bug: a way to get **unverified code merged with CI g
 
 ## The plugin in repos you don't trust
 
-The plugin runs in every repo you open in Claude Code or Cursor, including ones you just cloned. A malicious repo must not be able to run code on your machine because of it:
+The plugin runs in every repo you open in Claude Code, Cursor or Codex, including ones you just cloned. A malicious repo must not be able to run code on your machine because of it:
 
 - **No repo code in the plugin's hooks or MCP server.** They run only the plugin's own `dist/gate.mjs`. A repo's `.learning/config.json` is read as data: never through a symlink, at most 256 KB, and strictly validated.
 - **The local `pre-push` hook is pinned.** It records the SHA-256 of the `.learning/gate.mjs` it was installed for. On every push, it reads the file, checks the hash, and runs exactly those bytes as an in-memory module. That module can import only Node's `node:` built-ins, so nothing next to `gate.mjs` (no `node_modules`, no `package.json`) can stand in for anything it loads. If `gate.mjs` later changes (a pull, a checkout), the hook refuses to run it and tells you how to re-trust it.
@@ -33,11 +33,11 @@ The plugin runs in every repo you open in Claude Code or Cursor, including ones 
   - One known limit: if Node can't load the pinned `pre-push` hook's module at all (a Node too old for its syntax, say), that hook exits 1, and git blocks the push. `--no-verify` gets past it, and CI still checks.
   - If `node` isn't on PATH, the Claude Code plugin's hooks and the `.claude/settings.json` hook that `install` writes exit 0. They check with plain POSIX `sh` before starting Node.
   - Cursor's and Codex's hook commands (`hooks/cursor-hooks.json`, `hooks/codex-hooks.json`, and the `.cursor/hooks.json` that `install` writes) are a plain `node …` line, since both tools run hooks in PowerShell on Windows. Without `node` the command fails with the shell's own error code, which isn't 2 in `sh` or in PowerShell (both tested), and `failClosed: false` tells Cursor to let the command run.
-  - If Node can't run the gate (a missing file, or a Node too old to load it), SessionStart prints the same note and exits 0. PreToolUse exits 1, which Claude Code and Cursor both treat as a non-blocking error.
+  - If Node can't run the gate (a missing file, or a Node too old to load it), SessionStart prints the same note and exits 0. PreToolUse exits 1, which Claude Code, Cursor and Codex all treat as a non-blocking error.
   - When PreToolUse allows a command, it prints nothing. Cursor blocks a command when a hook's stdout isn't JSON, so a stray line would block every command.
   - The hook commands have no syntax that a shell could reject with its own exit code 2: plain POSIX `sh` for Claude Code, and no shell syntax at all for Cursor and for Codex's plugin. The repo's `.codex/hooks.json` uses `$(git rev-parse --show-toplevel)` to find the gate from a subfolder. Codex runs it with the user's own `$SHELL` (or PowerShell on Windows): it works in `sh`, bash, zsh, fish 3.4+ and PowerShell. In another shell, such as tcsh or nu, it fails with an exit code other than 2, so it fails open: that copy checks nothing, and the plugin's hook, the git hook and CI still do.
   - On Windows, Cursor and Codex run hooks in PowerShell with `-Command`, which turns the gate's exit 2 into 1. So there the agent's push guard fails open, and the git hook and CI still check ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
-  - Codex skips a plugin's hooks, without a word, until they're trusted in `/hooks`, and again after every update to the plugin. Until then the agent's push isn't checked by the hook; the git hook and CI still check it. The skill tells the user when a gated session got no session-start note.
+  - Codex skips a plugin's hooks, without a word, until they're trusted in `/hooks`, and again after every update to the plugin. Until then the agent's push isn't checked by the hook; the git hook and CI still check it. The skill tells the agent to mention it when a gated session got no session-start note (not yet confirmed in Codex).
   - A usage error in a hook fails open too: an option or a command this gate doesn't know, which a newer hook file might pass to an older copy, gives exit 1 for the AI tools' hooks and 0 for `pre-push`, with one line on stderr. It never gives 2.
 - **Exemptions are exact.** Only these skip the check:
   - the gate's own files;
