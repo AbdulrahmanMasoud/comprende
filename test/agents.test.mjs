@@ -537,3 +537,23 @@ test("a claim goes stale after two minutes: a session that starts again later un
   for (const claim of readdirSync(folder)) utimesSync(join(folder, claim), threeMinutesAgo, threeMinutesAgo);
   assert.match(start(), /^Comprende is installed\./);
 });
+
+test("a hook payload that starts with a UTF-8 BOM is read like any other", (t) => {
+  const { dev } = unverifiedRepo(t);
+  unlinkSync(join(dev, ".claude/settings.json"));
+  unlinkSync(join(dev, ".cursor/hooks.json"));
+  // Cursor's CLI on Windows has sent the payload with one.
+  const push = plugin(REPO, ["agent-hook", "--from-plugin", "--agent", "cursor"], {
+    input: `\uFEFF${cursorPush(dev, "call-bom")}`,
+    env: CURSOR_ENV,
+  });
+  assert.equal(push.status, 2, push.stderr);
+  const start = plugin(REPO, ["session-start", "--from-plugin", "--agent", "cursor"], {
+    input: `\uFEFF${cursorSession(dev, "session-bom")}`,
+    env: CURSOR_ENV,
+  });
+  assert.match(
+    JSON.parse(start.stdout).hookSpecificOutput.additionalContext,
+    /This repository uses the ownership gate/,
+  );
+});

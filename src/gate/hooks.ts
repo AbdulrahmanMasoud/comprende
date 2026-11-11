@@ -17,10 +17,12 @@ import { uncommittedReport } from "./report.js";
 import { CONFIG_PATH, GATE_ATTRIBUTES_LINE, GATE_REL, GateError, SELF, splitLines, ZERO_SHA } from "./shared.js";
 
 /** The hook's payload and the adapter that reads it, or no adapter when stdin
- *  isn't JSON or `--agent` names an unknown tool. Never throws. */
+ *  isn't JSON or `--agent` names an unknown tool. Never throws. A leading UTF-8
+ *  BOM goes first: Cursor's CLI on Windows has sent one
+ *  (https://forum.cursor.com/t/166794), and JSON.parse rejects it. */
 function readHookInput(stdinText: string, requested: string | null): { payload: unknown; agent: Agent | null } {
   try {
-    const payload: unknown = JSON.parse(stdinText || "{}");
+    const payload: unknown = JSON.parse(stdinText.replace(/^\uFEFF/, "") || "{}");
     return { payload, agent: resolveAgent(payload, process.env, requested) };
   } catch {
     return { payload: undefined, agent: null };

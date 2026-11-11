@@ -1749,7 +1749,7 @@ function isPushCommand(command, depth = 0) {
 // src/gate/hooks.ts
 function readHookInput(stdinText, requested) {
   try {
-    const payload = JSON.parse(stdinText || "{}");
+    const payload = JSON.parse(stdinText.replace(/^\uFEFF/, "") || "{}");
     return { payload, agent: resolveAgent(payload, process.env, requested) };
   } catch {
     return { payload: void 0, agent: null };
