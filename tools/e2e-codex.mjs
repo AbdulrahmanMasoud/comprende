@@ -345,7 +345,7 @@ function main() {
 
   const asked = turn("4-check-me", demo.app, "check me", { resume: session });
   // The agent may start the check right after the blocked push, so its question can come a turn early.
-  report("check me: questions asked", /\?/.test(asked.said) || /\?/.test(push.said));
+  report("check me: questions asked", /[?؟]/.test(asked.said) || /[?؟]/.test(push.said));
   const turns = [asked, turn("5-answers", demo.app, ANSWER, { resume: session })];
   for (let i = 0; i < 2 && !remoteHas(demo.remote, "feature/sum"); i++)
     turns.push(

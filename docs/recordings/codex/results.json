@@ -1,0 +1,82 @@
+[
+  {
+    "step": "the plugin's two hooks are trusted",
+    "status": "PASS",
+    "detail": "comprende@comprende:hooks/codex-hooks.json:pre_tool_use:0:0, comprende@comprende:hooks/codex-hooks.json:session_start:0:0"
+  },
+  {
+    "step": "session start: the always-on line",
+    "status": "PASS"
+  },
+  {
+    "step": "session start: the gate's message",
+    "status": "PASS"
+  },
+  {
+    "step": "an ordinary command runs, and the hook is silent",
+    "status": "PASS",
+    "detail": "1 plugin hook run(s)"
+  },
+  {
+    "step": "an unverified push is blocked by Codex's hook, once, and the agent sees why",
+    "status": "PASS",
+    "detail": "1 check(s)"
+  },
+  {
+    "step": "check me: questions asked",
+    "status": "FAIL"
+  },
+  {
+    "step": "check me: the report saved",
+    "status": "PASS",
+    "detail": "with the memory server"
+  },
+  {
+    "step": "check me: committed, then a separate push goes through",
+    "status": "PASS"
+  },
+  {
+    "step": "the agent's commit: its trailer",
+    "status": "PASS",
+    "detail": "none"
+  },
+  {
+    "step": "the memory server: learning_context works",
+    "status": "PASS",
+    "detail": "comprende:learning_context"
+  },
+  {
+    "step": "explain as you build: retry.js written",
+    "status": "PASS"
+  },
+  {
+    "step": "explain as you build: a short explanation of the non-obvious part",
+    "status": "PASS",
+    "detail": "1936 characters; read 7-explain-as-you-build.reply.md"
+  },
+  {
+    "step": "the repo's .codex/hooks.json is trusted too",
+    "status": "PASS",
+    "detail": "/work/demo-repo-hook/app/.codex/hooks.json:pre_tool_use:0:0, comprende@comprende:hooks/codex-hooks.json:pre_tool_use:0:0, comprende@comprende:hooks/codex-hooks.json:session_start:0:0"
+  },
+  {
+    "step": "the plugin and the repo's hook: both run, one checks",
+    "status": "PASS",
+    "detail": "1 plugin run, 1 repo run, 1 check(s)"
+  },
+  {
+    "step": "after an update: Codex skips the plugin's hooks",
+    "status": "PASS",
+    "detail": "0 plugin hook run(s)"
+  },
+  {
+    "step": "after an update: the repo's trusted hook still checks the push",
+    "status": "PASS",
+    "detail": "1 repo run, 1 check(s)"
+  },
+  {
+    "step": "after an update: the skill says to trust the hooks again",
+    "status": "FAIL",
+    "detail": "read its reply"
+  }
+]
