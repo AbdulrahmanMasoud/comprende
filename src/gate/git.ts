@@ -1,7 +1,6 @@
 // Running git safely: a fixed environment, no commands from the repo's own config,
 // and a temporary index for reading the working tree as `git add -A` would commit it.
 
-import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync, utimesSync } from "node:fs";
 import { devNull, homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";

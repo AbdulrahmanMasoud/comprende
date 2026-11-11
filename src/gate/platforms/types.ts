@@ -2,6 +2,8 @@
 // writes, what CI tells the gate about the change, where reviewers see the result,
 // CODEOWNERS, and making the check required. See CONTRIBUTING.md, "Adding a git platform".
 
+import type { ExistingFile } from "../files.js";
+
 /** The platforms the gate has an adapter for. */
 export type PlatformId = "github";
 
@@ -9,10 +11,14 @@ export type PlatformId = "github";
 export type CiEnv = Readonly<Record<string, string | undefined>>;
 
 /** What CI says about the change it's checking. A null field means CI doesn't
- *  say: the command's own flags (--base, --branch, --labels-json) decide. */
+ *  say: the command's own flags (--base, --branch, --labels-json) decide, and
+ *  they win when given. */
 export interface CiContext {
-  readonly baseBranch: string | null;
+  /** The ref to compare against, as `--base` takes it (e.g. "origin/main"). */
+  readonly baseRef: string | null;
+  /** The pull or merge request's branch, as the developer named it. */
   readonly headBranch: string | null;
+  /** The request's labels, for the skip label. */
   readonly labels: readonly string[] | null;
 }
 
@@ -39,7 +45,7 @@ export interface Platform {
      *  content means leave the file alone. Pure: the core does the write. A
      *  platform whose CI lives in one shared file (GitLab's .gitlab-ci.yml)
      *  merges its job in here, instead of writing a file of its own. */
-    withGateJob(existing: string | null, shownPath: string): { readonly content?: string; readonly message: string };
+    withGateJob(existing: ExistingFile, shownPath: string): { readonly content?: string; readonly message: string };
   };
 
   /** The name CI reports the check under, which protect makes required. */
@@ -65,6 +71,16 @@ export interface Platform {
     readonly ownerHint: string;
     /** The setting's name as the platform shows it, quoted. */
     readonly reviewSetting: string;
+  };
+
+  /** The platform's CLI, and its commands that open or merge a pull request: the
+   *  agent hook treats them like `git push`. */
+  readonly cli: {
+    readonly program: string;
+    /** Global options that take a value, which come before the subcommand. */
+    readonly optionsWithValue: ReadonlySet<string>;
+    /** Subcommand pairs, such as ["pr", "create"]. */
+    readonly publishes: readonly (readonly [string, string])[];
   };
 
   /** Make the check required on the default branch, in the repo at `root`.

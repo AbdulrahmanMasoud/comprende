@@ -7,7 +7,7 @@ import { type RunResult, run } from "../run.js";
 import { GATE_REL, GateError } from "../shared.js";
 import type { Platform, ProtectOptions } from "./types.js";
 
-export const WORKFLOW = `name: Ownership check
+const WORKFLOW = `name: Ownership check
 
 on:
   pull_request:
@@ -56,7 +56,7 @@ jobs:
 `;
 
 // The workflow job's name, which is also the status check's name.
-export const CHECK_NAME = "Ownership check";
+const CHECK_NAME = "Ownership check";
 
 const RULESET_NAME = "Ownership gate";
 
@@ -173,14 +173,16 @@ export const github: Platform = {
   ciConfig: {
     path: ".github/workflows/ownership-check.yml",
     withGateJob: (existing, shownPath) =>
-      existing === null ? { content: WORKFLOW, message: `wrote ${shownPath}` } : { message: `${shownPath} exists (kept)` },
+      existing === null
+        ? { content: WORKFLOW, message: `wrote ${shownPath}` }
+        : { message: `${shownPath} exists (kept)` },
   },
 
   checkName: CHECK_NAME,
 
   // The workflow passes the base branch and the labels as flags; only the head
   // branch also comes from the environment.
-  ciContext: (env) => ({ baseBranch: null, headBranch: env.GITHUB_HEAD_REF || null, labels: null }),
+  ciContext: (env) => ({ baseRef: null, headBranch: env.GITHUB_HEAD_REF || null, labels: null }),
 
   reviewerSummaryFile: (env) => env.GITHUB_STEP_SUMMARY || null,
 
@@ -192,6 +194,15 @@ export const github: Platform = {
     ownerPattern: /^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/,
     ownerHint: "a GitHub @user, @org/team, or an email",
     reviewSetting: "'Require review from Code Owners'",
+  },
+
+  cli: {
+    program: "gh",
+    optionsWithValue: new Set(["-R", "--repo", "--hostname"]),
+    publishes: [
+      ["pr", "create"],
+      ["pr", "merge"],
+    ],
   },
 
   protect,

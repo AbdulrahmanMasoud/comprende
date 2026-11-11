@@ -33,15 +33,16 @@ actionlint                        # the GitHub workflows
   - `features.ts` (a gate's header, and what the gate CI runs knows), `install-lines.ts` (install's `.gitignore` and `.gitattributes` lines)
   - `git.ts` (safe git runner, temp index, inert repo config), `config.ts` (config, validation, rules from the base)
   - `changes.ts` (fingerprints, plumbing, 3-way replay, states, small changes), `report.ts` (the report file)
-  - `commands.ts` (status, save, verify), `push-detect.ts`, `hooks.ts`, `ci-summary.ts`, `cli.ts`
-  - `install.ts` (writes the gate's files into a repo), `ci-workflow.ts` (the CI workflow text and the check's name), `codeowners.ts` (CODEOWNERS entries for the gate files), `protect.ts` (the GitHub ruleset)
+  - `commands.ts` (status, save, verify), `push-detect.ts`, `hooks.ts`, `ci-summary.ts` (the reviewer summary, in markdown), `cli.ts`
+  - `install.ts` (writes the gate's files into a repo), `codeowners.ts` (CODEOWNERS entries for the gate files), `run.ts` (spawning a program without a shell)
   - `gate-files.ts` (the files that control the gate), `project-hooks.ts` (safe reads and writes of the agents' repo-level hook files)
   - `agents/`: one adapter per AI tool behind one interface. `types.ts` (the `Agent` interface), `index.ts` (the registry and the resolve step), `claude-code.ts`, `cursor.ts`, and what both use: `claude-format.ts` (the payload) and `claude-settings.ts` (the `.claude/settings.json` hook file). `hook-replies.ts` holds the core's default replies. How to add a tool: CONTRIBUTING.md, "Adding an AI tool"
+  - `platforms/`: one adapter per git platform behind one interface. `types.ts` (the `Platform` interface), `index.ts` (the registry, the repo's platform and the CI's), `github.ts` (the Actions workflow, the job summary and annotations, CODEOWNERS, the ruleset through `gh`). How to add a platform: CONTRIBUTING.md, "Adding a git platform"
 - `src/store/`: the memory store. `profile.ts` (the learner profile), `project.ts` (`.learning/` map and decisions), `common.ts`
 - `src/server.ts`: the MCP server (thin: tools in, store or gate out). `src/learning.ts`: the skill's file-only helper
 - `src/util.ts`: helpers the gate and the store share, including the prototype-free `dict`/`own`/`get`
 - `dist/`: built output, **committed on purpose**, because that's what the plugin runs
-- `test/`: `node:test` suites against real git repos, one file per topic (install, config, fingerprints, checks, report, small-changes, push-detection, hooks, agents, security, ci, store, mcp, consistency, release). `helpers.mjs` has the fixtures, and `fixtures/<tool>/` the payloads captured from each AI tool.
+- `test/`: `node:test` suites against real git repos, one file per topic (install, config, fingerprints, checks, report, small-changes, push-detection, hooks, agents, platforms, security, ci, store, mcp, consistency, release). `helpers.mjs` has the fixtures, and `fixtures/<tool>/` the payloads captured from each AI tool.
 - `docs/`: `teams.md` (setting up the gate), `how-it-works.md` (requirements, internals, limits), `agents.md` (other AI tools: Cursor research and the adapter design), `demo.tape` → `demo.gif` (VHS)
 - `.github/`:
   - `workflows/ci.yml`: the PR checks
@@ -113,7 +114,6 @@ The code must stay easy for a new contributor to read and change. These rules ap
 Code written before these rules doesn't follow all of them yet. Don't make it worse, and fix it in its own `chore/` PR, not inside a feature:
 
 - `server.ts` (392 lines) is past ~300 lines. Split it before adding to it.
-- The GitHub code still lives in `install.ts`, `ci-workflow.ts`, `codeowners.ts`, `protect.ts` and `ci-summary.ts`. It moves behind the platform interface in [#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18).
 - Biome doesn't flag non-null assertions yet ([#6](https://github.com/AbdulrahmanMasoud/comprende/issues/6)).
 
 ## Writing style for the skill

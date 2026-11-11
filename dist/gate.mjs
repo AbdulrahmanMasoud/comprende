@@ -242,20 +242,12 @@ function samePath(a, b, platform = process.platform) {
 }
 
 // src/gate/git.ts
-import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync as statSync3, utimesSync } from "node:fs";
 import { devNull, homedir, tmpdir } from "node:os";
 import { dirname as dirname2, isAbsolute, join as join2, resolve } from "node:path";
-function gitEnv(extra) {
-  const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
-  delete env.GIT_DIFF_OPTS;
-  let n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
-  if (!Number.isFinite(n) || n < 0) n = 0;
-  env.GIT_CONFIG_COUNT = String(n + 1);
-  env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
-  env[`GIT_CONFIG_VALUE_${n}`] = "false";
-  return { ...env, ...extra ?? {} };
-}
+
+// src/gate/run.ts
+import { spawnSync } from "node:child_process";
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, {
     cwd: opts.cwd,
@@ -271,6 +263,195 @@ function run(cmd, args, opts = {}) {
     throw err;
   }
   return { status: r.status ?? 1, stdout: r.stdout ?? Buffer.alloc(0), stderr: r.stderr ?? Buffer.alloc(0) };
+}
+
+// src/gate/platforms/github.ts
+var WORKFLOW = `name: Ownership check
+
+on:
+  pull_request:
+    # 'edited' re-runs the check when a PR is retargeted to another base branch.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    name: Ownership check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Check the PR's own commit (not GitHub's merge commit) with full history,
+          # so fingerprints match what the developer verified.
+          ref: \${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          # The gate needs no dependencies; a restored cache is only a way in.
+          package-manager-cache: false
+
+      - name: Verify ownership report
+        env:
+          BASE_REF: \${{ github.base_ref }}
+          HEAD_REF: \${{ github.head_ref }}
+          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
+          NODE_OPTIONS: ""
+        run: |
+          # Run the gate as it exists on the base branch, so a PR can't weaken it
+          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
+          # doesn't have the gate yet (the PR that installs it); the rules then
+          # are the strict defaults, not the PR's own config.
+          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
+            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
+          else
+            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
+          fi
+          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
+            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
+`;
+var CHECK_NAME = "Ownership check";
+var RULESET_NAME = "Ownership gate";
+var REQUIRE_BY_HAND = "https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#make-the-check-required";
+function rulesetBody(approvals = 1, codeOwners = true) {
+  return {
+    name: RULESET_NAME,
+    target: "branch",
+    enforcement: "active",
+    conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+    rules: [
+      {
+        type: "pull_request",
+        parameters: {
+          required_approving_review_count: approvals,
+          require_code_owner_review: codeOwners,
+          dismiss_stale_reviews_on_push: false,
+          require_last_push_approval: false,
+          required_review_thread_resolution: false
+        }
+      },
+      {
+        type: "required_status_checks",
+        parameters: { strict_required_status_checks_policy: false, required_status_checks: [{ context: CHECK_NAME }] }
+      }
+    ]
+  };
+}
+function runGh(root, args, input) {
+  let r;
+  try {
+    r = run("gh", args, { cwd: root, input });
+  } catch (e) {
+    if (e.code === "ENOENT") {
+      throw new GateError(
+        `The GitHub CLI (gh) isn't installed. Install it and run \`gh auth login\`, or make the check required by hand: ${REQUIRE_BY_HAND}`
+      );
+    }
+    throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${e.message}`);
+  }
+  if (r.status !== 0) {
+    const err = (r.stderr.toString("utf8") || r.stdout.toString("utf8")).trim();
+    const low = err.toLowerCase();
+    if (err.includes("Upgrade to GitHub Pro") || low.includes("upgrade") && low.includes("plan")) {
+      throw new GateError(
+        `Rulesets aren't available for private repos on GitHub's free plan. Use Settings \u2192 Branches \u2192 branch protection instead: ${REQUIRE_BY_HAND}`
+      );
+    }
+    if (err.includes("403") || err.includes("Must have admin rights") || err.includes("Resource not accessible")) {
+      throw new GateError("GitHub refused: creating rules needs admin access to this repository.");
+    }
+    throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${err}`);
+  }
+  return r.stdout.toString("utf8");
+}
+function protect(root, { apply, approvals, codeOwners }) {
+  if (!Number.isInteger(approvals) || approvals < 0 || approvals > 10)
+    throw new GateError("--approvals must be between 0 and 10.");
+  const nwo = runGh(root, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).trim();
+  if (!/^[\w.-]+\/[\w.-]+$/.test(nwo))
+    throw new GateError(`Couldn't tell which GitHub repo this is (got ${JSON.stringify(nwo)}).`);
+  let existing = [];
+  try {
+    existing = JSON.parse(runGh(root, ["api", `repos/${nwo}/rulesets`]) || "[]");
+  } catch (e) {
+    if (e instanceof GateError) throw e;
+  }
+  for (const r of Array.isArray(existing) ? existing : []) {
+    if (isRecord(r) && r.name === RULESET_NAME)
+      return [`Ruleset '${RULESET_NAME}' already exists on ${nwo}: https://github.com/${nwo}/rules/${String(r.id)}`];
+  }
+  const body = rulesetBody(approvals, codeOwners);
+  const plan = [
+    `Ruleset for ${nwo} (default branch): require a pull request with ${approvals} approval(s)` + (codeOwners ? " incl. code owners" : "") + `, and the '${CHECK_NAME}' status check.`,
+    "It adds to existing branch protection; it doesn't replace it."
+  ];
+  if (codeOwners)
+    plan.push("Note: a code owner can't approve their own PR. On a one-person repo, use --no-code-owners.");
+  if (!apply)
+    return [
+      ...plan,
+      "Dry run \u2014 nothing changed. Rerun with --apply (needs admin) to create it.",
+      JSON.stringify(body, null, 2)
+    ];
+  let created = {};
+  try {
+    created = JSON.parse(
+      runGh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}"
+    );
+  } catch (e) {
+    if (e instanceof GateError) throw e;
+  }
+  return [...plan, `Created: https://github.com/${nwo}/rules/${String(isRecord(created) ? created.id : void 0)}`];
+}
+var github = {
+  id: "github",
+  detects: (env) => env.GITHUB_ACTIONS === "true",
+  ciConfig: {
+    path: ".github/workflows/ownership-check.yml",
+    withGateJob: (existing, shownPath) => existing === null ? { content: WORKFLOW, message: `wrote ${shownPath}` } : { message: `${shownPath} exists (kept)` }
+  },
+  checkName: CHECK_NAME,
+  // The workflow passes the base branch and the labels as flags; only the head
+  // branch also comes from the environment.
+  ciContext: (env) => ({ baseRef: null, headBranch: env.GITHUB_HEAD_REF || null, labels: null }),
+  reviewerSummaryFile: (env) => env.GITHUB_STEP_SUMMARY || null,
+  annotations: (kind, messages, env) => env.GITHUB_ACTIONS === "true" ? messages.map((m) => `::${kind} title=Ownership check::${m}
+`).join("") : "",
+  codeowners: {
+    path: ".github/CODEOWNERS",
+    ownerPattern: /^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/,
+    ownerHint: "a GitHub @user, @org/team, or an email",
+    reviewSetting: "'Require review from Code Owners'"
+  },
+  cli: {
+    program: "gh",
+    optionsWithValue: /* @__PURE__ */ new Set(["-R", "--repo", "--hostname"]),
+    publishes: [
+      ["pr", "create"],
+      ["pr", "merge"]
+    ]
+  },
+  protect
+};
+
+// src/gate/platforms/index.ts
+var PLATFORMS = [github];
+var REPO_PLATFORM = github;
+var ciPlatform = (env) => PLATFORMS.find((p) => p.detects(env)) ?? REPO_PLATFORM;
+
+// src/gate/git.ts
+function gitEnv(extra) {
+  const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
+  delete env.GIT_DIFF_OPTS;
+  let n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  env.GIT_CONFIG_COUNT = String(n + 1);
+  env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
+  env[`GIT_CONFIG_VALUE_${n}`] = "false";
+  return { ...env, ...extra ?? {} };
 }
 function gitBytes(root, args, opts = {}) {
   let r;
@@ -343,7 +524,8 @@ function resolveBase(root, cfg, base) {
 }
 function currentBranch(root, branch) {
   if (branch) return branch;
-  if (process.env.GITHUB_HEAD_REF) return process.env.GITHUB_HEAD_REF;
+  const fromCi = ciPlatform(process.env).ciContext(process.env).headBranch;
+  if (fromCi) return fromCi;
   const name = git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], { check: false }).trim();
   if (!name) throw new GateError("Detached HEAD: pass --branch <name>.");
   return name;
@@ -623,9 +805,9 @@ function ciGateHasFeature(root, baseRef, rev, feature) {
 var GATE_FILES = [
   CONFIG_PATH,
   GATE_REL,
-  ".github/workflows/ownership-check.yml",
+  REPO_PLATFORM.ciConfig.path,
   ...PROJECT_HOOK_FILES.map((f) => f.path),
-  ".github/CODEOWNERS"
+  REPO_PLATFORM.codeowners.path
 ];
 
 // src/gate/install-lines.ts
@@ -1016,61 +1198,6 @@ function jobSummary(root, branch, rev, base, passed, messages, mode) {
   return `${out.join("\n")}
 `.slice(0, 6e4);
 }
-function annotate(kind, messages) {
-  if (process.env.GITHUB_ACTIONS === "true")
-    for (const m of messages) process.stdout.write(`::${kind} title=Ownership check::${m}
-`);
-}
-
-// src/gate/ci-workflow.ts
-var WORKFLOW = `name: Ownership check
-
-on:
-  pull_request:
-    # 'edited' re-runs the check when a PR is retargeted to another base branch.
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
-
-permissions:
-  contents: read
-
-jobs:
-  ownership:
-    name: Ownership check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          # Check the PR's own commit (not GitHub's merge commit) with full history,
-          # so fingerprints match what the developer verified.
-          ref: \${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          # The gate needs no dependencies; a restored cache is only a way in.
-          package-manager-cache: false
-
-      - name: Verify ownership report
-        env:
-          BASE_REF: \${{ github.base_ref }}
-          HEAD_REF: \${{ github.head_ref }}
-          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
-          NODE_OPTIONS: ""
-        run: |
-          # Run the gate as it exists on the base branch, so a PR can't weaken it
-          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
-          # doesn't have the gate yet (the PR that installs it); the rules then
-          # are the strict defaults, not the PR's own config.
-          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
-            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
-          else
-            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
-          fi
-          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
-            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
-`;
-var CHECK_NAME = "Ownership check";
 
 // src/gate/commands.ts
 import { existsSync as existsSync2, unlinkSync as unlinkSync2 } from "node:fs";
@@ -1292,7 +1419,6 @@ var WRAPPERS = /* @__PURE__ */ new Set(["sudo", "doas", "env", "command", "built
 var WRAPPER_ARG_OPTS = /* @__PURE__ */ new Set(["-u", "-g", "-C", "-h", "-p", "-n", "-f", "-o", "-i", "-e"]);
 var SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "zsh", "dash", "ksh"]);
 var GIT_ARG_OPTS = /* @__PURE__ */ new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"]);
-var GH_ARG_OPTS = /* @__PURE__ */ new Set(["-R", "--repo", "--hostname"]);
 var PUNCT = "();<>|&";
 function tokenize(command) {
   const tokens = [];
@@ -1396,10 +1522,12 @@ function isPushCommand(command, depth = 0) {
       let j = 1;
       while (j < tokens.length && tokens[j].startsWith("-")) j += GIT_ARG_OPTS.has(tokens[j]) ? 2 : 1;
       if (j < tokens.length && tokens[j] === "push") return true;
-    } else if (prog === "gh") {
+    } else {
+      const cli = PLATFORMS.map((p) => p.cli).find((c) => c.program === prog);
+      if (!cli) continue;
       let j = 1;
-      while (j < tokens.length && tokens[j].startsWith("-")) j += GH_ARG_OPTS.has(tokens[j]) ? 2 : 1;
-      if (tokens[j] === "pr" && j + 1 < tokens.length && ["create", "merge"].includes(tokens[j + 1])) return true;
+      while (j < tokens.length && tokens[j].startsWith("-")) j += cli.optionsWithValue.has(tokens[j]) ? 2 : 1;
+      if (j + 1 < tokens.length && cli.publishes.some(([a, b]) => tokens[j] === a && tokens[j + 1] === b)) return true;
     }
   }
   return false;
@@ -1611,13 +1739,14 @@ import { dirname as dirname4, join as join11, resolve as resolve4 } from "node:p
 import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:fs";
 import { join as join10 } from "node:path";
 function setUpCodeowners(root, owner) {
+  const { path: rel, ownerPattern, ownerHint, reviewSetting } = REPO_PLATFORM.codeowners;
   const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
   if (!owner) {
-    return "MANUAL STEP 2: add to .github/CODEOWNERS (or rerun install with --owner @handle) and turn on 'Require review from Code Owners' \u2014 otherwise a PR could edit the workflow to skip the check:\n  " + lines.join("\n  ");
+    return `MANUAL STEP 2: add to ${rel} (or rerun install with --owner @handle) and turn on ${reviewSetting} \u2014 otherwise a PR could edit the workflow to skip the check:
+  ` + lines.join("\n  ");
   }
-  if (!/^(?:@[\w.-]+(?:\/[\w.-]+)?|[^@\s]+@[^@\s]+)$/.test(owner))
-    throw new GateError(`--owner must be a GitHub @user, @org/team, or an email; got ${JSON.stringify(owner)}.`);
-  const path = join10(root, ".github", "CODEOWNERS");
+  if (!ownerPattern.test(owner)) throw new GateError(`--owner must be ${ownerHint}; got ${JSON.stringify(owner)}.`);
+  const path = join10(root, rel);
   const existing = existsSync4(path) ? readFileSync3(path, "utf8") : "";
   const have = new Set(
     splitLines(existing).filter((l) => l.trim() && !l.trimStart().startsWith("#")).map((l) => l.trim().split(/\s+/)[0])
@@ -1632,7 +1761,7 @@ ${fresh.join("\n")}
 `
     );
   }
-  return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on 'Require review from Code Owners' in branch protection.`;
+  return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on ${reviewSetting} in branch protection.`;
 }
 
 // src/gate/install.ts
@@ -1671,116 +1800,19 @@ function install(repo, upgrade = false, owner) {
 `);
     done.push(`wrote ${CONFIG_PATH} (base: ${cfg.base}, mode: required)`);
   }
-  const wf = join11(root, ".github", "workflows", "ownership-check.yml");
-  const wfRel = ".github/workflows/ownership-check.yml";
-  if (existsSync5(wf)) done.push(`${wfRel} exists (kept)`);
-  else {
-    atomicWrite(wf, WORKFLOW);
-    done.push(`wrote ${wfRel}`);
-  }
+  const ci = REPO_PLATFORM.ciConfig;
+  const ciPath = join11(root, ci.path);
+  const { content, message } = ci.withGateJob(existsSync5(ciPath) ? readExisting(ciPath) : null, ci.path);
+  if (content !== void 0) atomicWrite(ciPath, content);
+  done.push(message);
   for (const file of PROJECT_HOOK_FILES) done.push(addProjectHook(join11(root, file.path), file));
   for (const { file, line } of INSTALL_LINES) done.push(addInstallLine(root, file, line));
   done.push(...installHooks(root));
   done.push(
-    `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${CHECK_NAME}' status on the default branch \u2014 without it CI only warns.`
+    `NEXT, after this is merged: run \`node ${GATE_REL} protect\` (dry run, then --apply) to require the '${REPO_PLATFORM.checkName}' status on the default branch \u2014 without it CI only warns.`
   );
   done.push(setUpCodeowners(root, owner));
   return done;
-}
-
-// src/gate/protect.ts
-var RULESET_NAME = "Ownership gate";
-var REQUIRE_BY_HAND = "https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#make-the-check-required";
-function rulesetBody(approvals = 1, codeOwners = true) {
-  return {
-    name: RULESET_NAME,
-    target: "branch",
-    enforcement: "active",
-    conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
-    rules: [
-      {
-        type: "pull_request",
-        parameters: {
-          required_approving_review_count: approvals,
-          require_code_owner_review: codeOwners,
-          dismiss_stale_reviews_on_push: false,
-          require_last_push_approval: false,
-          required_review_thread_resolution: false
-        }
-      },
-      {
-        type: "required_status_checks",
-        parameters: { strict_required_status_checks_policy: false, required_status_checks: [{ context: CHECK_NAME }] }
-      }
-    ]
-  };
-}
-function runGh(root, args, input) {
-  let r;
-  try {
-    r = run("gh", args, { cwd: root, input });
-  } catch (e) {
-    if (e.code === "ENOENT") {
-      throw new GateError(
-        `The GitHub CLI (gh) isn't installed. Install it and run \`gh auth login\`, or make the check required by hand: ${REQUIRE_BY_HAND}`
-      );
-    }
-    throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${e.message}`);
-  }
-  if (r.status !== 0) {
-    const err = (r.stderr.toString("utf8") || r.stdout.toString("utf8")).trim();
-    const low = err.toLowerCase();
-    if (err.includes("Upgrade to GitHub Pro") || low.includes("upgrade") && low.includes("plan")) {
-      throw new GateError(
-        `Rulesets aren't available for private repos on GitHub's free plan. Use Settings \u2192 Branches \u2192 branch protection instead: ${REQUIRE_BY_HAND}`
-      );
-    }
-    if (err.includes("403") || err.includes("Must have admin rights") || err.includes("Resource not accessible")) {
-      throw new GateError("GitHub refused: creating rules needs admin access to this repository.");
-    }
-    throw new GateError(`gh ${args.slice(0, 2).join(" ")} failed: ${err}`);
-  }
-  return r.stdout.toString("utf8");
-}
-function protect(repo, apply = false, approvals = 1, codeOwners = true) {
-  const root = repoRoot(repo);
-  if (!Number.isInteger(approvals) || approvals < 0 || approvals > 10)
-    throw new GateError("--approvals must be between 0 and 10.");
-  const nwo = runGh(root, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).trim();
-  if (!/^[\w.-]+\/[\w.-]+$/.test(nwo))
-    throw new GateError(`Couldn't tell which GitHub repo this is (got ${JSON.stringify(nwo)}).`);
-  let existing = [];
-  try {
-    existing = JSON.parse(runGh(root, ["api", `repos/${nwo}/rulesets`]) || "[]");
-  } catch (e) {
-    if (e instanceof GateError) throw e;
-  }
-  for (const r of Array.isArray(existing) ? existing : []) {
-    if (isRecord(r) && r.name === RULESET_NAME)
-      return [`Ruleset '${RULESET_NAME}' already exists on ${nwo}: https://github.com/${nwo}/rules/${String(r.id)}`];
-  }
-  const body = rulesetBody(approvals, codeOwners);
-  const plan = [
-    `Ruleset for ${nwo} (default branch): require a pull request with ${approvals} approval(s)` + (codeOwners ? " incl. code owners" : "") + `, and the '${CHECK_NAME}' status check.`,
-    "It adds to existing branch protection; it doesn't replace it."
-  ];
-  if (codeOwners)
-    plan.push("Note: a code owner can't approve their own PR. On a one-person repo, use --no-code-owners.");
-  if (!apply)
-    return [
-      ...plan,
-      "Dry run \u2014 nothing changed. Rerun with --apply (needs admin) to create it.",
-      JSON.stringify(body, null, 2)
-    ];
-  let created = {};
-  try {
-    created = JSON.parse(
-      runGh(root, ["api", "-X", "POST", `repos/${nwo}/rulesets`, "--input", "-"], JSON.stringify(body)) || "{}"
-    );
-  } catch (e) {
-    if (e instanceof GateError) throw e;
-  }
-  return [...plan, `Created: https://github.com/${nwo}/rules/${String(isRecord(created) ? created.id : void 0)}`];
 }
 
 // src/gate/cli.ts
@@ -1797,7 +1829,7 @@ Commands (run from inside the repo, or pass --repo):
   session-start  SessionStart hook (plugin): the always-on note; in gated repos, the git hook   [--agent ID]
   install        Add the gate, config, CI workflow, the AI tools' repo hook files and the git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
-  protect        Create the GitHub ruleset that makes the check required (gh; dry run by default)
+  protect        Make the check required on the default branch (GitHub: a ruleset, through gh; dry run by default)
   version        Print the gate version
 
 Common options: --repo PATH  --base REF  --branch NAME
@@ -1849,13 +1881,17 @@ function parseArgs(argv) {
 }
 var UsageError = class extends Error {
 };
+function annotate(kind, messages) {
+  process.stdout.write(ciPlatform(process.env).annotations(kind, messages, process.env));
+}
 function testCall(fn, a) {
   const s = (i) => a[i] === null || a[i] === void 0 ? null : String(a[i]);
   const consts = {
     GATE_VERSION,
     GATE_FILES,
-    WORKFLOW,
-    CHECK_NAME,
+    // The text install writes into a repo with no CI config yet.
+    WORKFLOW: REPO_PLATFORM.ciConfig.withGateJob(null, REPO_PLATFORM.ciConfig.path).content,
+    CHECK_NAME: REPO_PLATFORM.checkName,
     REPO_GATE: GATE_REL,
     ALWAYS_ON
   };
@@ -1870,6 +1906,11 @@ function testCall(fn, a) {
     case "merge_claude_settings": {
       const file = PROJECT_HOOK_FILES.find((f) => f.path === ".claude/settings.json");
       return file ? addProjectHook(String(a[0]), file) : null;
+    }
+    case "ci_platform": {
+      const env = a[0] ?? {};
+      const p = ciPlatform(env);
+      return { id: p.id, context: p.ciContext(env), summaryFile: p.reviewerSummaryFile(env) };
     }
     case "resolve_agent": {
       const env = a[1] ?? {};
@@ -1946,7 +1987,8 @@ ${HELP}`);
         return 0;
       }
       case "verify": {
-        let labels = [];
+        const ci = ciPlatform(process.env).ciContext(process.env);
+        let labels = [...ci.labels ?? []];
         const lj = o("labels-json");
         if (lj?.trim()) {
           try {
@@ -1958,18 +2000,19 @@ ${HELP}`);
           }
         }
         const rev = o("rev") ?? "HEAD";
-        const [passed, messages, mode] = verify(o("repo"), o("base"), o("branch"), rev, labels);
+        const base = o("base") ?? ci.baseRef;
+        const [passed, messages, mode] = verify(o("repo"), base, o("branch"), rev, labels);
         if (opts.json) {
           out(JSON.stringify({ passed, messages, mode }));
           return 0;
         }
-        const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+        const summaryPath = ciPlatform(process.env).reviewerSummaryFile(process.env);
         if (summaryPath) {
           try {
             const root = repoRoot(o("repo"));
             appendFileSync(
               summaryPath,
-              jobSummary(root, currentBranch(root, o("branch")), rev, o("base"), passed, messages, mode),
+              jobSummary(root, currentBranch(root, o("branch")), rev, base, passed, messages, mode),
               "utf8"
             );
           } catch {
@@ -2008,7 +2051,11 @@ ${HELP}`);
           const n = o("approvals");
           if (n !== null && !/^\d+$/.test(n)) throw new GateError("--approvals must be between 0 and 10.");
           const approvals = n === null ? 1 : Number(n);
-          lines = protect(o("repo"), Boolean(opts.apply), approvals, !opts["no-code-owners"]);
+          lines = REPO_PLATFORM.protect(repoRoot(o("repo")), {
+            apply: Boolean(opts.apply),
+            approvals,
+            codeOwners: !opts["no-code-owners"]
+          });
         }
         out(opts.json ? JSON.stringify(lines) : lines.join("\n"));
         return 0;

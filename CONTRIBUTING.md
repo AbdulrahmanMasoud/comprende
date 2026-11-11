@@ -88,7 +88,8 @@ src/gate/agents/      types.ts (the Agent interface), index.ts (the registry and
                       one module per AI tool: claude-code.ts, cursor.ts, plus what they share:
                       claude-format.ts (the payload) and claude-settings.ts (the hook file)
 src/gate/hook-replies.ts   the core's default replies, for adapters that don't format their own
-src/gate/platforms/   one module per git platform (next: the platform PR of #18)
+src/gate/platforms/   types.ts (the Platform interface), index.ts (the registry, the repo's platform
+                      and the CI's), one module per git platform: github.ts
 ```
 
 The core (`status`, `save`, `verify`, push detection, the hooks) gets typed values from an adapter. It never asks which tool or platform it runs under. So:
@@ -121,6 +122,43 @@ The interface, with a comment on each member, is in `src/gate/agents/types.ts`. 
    - the step-aside rules
 6. **Check it end to end** in the tool itself, with a gated demo repo: an unverified push is blocked, a verified one goes through, and the session-start message arrives.
 7. **Docs:** `docs/agents.md`, the install steps in both READMEs, and `SECURITY.md` if it adds a gate file.
+
+#### Adding a git platform
+
+The interface is in `src/gate/platforms/types.ts`, with a comment on each member. GitHub's adapter, `github.ts`, holds everything GitHub-specific:
+
+```ts
+export interface Platform {
+  readonly id: PlatformId;
+  detects(env: CiEnv): boolean;                    // is this the platform's CI?
+  readonly ciConfig: {                             // the CI config install writes
+    readonly path: string;
+    withGateJob(existing: ExistingFile, shownPath: string): { readonly content?: string; readonly message: string };
+  };
+  readonly checkName: string;                      // the status protect makes required
+  ciContext(env: CiEnv): CiContext;                // { baseRef, headBranch, labels }, null = CI doesn't say
+  reviewerSummaryFile(env: CiEnv): string | null;  // where the markdown summary goes
+  annotations(kind: AnnotationKind, messages: readonly string[], env: CiEnv): string;  // stdout, "" for none
+  readonly codeowners: { readonly path: string; readonly ownerPattern: RegExp; readonly ownerHint: string; readonly reviewSetting: string };
+  readonly cli: { readonly program: string; readonly optionsWithValue: ReadonlySet<string>; readonly publishes: readonly (readonly [string, string])[] };
+  protect(root: string, options: ProtectOptions): string[];  // dry run unless options.apply
+}
+```
+
+1. **Capture a real CI run.** Record the environment a merge-request job gets, and save it, cleaned of tokens and names, in `test/fixtures/<platform>/`.
+2. **Write `src/gate/platforms/<platform>.ts`.** Check each method against what the platform really does. For GitLab, from its docs:
+   - **`ciConfig`:** a merge-request job's `rules:` must be in `.gitlab-ci.yml` itself, not an `include:`. So `withGateJob` merges a job into that file, and keeps the rest.
+   - **The base branch's gate:** a merge request can edit its own pipeline. Running the base branch's gate is only binding with the CI config in another project (`ci_config_path`) or a pipeline execution policy (Ultimate). `install` and `protect` must say so.
+   - **`ciContext`:** `CI_MERGE_REQUEST_TARGET_BRANCH_NAME` and `CI_MERGE_REQUEST_SOURCE_BRANCH_NAME`, and labels from the comma-separated `CI_MERGE_REQUEST_LABELS`, which is missing when there are none. The base branch must be fetched in the job, because the clone is shallow. A label change doesn't start a pipeline.
+   - **`reviewerSummaryFile`:** a file that the job exposes with `artifacts:expose_as`. There's no inline job summary. Markdown isn't previewed, so reviewers download it.
+   - **`annotations`:** none (`""`). Code Quality reports are the closest thing.
+   - **`codeowners`:** `CODEOWNERS`, `docs/CODEOWNERS` or `.gitlab/CODEOWNERS`. Code-owner approval is Premium.
+   - **`cli`:** `glab`, with `mr create` and `mr merge`.
+   - **`protect`:** "Pipelines must succeed" (`only_allow_merge_if_pipeline_succeeds`, through `glab api`) is free but covers the whole pipeline. Approval counts and code-owner approval are Premium, and a single required check is Ultimate. Say which parts were applied and which need a higher tier.
+3. **Register it in `src/gate/platforms/index.ts`.** Once there are two platforms, the repo's config names its platform (`REPO_PLATFORM`), and `GATE_FILES` follows it.
+4. **Tests** in `test/platforms.test.mjs` and `test/ci.test.mjs`, from the captured environment.
+5. **Check it end to end** on a real merge request: an unverified change fails the pipeline, the skip label passes, a verified one passes, and the summary is there for reviewers.
+6. **Docs:** `docs/teams.md`, and both READMEs.
 
 The Claude Code and GitHub code was written before this rule and isn't behind these interfaces yet. The end of "Clean code" in [CLAUDE.md](CLAUDE.md) lists where today's code doesn't follow the rules, and the issue for each.
 

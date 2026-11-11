@@ -23588,7 +23588,6 @@ var StdioServerTransport = class {
 };
 
 // src/gate/git.ts
-import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync as statSync2, utimesSync } from "node:fs";
 import { devNull, homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -23625,6 +23624,25 @@ var isDirectory = (p) => {
   }
 };
 
+// src/gate/run.ts
+import { spawnSync } from "node:child_process";
+function run(cmd, args, opts = {}) {
+  const r = spawnSync(cmd, args, {
+    cwd: opts.cwd,
+    env: opts.env,
+    input: opts.input,
+    maxBuffer: 1 << 30,
+    timeout: opts.timeout,
+    windowsHide: true
+  });
+  if (r.error) {
+    const err = r.error;
+    if (err.code === "ENOENT") throw Object.assign(new Error(`${cmd}: not found`), { code: "ENOENT" });
+    throw err;
+  }
+  return { status: r.status ?? 1, stdout: r.stdout ?? Buffer.alloc(0), stderr: r.stderr ?? Buffer.alloc(0) };
+}
+
 // src/gate/shared.ts
 import { fileURLToPath } from "node:url";
 var LEARNING = ".learning";
@@ -23644,6 +23662,55 @@ var SELF = (() => {
   }
 })();
 
+// src/gate/platforms/github.ts
+var WORKFLOW = `name: Ownership check
+
+on:
+  pull_request:
+    # 'edited' re-runs the check when a PR is retargeted to another base branch.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    name: Ownership check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Check the PR's own commit (not GitHub's merge commit) with full history,
+          # so fingerprints match what the developer verified.
+          ref: \${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          # The gate needs no dependencies; a restored cache is only a way in.
+          package-manager-cache: false
+
+      - name: Verify ownership report
+        env:
+          BASE_REF: \${{ github.base_ref }}
+          HEAD_REF: \${{ github.head_ref }}
+          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
+          NODE_OPTIONS: ""
+        run: |
+          # Run the gate as it exists on the base branch, so a PR can't weaken it
+          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
+          # doesn't have the gate yet (the PR that installs it); the rules then
+          # are the strict defaults, not the PR's own config.
+          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
+            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
+          else
+            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
+          fi
+          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
+            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
+`;
+
 // src/gate/git.ts
 function gitEnv(extra) {
   const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
@@ -23654,22 +23721,6 @@ function gitEnv(extra) {
   env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
   env[`GIT_CONFIG_VALUE_${n}`] = "false";
   return { ...env, ...extra ?? {} };
-}
-function run(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, {
-    cwd: opts.cwd,
-    env: opts.env,
-    input: opts.input,
-    maxBuffer: 1 << 30,
-    timeout: opts.timeout,
-    windowsHide: true
-  });
-  if (r.error) {
-    const err = r.error;
-    if (err.code === "ENOENT") throw Object.assign(new Error(`${cmd}: not found`), { code: "ENOENT" });
-    throw err;
-  }
-  return { status: r.status ?? 1, stdout: r.stdout ?? Buffer.alloc(0), stderr: r.stderr ?? Buffer.alloc(0) };
 }
 function repoRoot(path) {
   let start = resolve((path || process.cwd()).replace(/^~(?=$|[/\\])/, homedir()));

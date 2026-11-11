@@ -268,7 +268,7 @@ How each tool fills it in:
 
 Still to do, in the Cursor PR: strip a leading UTF-8 BOM before parsing a payload. Cursor's CLI on Windows once sent one. Today a payload with a BOM fails to parse, so the hook steps aside.
 
-The platform adapter is the other half of #18: GitHub now, GitLab later ([#4](https://github.com/AbdulrahmanMasoud/comprende/issues/4)). It covers the CI workflow, CODEOWNERS, the PR's branch and labels, the reviewer summary, and `protect`.
+The platform adapter is the other half of #18: GitHub now, GitLab later ([#4](https://github.com/AbdulrahmanMasoud/comprende/issues/4)). It covers the CI config, what CI says about the change, the reviewer summary and annotations, CODEOWNERS, the platform CLI's pull-request commands, and `protect`. The `Platform` interface, and how it maps to GitLab, are in CONTRIBUTING.md, under [Adding a git platform](../CONTRIBUTING.md#adding-a-git-platform).
 
 ### Step-aside rules
 

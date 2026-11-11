@@ -15,8 +15,7 @@ import { appendFileSync, readFileSync, readSync } from "node:fs";
 import { isRecord } from "../util.js";
 import { AGENTS, PROJECT_HOOK_FILES, resolveAgent } from "./agents/index.js";
 import { collectChanges, isPlumbing } from "./changes.js";
-import { annotate, escapeMarkdown, jobSummary } from "./ci-summary.js";
-import { CHECK_NAME, WORKFLOW } from "./ci-workflow.js";
+import { escapeMarkdown, jobSummary } from "./ci-summary.js";
 import { deleteReportInputFile, formatStatus, save, status, verify } from "./commands.js";
 import { type Config, isSensitive } from "./config.js";
 import { samePath } from "./files.js";
@@ -24,8 +23,8 @@ import { GATE_FILES } from "./gate-files.js";
 import { currentBranch, repoRoot } from "./git.js";
 import { ALWAYS_ON, agentHook, installHooks, prePush, sessionStart } from "./hooks.js";
 import { install } from "./install.js";
+import { type AnnotationKind, ciPlatform, REPO_PLATFORM } from "./platforms/index.js";
 import { addProjectHook } from "./project-hooks.js";
-import { protect } from "./protect.js";
 import { isPushCommand } from "./push-detect.js";
 import { parseReport, readReport, renderReport, reportPath } from "./report.js";
 import { GATE_REL, GATE_VERSION, GateError, sorted } from "./shared.js";
@@ -43,7 +42,7 @@ Commands (run from inside the repo, or pass --repo):
   session-start  SessionStart hook (plugin): the always-on note; in gated repos, the git hook   [--agent ID]
   install        Add the gate, config, CI workflow, the AI tools' repo hook files and the git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
-  protect        Create the GitHub ruleset that makes the check required (gh; dry run by default)
+  protect        Make the check required on the default branch (GitHub: a ruleset, through gh; dry run by default)
   version        Print the gate version
 
 Common options: --repo PATH  --base REF  --branch NAME
@@ -106,14 +105,20 @@ function parseArgs(argv: string[]): Args {
 
 class UsageError extends Error {}
 
+/** Show `messages` as annotations in the CI that's running, if it has them. */
+function annotate(kind: AnnotationKind, messages: string[]): void {
+  process.stdout.write(ciPlatform(process.env).annotations(kind, messages, process.env));
+}
+
 /** Internal functions, JSON in / JSON out, for the black-box test suite. */
 function testCall(fn: string, a: unknown[]): unknown {
   const s = (i: number) => (a[i] === null || a[i] === undefined ? null : String(a[i]));
   const consts: Record<string, unknown> = {
     GATE_VERSION,
     GATE_FILES,
-    WORKFLOW,
-    CHECK_NAME,
+    // The text install writes into a repo with no CI config yet.
+    WORKFLOW: REPO_PLATFORM.ciConfig.withGateJob(null, REPO_PLATFORM.ciConfig.path).content,
+    CHECK_NAME: REPO_PLATFORM.checkName,
     REPO_GATE: GATE_REL,
     ALWAYS_ON,
   };
@@ -129,6 +134,12 @@ function testCall(fn: string, a: unknown[]): unknown {
       // The test suite's name for adding the hook to a .claude/settings.json at any path.
       const file = PROJECT_HOOK_FILES.find((f) => f.path === ".claude/settings.json");
       return file ? addProjectHook(String(a[0]), file) : null;
+    }
+    case "ci_platform": {
+      // [env]: the platform whose CI this is, and what its environment says.
+      const env = (a[0] ?? {}) as Record<string, string>;
+      const p = ciPlatform(env);
+      return { id: p.id, context: p.ciContext(env), summaryFile: p.reviewerSummaryFile(env) };
     }
     case "resolve_agent": {
       // [payload JSON text, env, --agent]: which adapter runs, and what it reads.
@@ -206,7 +217,8 @@ export function main(argv: string[]): number {
         return 0;
       }
       case "verify": {
-        let labels: string[] = [];
+        const ci = ciPlatform(process.env).ciContext(process.env);
+        let labels: string[] = [...(ci.labels ?? [])];
         const lj = o("labels-json");
         if (lj?.trim()) {
           try {
@@ -218,18 +230,19 @@ export function main(argv: string[]): number {
           }
         }
         const rev = o("rev") ?? "HEAD";
-        const [passed, messages, mode] = verify(o("repo"), o("base"), o("branch"), rev, labels);
+        const base = o("base") ?? ci.baseRef;
+        const [passed, messages, mode] = verify(o("repo"), base, o("branch"), rev, labels);
         if (opts.json) {
           out(JSON.stringify({ passed, messages, mode }));
           return 0;
         }
-        const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+        const summaryPath = ciPlatform(process.env).reviewerSummaryFile(process.env);
         if (summaryPath) {
           try {
             const root = repoRoot(o("repo"));
             appendFileSync(
               summaryPath,
-              jobSummary(root, currentBranch(root, o("branch")), rev, o("base"), passed, messages, mode),
+              jobSummary(root, currentBranch(root, o("branch")), rev, base, passed, messages, mode),
               "utf8",
             );
           } catch {
@@ -267,7 +280,11 @@ export function main(argv: string[]): number {
           const n = o("approvals");
           if (n !== null && !/^\d+$/.test(n)) throw new GateError("--approvals must be between 0 and 10.");
           const approvals = n === null ? 1 : Number(n);
-          lines = protect(o("repo"), Boolean(opts.apply), approvals, !opts["no-code-owners"]);
+          lines = REPO_PLATFORM.protect(repoRoot(o("repo")), {
+            apply: Boolean(opts.apply),
+            approvals,
+            codeOwners: !opts["no-code-owners"],
+          });
         }
         out(opts.json ? JSON.stringify(lines) : lines.join("\n"));
         return 0;
