@@ -481,11 +481,11 @@ test("exactly one copy of the gate checks each push, whatever hook files and plu
 });
 
 /** How many copies give each session line in `combo`: the always-on line, the
- *  gate's context, and Codex's note for skipped plugin hooks. */
+ *  gate's context, and Codex's note for a plugin that isn't running. */
 function expectedSessionLines(tool, combo) {
   const plugins = ["claudePlugin", "cursorPlugin", "codexPlugin"].some((copy) => runs(tool, combo, copy));
   const repoStarts = runs(tool, combo, "cursorHooks") || runs(tool, combo, "codexHooks");
-  // Only Codex may skip the plugin's hooks, so only its repo hook says how to tell.
+  // Only Codex may skip an installed plugin's hooks, so only its repo hook says how to tell.
   const note = runs(tool, combo, "codexHooks") ? 1 : 0;
   // A known limit (docs/agents.md, "Codex: the design"): a Claude Code plugin copy in
   // a Codex session. A Codex session start has no turn_id, so that copy reads it as
@@ -498,7 +498,7 @@ function expectedSessionLines(tool, combo) {
   return { alwaysOn: plugins ? 1 : 0, gateContext: plugins || repoStarts ? 1 : 0, note };
 }
 
-test("each session gets the always-on line, the gate's context and Codex's skipped-hooks note once each", (t) => {
+test("each session gets the always-on line, the gate's context and Codex's plugin-not-running note once each", (t) => {
   const { dev } = setup(t);
   const files = readRepoHookFiles(dev);
   let session = 0;
@@ -514,7 +514,7 @@ test("each session gets the always-on line, the gate's context and Codex's skipp
       const label = `${tool} ${JSON.stringify(combo)}`;
       assert.equal(count(/Comprende is installed\./), expected.alwaysOn, `always-on: ${label}`);
       assert.equal(count(/This repository uses the ownership gate/), expected.gateContext, `gate: ${label}`);
-      assert.equal(count(/Codex skipped Comprende's plugin hooks/), expected.note, `note: ${label}`);
+      assert.equal(count(/Comprende's plugin isn't running in Codex/), expected.note, `note: ${label}`);
     }
   }
 });
@@ -756,32 +756,34 @@ test("a report from another gate version blocks the git hook, but not the agents
 // GitHub's runners have pwsh, so the PowerShell case runs in CI. Locally it's skipped without it.
 const PWSH = spawnSync("/bin/sh", ["-c", "command -v pwsh"], { encoding: "utf8" }).stdout.trim();
 
+/** Runs the session start in `dev`'s .codex/hooks.json from `cwd`, as Codex does,
+ *  and returns the context it gives. Each call is a new session. */
+let codexSession = 0;
+function codexRepoSessionStart(dev, cwd) {
+  const [{ hooks }] = JSON.parse(readFileSync(join(dev, ".codex/hooks.json"), "utf8")).hooks.SessionStart;
+  const input = JSON.stringify({
+    ...JSON.parse(codexPayload("session-start.json", cwd)),
+    session_id: `repo-session-${++codexSession}`,
+  });
+  const r = sh(cwd, "/bin/sh", ["-c", hooks[0].command], { check: false, input, env: ENV });
+  assert.equal(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout).hookSpecificOutput?.additionalContext ?? "";
+}
+
 // After a plugin update Codex skips the plugin's hooks without a word, but the
 // repo's session start keeps its trust, so it's the one that can say so.
-test("the repo's .codex/hooks.json session start, from a subfolder, gives the gate's context and how to tell the plugin's hooks were skipped", {
+test("the repo's .codex/hooks.json session start, from a subfolder, gives the gate's context and the plugin-not-running note", {
   skip: process.platform === "win32",
 }, (t) => {
   const { dev } = setup(t);
-  const [{ hooks }] = JSON.parse(readFileSync(join(dev, ".codex/hooks.json"), "utf8")).hooks.SessionStart;
   const sub = join(dev, "src");
   mkdirSync(sub, { recursive: true });
-  let session = 0;
-  const start = () => {
-    const input = JSON.stringify({
-      ...JSON.parse(codexPayload("session-start.json", sub)),
-      session_id: `s-${++session}`,
-    });
-    const r = sh(sub, "/bin/sh", ["-c", hooks[0].command], { check: false, input, env: ENV });
-    assert.equal(r.status, 0, r.stderr);
-    return JSON.parse(r.stdout).hookSpecificOutput?.additionalContext ?? "";
-  };
-  const context = start();
+  const context = codexRepoSessionStart(dev, sub);
   assert.match(context, /This repository uses the ownership gate/);
   assert.match(
     context,
-    /didn't also get a note starting with "Comprende is installed", Codex skipped Comprende's plugin hooks/,
+    /didn't also get a note starting with "Comprende is installed", Comprende's plugin isn't running in Codex/,
   );
-  assert.match(context, /trusted again in `\/hooks`/);
   assert.doesNotMatch(context, /Comprende is installed\./, "the always-on line is the plugin's to give");
   assert.ok(context.includes(`"${gate.const("PLUGIN_LINE_START")}"`), "the note quotes how the plugin's line starts");
 
@@ -789,7 +791,29 @@ test("the repo's .codex/hooks.json session start, from a subfolder, gives the ga
   const config = JSON.parse(readFileSync(join(dev, ".learning/config.json"), "utf8"));
   config.ownership_check.mode = "off";
   writeFileSync(join(dev, ".learning/config.json"), JSON.stringify(config));
-  assert.equal(start(), "", "mode off");
+  assert.equal(codexRepoSessionStart(dev, sub), "", "mode off");
+});
+
+// A teammate on Codex may never have installed the plugin: only the repo's hooks run.
+// A real run had the agent tell them to "trust the hooks again", which they never had.
+test("the repo's Codex note doesn't assume the plugin is installed: it names both cases, and both ways out", {
+  skip: process.platform === "win32",
+}, (t) => {
+  const { dev } = setup(t);
+  const context = codexRepoSessionStart(dev, dev);
+  assert.match(context, /either it isn't installed, or its hooks were skipped/);
+  assert.match(
+    context,
+    /with both options: install the plugin \(.+\), or, if it's installed, trust its hooks in `\/hooks`/,
+  );
+  // The install commands are the README's, so a rename can't leave the note behind.
+  const readme = readFileSync(join(REPO, "README.md"), "utf8");
+  const commands = [...context.matchAll(/`(codex plugin [^`]+)`/g)].map((m) => m[1]);
+  assert.deepEqual(commands, [
+    "codex plugin marketplace add AbdulrahmanMasoud/comprende",
+    "codex plugin add comprende@comprende",
+  ]);
+  for (const command of commands) assert.ok(readme.includes(command), `README.md: ${command}`);
 });
 
 test("the repo's .codex/hooks.json blocks an unverified push from a subfolder, and fails open without git or node", {

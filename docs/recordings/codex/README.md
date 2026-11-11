@@ -10,6 +10,8 @@ They live in `docs/`, not `test/fixtures/`: no test reads them. Fixtures are hoo
 - **Isolation:** a throwaway `HOME` and `CODEX_HOME`, holding only a copy of the maintainer's `auth.json`, deleted when the run ended.
 - **The plugin:** this repo, installed with `codex plugin marketplace add` and `codex plugin add`, at the code of [#49](https://github.com/AbdulrahmanMasoud/comprende/pull/49) plus the install PR's branch.
 - **`0.4.1-after-update/`:** the same setup, run by the maintainer with `--only after-update`, at the code of the 0.4.1 release ([#53](https://github.com/AbdulrahmanMasoud/comprende/pull/53), with [#52](https://github.com/AbdulrahmanMasoud/comprende/pull/52) and [#54](https://github.com/AbdulrahmanMasoud/comprende/pull/54)).
+- **`0.4.1-no-plugin/`:** the 0.4.1 gate, run with the `no-plugin` scenario from the branch that fixed it: Codex without the plugin, and only the repo's `.codex/hooks.json` trusted.
+- **`0.4.2/`:** the same setup, run by the maintainer with `--only no-plugin,after-update` from a fresh `CODEX_HOME`, at the code of the fix for the no-plugin run (0.4.2).
 - **The hooks:** trusted the way `/hooks` does it, through Codex's app server.
 - **The demo:** a gated repo with a local bare remote, and an unverified `sum(xs)` on `feature/sum`.
 - **The replies:** each `.reply.md` holds every agent message of one turn, from `--json`. The demo's paths were replaced with `/work/…`. Nothing else was changed, and nothing personal is in them.
@@ -36,3 +38,20 @@ They live in `docs/`, not `test/fixtures/`: no test reads them. Fixtures are hoo
 - **"check me: questions asked" failed in the script, not in Codex.** The question in `4-check-me` ends with an Arabic question mark (`؟`), which the script's check didn't know. It does now.
 - **"after an update: the skill says to trust the hooks again" failed.** With the plugin's hooks skipped, nothing told Codex to load the skill, so for a plain code task (`10-after-update-code`) it never read the skill's rule. A rerun with 0.4.0, whose description named code changes in a repo with `.learning/config.json`, failed too (its replies weren't kept): the agent looked for that file with `rg --files`, which skips hidden folders, and never opened the skill. A second rerun, with the skill's description saying to load it for any code change, failed the same way: Codex listed the new description, and its agent made the edit without opening the skill. The note now comes from the session start in the repo's `.codex/hooks.json`, which keeps its trust across plugin updates. Recorded in [`0.4.1-after-update/`](0.4.1-after-update/), all 4 steps passing: Codex skipped the plugin's hooks, the repo's session start still ran, the push was still blocked, and the agent said, mid-turn: "this session did not include Comprende's “Comprende is installed” note. Codex skips its hooks after plugin updates until they're trusted again in `/hooks`."
 - **After an update, the repo's own `.codex/hooks.json` still blocked the push** (`9-after-update-push`): its trust lasts across plugin updates.
+
+## The no-plugin run (0.4.1)
+
+`0.4.1-no-plugin/results.json`: 2 passed, 1 failed. Without the plugin, only the repo's session start ran.
+
+- **"without the plugin: the agent says how to install it" failed.** The agent told the user "Codex skips Comprende's plugin hooks after every plugin update until they're trusted again in `/hooks`". The plugin had never been installed, and the reply never said how to install it. The note now covers both cases in one line.
+- **Two more things the run shows, not fixed here (follow-ups):**
+  - With no plugin, there's no skill, and the agent answered its own ownership-check questions, then saved a report with a summary it wrote. A headless run has no one to ask.
+  - The gate's note points to the skill's `references/ownership-check.md`, which isn't installed. The agent searched `/tmp` and read a copy left by another tool's test run on the same machine.
+
+## The fix's run (0.4.2)
+
+`0.4.2/results.json`: all 7 steps passed, 3 without the plugin and 4 after an update. The repo's note now says the plugin isn't running, either not installed or its hooks skipped, and asks for both options in one line.
+
+- **Without the plugin** (`11-no-plugin-code`), the agent ended with: "Comprende isn’t running in this Codex session. Install it with `codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`; if it’s already installed, trust its hooks in `/hooks` (Codex skips them until trusted and after every update)."
+- **After an update** (`9-after-update-push`, `10-after-update-code`), the agent gave the same two options, and the repo's hook still blocked the unverified push.
+- **The first follow-up above shows again:** without the plugin, the agent saved a report it answered itself. Codex's log for that turn has a failed call to its question tool (`` unknown field `question` ``), which suggests it tried to ask first. After an update, with the plugin installed but its hooks skipped (`10-after-update-code`), it didn't save one, and asked the user for their answer.

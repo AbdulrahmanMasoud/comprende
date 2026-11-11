@@ -38,7 +38,7 @@ The first two catch forgetting. The last two are the lock.
 
 **In Cursor**, the first layer is the Cursor plugin's hook, or the repo's `.cursor/hooks.json`. Cursor also runs Claude Code's hooks (the repo's `.claude/settings.json`, and your Claude Code plugins) while its Third-Party Imports setting is on. However many copies of the hook run, each push is checked once.
 
-**In Codex**, the first layer is the Codex plugin's hook, or the repo's `.codex/hooks.json`, each once trusted in `/hooks`. Codex skips a plugin's hooks after every update until they're trusted again; the repo's keep their trust, and its session start then tells the agent the plugin's hooks were skipped. What works where, and what's weaker in Cursor and Codex: [docs/agents.md](agents.md#what-works-where).
+**In Codex**, the first layer is the Codex plugin's hook, or the repo's `.codex/hooks.json`, each once trusted in `/hooks`. Codex skips a plugin's hooks after every update until they're trusted again; the repo's keep their trust, and its session start then tells the agent the plugin isn't running: not installed, or its hooks skipped. What works where, and what's weaker in Cursor and Codex: [docs/agents.md](agents.md#what-works-where).
 
 ### One file
 

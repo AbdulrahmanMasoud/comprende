@@ -1,0 +1,3 @@
+The command was blocked by the ownership gate before it ran. I did not retry it.
+
+The gate requires an ownership check and a saved report for `feature/sum` at `.learning/checks/feature%2Fsum.md`. The Comprende plugin isn’t running in this Codex session: either it isn’t installed, or its hooks weren’t trusted. Install it with `codex plugin marketplace add AbdulrahmanMasoud/comprende`, then `codex plugin add comprende@comprende`; if it’s already installed, trust its hooks in `/hooks`—Codex skips untrusted hooks and after every update.

@@ -1,0 +1,17 @@
+[
+  {
+    "step": "without the plugin: only the repo's two hooks are there to trust",
+    "status": "PASS",
+    "detail": "/work/demo-no-plugin/app/.codex/hooks.json:pre_tool_use:0:0, /work/demo-no-plugin/app/.codex/hooks.json:session_start:0:0"
+  },
+  {
+    "step": "without the plugin: the repo's session start runs",
+    "status": "PASS",
+    "detail": "1 run(s)"
+  },
+  {
+    "step": "without the plugin: the agent says how to install it",
+    "status": "FAIL",
+    "detail": "read its reply"
+  }
+]

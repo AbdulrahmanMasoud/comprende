@@ -15,6 +15,8 @@
 //                one checks
 //   after-update a file changed in the installed plugin: Codex skips its hooks, the
 //                repo's trusted hooks still check and say to trust the plugin's again
+//   no-plugin    a gated repo, and Codex without the plugin: only the repo's hooks run,
+//                and the agent says how to install it. Runs first, before the install
 // This repo is installed as the plugin (`codex plugin marketplace add <this repo>`),
 // and hooks are trusted the way /hooks does it, through Codex's app server. Every
 // gate.mjs run is logged (a NODE_OPTIONS preload). It prints one line per step,
@@ -455,11 +457,50 @@ function afterUpdate() {
   }
 }
 
-const SCENARIOS = { main, explain, "repo-hook": repoHook, "after-update": afterUpdate };
+// A Codex user in a gated repo who never installed the plugin: only the repo's
+// .codex/hooks.json runs. Its session start must not send them to re-trust a plugin
+// they don't have.
+function noPlugin() {
+  const demo = makeDemo("demo-no-plugin");
+  const keys = trust(demo.app);
+  // A reused --out keeps the plugin a full run installed: then this scenario can't show anything.
+  if (keys.some((k) => !k.includes(".codex/hooks.json")))
+    throw new Error(`the plugin is installed in ${CODEX_HOME}: run no-plugin with a fresh --out`);
+  report("without the plugin: only the repo's two hooks are there to trust", keys.length === 2, keys.join(", "));
+  const from = gateRuns().length;
+  const t = turn(
+    "11-no-plugin-code",
+    demo.app,
+    "Add a function mul(a, b) to math.js that multiplies two numbers. Don't commit.",
+  );
+  const starts = repoSessionStarts(from);
+  report("without the plugin: the repo's session start runs", starts >= 1, `${starts} run(s)`);
+  report(
+    "without the plugin: the agent says how to install it",
+    /codex plugin (marketplace )?add/.test(t.said),
+    "read its reply",
+  );
+}
+
+// In run order. no-plugin comes first: the plugin, once installed, stays for the rest.
+const SCENARIOS = [
+  { name: "no-plugin", run: noPlugin, needsPlugin: false },
+  { name: "main", run: main, needsPlugin: true },
+  { name: "explain", run: explain, needsPlugin: true },
+  { name: "repo-hook", run: repoHook, needsPlugin: true },
+  { name: "after-update", run: afterUpdate, needsPlugin: true },
+];
 try {
-  installPlugin();
-  for (const [name, run] of Object.entries(SCENARIOS)) {
+  // Inside the try, so the login copy is still deleted.
+  const unknown = ONLY?.filter((name) => !SCENARIOS.some((s) => s.name === name)) ?? [];
+  if (unknown.length) throw new Error(`no such scenario: ${unknown.join(", ")}`);
+  let installed = false;
+  for (const { name, run, needsPlugin } of SCENARIOS) {
     if (ONLY && !ONLY.includes(name)) continue;
+    if (needsPlugin && !installed) {
+      installPlugin();
+      installed = true;
+    }
     try {
       run();
     } catch (e) {
