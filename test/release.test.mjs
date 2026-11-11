@@ -46,7 +46,10 @@ function project(
 test("check skips the Unreleased section and compares with the newest release", (t) => {
   const r = release(project(t), "check");
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, "1.2.0: .claude-plugin/plugin.json, .cursor-plugin/plugin.json, package.json, package-lock.json, CHANGELOG.md agree.\n");
+  assert.equal(
+    r.stdout,
+    "1.2.0: .claude-plugin/plugin.json, .cursor-plugin/plugin.json, package.json, package-lock.json, CHANGELOG.md agree.\n",
+  );
 });
 
 test("check passes without an Unreleased section too", (t) => {
