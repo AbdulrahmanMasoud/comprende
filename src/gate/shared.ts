@@ -35,6 +35,9 @@ export const REGULAR_MODES = ["100644", "100755"];
 
 export class GateError extends Error {}
 
+/** A file the gate won't read: too large, or not a regular file. */
+export class UnreadableFileError extends GateError {}
+
 export const SELF = (() => {
   try {
     return fileURLToPath(import.meta.url);

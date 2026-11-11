@@ -268,6 +268,13 @@ export function main(argv: string[]): number {
     }
   } catch (e) {
     const msg = (e as Error).message;
+    // A hook entry point fails open on anything, a real bug included: a crash
+    // must never block (git blocks a push on any non-zero exit).
+    const failOpen = Object.hasOwn(FAIL_OPEN_EXIT, cmd) ? FAIL_OPEN_EXIT[cmd] : undefined;
+    if (failOpen !== undefined) {
+      process.stderr.write(`ownership gate: ${oneLine(msg)}; skipping this hook\n`);
+      return failOpen;
+    }
     if (!(e instanceof GateError)) {
       const code = (e as NodeJS.ErrnoException).code;
       if (!code) throw e; // a real bug: let it surface with a stack trace

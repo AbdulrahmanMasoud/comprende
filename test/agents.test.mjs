@@ -11,9 +11,11 @@ import { pathToFileURL } from "node:url";
 import {
   commitAll,
   ENV,
+  failingGitBin,
   GATE,
   gate,
   NODE,
+  payload,
   plugin,
   REPO,
   REPO_GATE,
@@ -556,4 +558,100 @@ test("a hook payload that starts with a UTF-8 BOM is read like any other", (t) =
     JSON.parse(start.stdout).hookSpecificOutput.additionalContext,
     /This repository uses the ownership gate/,
   );
+});
+
+/** The usage-error and bad-input cases can't reach an adapter, so they can't
+ *  print an adapter's deny. Exit 2 is the deny that any tool reads. */
+const exitsTwo = (r) => r.status === 2;
+
+test("a usage error or bad input never produces a deny, from any hook entry point", (t) => {
+  const { dev } = unverifiedRepo(t);
+  const inputs = {
+    "not JSON": "git push",
+    "a JSON list": "[]",
+    empty: "",
+    "fields of the wrong type": JSON.stringify({ tool_name: 5, tool_input: "git push", cwd: 7 }),
+  };
+  for (const command of ["agent-hook", "claude-hook", "session-start"]) {
+    const runs = [
+      ["an unknown option", [command, "--bogus"], "{}"],
+      ["a missing value", [command, "--agent"], "{}"],
+      ["an unknown --agent", [command, "--agent", "no-such-tool"], "{}"],
+      ...Object.entries(inputs).map(([name, input]) => [`stdin ${name}`, [command], input]),
+    ];
+    for (const [name, args, input] of runs) {
+      const r = runGate(dev, args, { input });
+      assert.ok(!exitsTwo(r), `${command}, ${name}: exit ${r.status}`);
+      // Session start prints context, never a decision. The shell hooks print nothing here.
+      if (command !== "session-start") assert.equal(r.stdout, "", `${command}, ${name}`);
+    }
+  }
+  // Git blocks a push on any non-zero exit, so the git hook must exit 0.
+  for (const [name, args, input] of [
+    ["an unknown option", ["pre-push", "--bogus"], ""],
+    ["a missing value", ["pre-push", "--repo"], ""],
+    ["stdin that isn't git's", ["pre-push", "origin", "url"], "not a ref line"],
+  ]) {
+    assert.equal(runGate(dev, args, { input }).status, 0, `pre-push, ${name}`);
+  }
+});
+
+test("for every agent, only a verdict on the change blocks a push: a crash never does", {
+  skip: process.platform === "win32",
+}, (t) => {
+  const { dev } = unverifiedRepo(t);
+  const pushes = {
+    "claude-code": claudeCodePayload("pre-tool-use.bash.git-push.json", dev),
+    cursor: cursorPush(dev, "call"),
+  };
+  assert.deepEqual(Object.keys(pushes).sort(), [...gate.const("AGENT_IDS")].sort(), "a case for every adapter");
+  const failingGit = failingGitBin(t);
+  const branch = sh(dev, "git", ["branch", "--show-current"]).stdout.trim();
+  const commitThen = (path, text, check) => {
+    write(dev, path, text);
+    commitAll(dev, `with ${path} changed`);
+    check();
+    sh(dev, "git", ["reset", "-q", "--hard", "HEAD~1"]);
+  };
+  let call = 0;
+  for (const [id, push] of Object.entries(pushes)) {
+    const allow = gate.allowReply(id);
+    // A fresh tool call each time, so no run loses its claim to an earlier one.
+    const run = (input, env = ENV) =>
+      runGate(dev, ["agent-hook", "--agent", id], {
+        input: JSON.stringify({ ...JSON.parse(input), tool_use_id: `call-${++call}` }),
+        env,
+      });
+    const allows = (r, why) => assert.deepEqual([r.status, r.stdout], [allow.exitCode, allow.stdout], `${id}: ${why}`);
+    const blocks = (r, why) => assert.equal(r.status, 2, `${id}: ${why}`);
+    // Not verdicts: the hook couldn't check, so the command runs, as the adapter allows it.
+    allows(run(push.replaceAll(dev, `${dev}-missing`)), "the repo's folder is missing");
+    allows(run(push, { ...ENV, PATH: `${failingGit}:${ENV.PATH}` }), "git fails during the check");
+    commitThen(".learning/config.json", "{ not json", () => allows(run(push), "the config is broken"));
+    // Verdicts: the check ran, and the change isn't verified.
+    blocks(run(push), "an unverified push");
+    commitThen(gate.reportRelpath(branch), "not a report\n", () => blocks(run(push), "a broken report"));
+    commitThen(gate.reportRelpath(branch), "x".repeat(5 * 1024 * 1024), () =>
+      blocks(run(push), "a report too large to read"),
+    );
+  }
+});
+
+test("a report from another gate version blocks the git hook, but not the agents' hook", (t) => {
+  // The plugin's copy of the gate may be newer than the repo's, and CI runs the
+  // base's, so in the agents' hook a version gap says nothing about the change.
+  const { dev } = unverifiedRepo(t);
+  gate.save(payload(), dev);
+  const path = join(dev, gate.reportRelpath(sh(dev, "git", ["branch", "--show-current"]).stdout.trim()));
+  writeFileSync(path, readFileSync(path, "utf8").replace(/"version": \d+/, '"version": 999'));
+  commitAll(dev, "a report from another version");
+  const hook = runGate(dev, ["agent-hook"], { input: claudeCodePayload("pre-tool-use.bash.git-push.json", dev) });
+  assert.deepEqual([hook.status, hook.stdout], [0, ""], hook.stderr);
+  const sha = sh(dev, "git", ["rev-parse", "HEAD"]).stdout.trim();
+  const branch = sh(dev, "git", ["branch", "--show-current"]).stdout.trim();
+  const prePush = runGate(dev, ["pre-push", "origin", "url"], {
+    input: `refs/heads/${branch} ${sha} refs/heads/${branch} ${"0".repeat(40)}\n`,
+  });
+  assert.notEqual(prePush.status, 0);
+  assert.match(prePush.stderr, /Report was made by gate v999/);
 });

@@ -18,6 +18,7 @@ import { pathToFileURL } from "node:url";
 import {
   commitAll,
   ENV,
+  failingGitBin,
   gate,
   git,
   gitTry,
@@ -155,6 +156,40 @@ for (const [refspec, remoteBranch] of [
     assert.equal(r.status, 0, r.stderr);
   });
 }
+
+test("the git hook never blocks on a crash: a check that can't run skips the branch with a note, a broken report blocks", {
+  skip: process.platform === "win32",
+}, (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  // With a report, the check has to read the change to compare it.
+  gate.save(payload(), dev);
+  commitAll(dev, "report");
+  // What git writes to the hook's stdin for this push. Git puts its own folder
+  // first on a hook's PATH, so the entry point is called directly here.
+  const prePush = (env = ENV) => {
+    const sha = out(git(dev, "rev-parse", "HEAD"));
+    const line = `refs/heads/feature/rate-limit ${sha} refs/heads/feature/rate-limit ${"0".repeat(40)}\n`;
+    return runGate(dev, ["pre-push", "origin", "../remote.git"], { input: line, env });
+  };
+  const skipped = (r, why) => {
+    assert.equal(r.status, 0, `${why}: ${r.stderr}`);
+    assert.match(r.stderr, /ownership gate: skipped \(/, why);
+  };
+  skipped(prePush({ ...ENV, PATH: `${failingGitBin(t)}:${ENV.PATH}` }), "git fails during the check");
+  const config = readFileSync(join(dev, ".learning/config.json"), "utf8");
+  writeFileSync(join(dev, ".learning/config.json"), "{ not json");
+  skipped(prePush(), "the config in the working tree is broken");
+  writeFileSync(join(dev, ".learning/config.json"), config);
+  // A report that's there but can't be read is a verdict on the change.
+  write(dev, "src/app.js", "export const app = 3;\n");
+  write(dev, gate.reportRelpath("feature/rate-limit"), "not a report\n");
+  commitAll(dev, "a broken report");
+  const broken = prePush();
+  assert.notEqual(broken.status, 0);
+  assert.match(broken.stderr, /Report is missing its data block/);
+});
 
 test("pre-push checks a push by sha refspec", (t) => {
   const { dev } = setup(t);

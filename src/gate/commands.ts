@@ -19,7 +19,7 @@ import { gateHeader } from "./features.js";
 import { atomicWrite, realPath, samePath } from "./files.js";
 import { currentBranch, repoRoot, resolveBase } from "./git.js";
 import { matches } from "./glob.js";
-import { previousReport, readReport, renderReport, reportPath } from "./report.js";
+import { previousReport, ReportError, ReportVersionError, readReport, renderReport, reportPath } from "./report.js";
 import { GATE_REL, GATE_VERSION, GateError, oneLine, REPORT_INPUT, sorted, VERSION_RE } from "./shared.js";
 
 // English only: terminals draw right-to-left text in reverse order. The skill understands the phrase in any language.
@@ -251,6 +251,25 @@ export function verify(
   if (len < cfg.min_summary_chars && !shortOk()) problems.push("The developer's summary is missing or too short.");
   if (problems.length && !(by("rebased").length && problems.length === 1)) problems.push(checkMeHint(assistant));
   return [problems.length === 0, problems, cfg.mode];
+}
+
+/** What a hook makes of the check: a verdict, or why it couldn't check. */
+export type HookCheck =
+  | { readonly passed: boolean; readonly problems: readonly string[]; readonly mode: string }
+  | { readonly skipped: string };
+
+/** `verify`, as the hooks use it. Of its errors, only a ReportError is a verdict
+ *  on the change, and a report from another gate version only when
+ *  `versionGapIsVerdict`. Any other error (git, the file system, a broken config)
+ *  means the hook couldn't check: it lets the command run, and CI still checks. */
+export function checkForHook(root: string, options: VerifyOptions, versionGapIsVerdict: boolean): HookCheck {
+  try {
+    const [passed, problems, mode] = verify(root, options);
+    return { passed, problems, mode };
+  } catch (e) {
+    const verdict = e instanceof ReportError && (versionGapIsVerdict || !(e instanceof ReportVersionError));
+    return verdict ? { passed: false, problems: [e.message], mode: "required" } : { skipped: (e as Error).message };
+  }
 }
 
 /** After a successful save: delete the input file if, and only if, it is this

@@ -2,7 +2,7 @@
 // dist/server.mjs) only through their command lines, against real git repos:
 // a bare "GitHub" remote, a developer clone, CI-style clones.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -127,6 +127,7 @@ export const gate = {
   protect: (repo, { apply, approvals, codeOwners = true } = {}, env) =>
     gjson(["protect", "--json", ...opts({ repo, apply, approvals, "no-code-owners": !codeOwners })], undefined, env),
   reportRelpath: (branch) => testFn("report_relpath", branch),
+  allowReply: (agentId) => testFn("allow_reply", agentId),
   readReport: (root, branch, rev = null) => testFn("read_report", root, branch, rev),
   isPushCommand: (cmd) => testFn("is_push_command", cmd),
   isPlumbing: (path, mode = "100644") => testFn("is_plumbing", path, mode),
@@ -230,3 +231,17 @@ export const plugin = (cwd, args, { input = "", env, timeout = 60_000 } = {}) =>
 /** The PreToolUse payload for Claude running `command` (by default `git push`) in `cwd`. */
 export const pushEvent = (cwd, command = "git push", tool_name = "Bash") =>
   JSON.stringify({ tool_name, tool_input: { command }, cwd });
+
+/** A folder holding a `git` that fails once the gate reads a change (`git diff`),
+ *  and runs the real git otherwise. Put it first on PATH. POSIX only. */
+export function failingGitBin(t) {
+  const realGit = sh(tmp(t), "/bin/sh", ["-c", "command -v git"]).stdout.trim();
+  const bin = join(tmp(t), "bin");
+  mkdirSync(bin);
+  writeFileSync(
+    join(bin, "git"),
+    `#!/bin/sh\nfor a in "$@"; do [ "$a" = diff ] && { echo "simulated git failure" >&2; exit 128; }; done\nexec "${realGit}" "$@"\n`,
+  );
+  chmodSync(join(bin, "git"), 0o755);
+  return bin;
+}
