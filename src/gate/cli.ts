@@ -15,6 +15,7 @@ import { appendFileSync, readFileSync, readSync } from "node:fs";
 import { isRecord } from "../util.js";
 import { collectChanges, isPlumbing } from "./changes.js";
 import { annotate, escapeMarkdown, jobSummary } from "./ci-summary.js";
+import { CHECK_NAME, WORKFLOW } from "./ci-workflow.js";
 import { mergeClaudeSettings } from "./claude-settings.js";
 import { deleteReportInputFile, formatStatus, save, status, verify } from "./commands.js";
 import { type Config, isSensitive } from "./config.js";
@@ -26,7 +27,6 @@ import { protect } from "./protect.js";
 import { isPushCommand } from "./push-detect.js";
 import { parseReport, readReport, renderReport, reportPath } from "./report.js";
 import { GATE_FILES, GATE_REL, GATE_VERSION, GateError, sorted } from "./shared.js";
-import { CHECK_NAME, WORKFLOW } from "./workflow.js";
 
 const HELP = `Ownership gate (comprende)
 

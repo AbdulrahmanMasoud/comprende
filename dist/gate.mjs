@@ -916,6 +916,56 @@ function annotate(kind, messages) {
 `);
 }
 
+// src/gate/ci-workflow.ts
+var WORKFLOW = `name: Ownership check
+
+on:
+  pull_request:
+    # 'edited' re-runs the check when a PR is retargeted to another base branch.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    name: Ownership check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Check the PR's own commit (not GitHub's merge commit) with full history,
+          # so fingerprints match what the developer verified.
+          ref: \${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          # The gate needs no dependencies; a restored cache is only a way in.
+          package-manager-cache: false
+
+      - name: Verify ownership report
+        env:
+          BASE_REF: \${{ github.base_ref }}
+          HEAD_REF: \${{ github.head_ref }}
+          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
+          NODE_OPTIONS: ""
+        run: |
+          # Run the gate as it exists on the base branch, so a PR can't weaken it
+          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
+          # doesn't have the gate yet (the PR that installs it); the rules then
+          # are the strict defaults, not the PR's own config.
+          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
+            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
+          else
+            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
+          fi
+          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
+            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
+`;
+var CHECK_NAME = "Ownership check";
+
 // src/gate/claude-settings.ts
 var CLAUDE_HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
 var HOOK_BY_HAND = "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-claude-hook-by-hand";
@@ -1494,56 +1544,6 @@ ${fresh.join("\n")}
   }
   return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on 'Require review from Code Owners' in branch protection.`;
 }
-
-// src/gate/workflow.ts
-var WORKFLOW = `name: Ownership check
-
-on:
-  pull_request:
-    # 'edited' re-runs the check when a PR is retargeted to another base branch.
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
-
-permissions:
-  contents: read
-
-jobs:
-  ownership:
-    name: Ownership check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          # Check the PR's own commit (not GitHub's merge commit) with full history,
-          # so fingerprints match what the developer verified.
-          ref: \${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          # The gate needs no dependencies; a restored cache is only a way in.
-          package-manager-cache: false
-
-      - name: Verify ownership report
-        env:
-          BASE_REF: \${{ github.base_ref }}
-          HEAD_REF: \${{ github.head_ref }}
-          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
-          NODE_OPTIONS: ""
-        run: |
-          # Run the gate as it exists on the base branch, so a PR can't weaken it
-          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
-          # doesn't have the gate yet (the PR that installs it); the rules then
-          # are the strict defaults, not the PR's own config.
-          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
-            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
-          else
-            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
-          fi
-          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
-            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
-`;
-var CHECK_NAME = "Ownership check";
 
 // src/gate/install.ts
 var EXISTING_GATE_NOTE = {

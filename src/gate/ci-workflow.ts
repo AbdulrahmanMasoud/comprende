@@ -1,5 +1,5 @@
-// The CI workflow install writes (.github/workflows/ownership-check.yml), and the
-// name of the status check it reports, which protect makes required.
+// The text of the CI workflow that install writes, and the name of the status
+// check it reports, which protect makes required.
 
 import { GATE_REL } from "./shared.js";
 

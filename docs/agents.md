@@ -171,7 +171,7 @@ Plugin roots differ too, but only in the hook files we ship, not in the gate's c
 
 ### The agent-adapter interface
 
-The interface goes in `src/gate/agents/agent.ts`, with one adapter per tool: `claude-code.ts`, `cursor.ts` and later `codex.ts`. They replace `SHELL_TOOL_NAMES` in `shared.ts`, and the `.claude/settings.json` reading in `hooks.ts` and `setup.ts` ([#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18)).
+The interface goes in `src/gate/agents/agent.ts`, with one adapter per tool: `claude-code.ts`, `cursor.ts` and later `codex.ts`. They replace `SHELL_TOOL_NAMES` in `shared.ts`, and the `.claude/settings.json` reading in `hooks.ts` and `claude-settings.ts` ([#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18)).
 
 ```ts
 /** The AI tools the gate knows. */

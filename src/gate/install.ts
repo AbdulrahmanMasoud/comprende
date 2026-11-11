@@ -4,6 +4,7 @@
 
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { CHECK_NAME, WORKFLOW } from "./ci-workflow.js";
 import { mergeClaudeSettings } from "./claude-settings.js";
 import { setUpCodeowners } from "./codeowners.js";
 import { DEFAULT_CONFIG } from "./config.js";
@@ -12,7 +13,6 @@ import { repoRoot, resolveBase } from "./git.js";
 import { type GateCopyDifference, gateCopyDifference, installHooks } from "./hooks.js";
 import { addInstallLine, INSTALL_LINES } from "./install-lines.js";
 import { CONFIG_PATH, GATE_REL, GateError, SELF } from "./shared.js";
-import { CHECK_NAME, WORKFLOW } from "./workflow.js";
 
 /** What install says about an existing gate.mjs it wasn't asked to replace. */
 const EXISTING_GATE_NOTE: Record<GateCopyDifference, string> = {

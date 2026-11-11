@@ -2,9 +2,9 @@
 // through the GitHub CLI (gh). A dry run by default.
 
 import { isRecord } from "../util.js";
+import { CHECK_NAME } from "./ci-workflow.js";
 import { type RunResult, repoRoot, run } from "./git.js";
 import { GateError } from "./shared.js";
-import { CHECK_NAME } from "./workflow.js";
 
 const RULESET_NAME = "Ownership gate";
 
