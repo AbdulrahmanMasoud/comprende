@@ -8,25 +8,27 @@
  * Bundled into one dependency-free file (dist/gate.mjs) that imports only
  * `node:` built-ins — those can never be shadowed by files in a repo. The same
  * file is copied into each repo as .learning/gate.mjs, and runs in the git
- * hook, the Claude Code hook, the MCP server, and CI, with nothing to install.
+ * hook, the AI tools' hooks, the MCP server, and CI, with nothing to install.
  */
 
 import { appendFileSync, readFileSync, readSync } from "node:fs";
 import { isRecord } from "../util.js";
+import { AGENTS, PROJECT_HOOK_FILES, resolveAgent } from "./agents/index.js";
 import { collectChanges, isPlumbing } from "./changes.js";
 import { annotate, escapeMarkdown, jobSummary } from "./ci-summary.js";
 import { CHECK_NAME, WORKFLOW } from "./ci-workflow.js";
-import { mergeClaudeSettings } from "./claude-settings.js";
 import { deleteReportInputFile, formatStatus, save, status, verify } from "./commands.js";
 import { type Config, isSensitive } from "./config.js";
 import { samePath } from "./files.js";
+import { GATE_FILES } from "./gate-files.js";
 import { currentBranch, repoRoot } from "./git.js";
-import { ALWAYS_ON, claudeHook, installHooks, prePush, sessionStart } from "./hooks.js";
+import { ALWAYS_ON, agentHook, installHooks, prePush, sessionStart } from "./hooks.js";
 import { install } from "./install.js";
+import { addProjectHook } from "./project-hooks.js";
 import { protect } from "./protect.js";
 import { isPushCommand } from "./push-detect.js";
 import { parseReport, readReport, renderReport, reportPath } from "./report.js";
-import { GATE_FILES, GATE_REL, GATE_VERSION, GateError, sorted } from "./shared.js";
+import { GATE_REL, GATE_VERSION, GateError, sorted } from "./shared.js";
 
 const HELP = `Ownership gate (comprende)
 
@@ -36,14 +38,16 @@ Commands (run from inside the repo, or pass --repo):
                  or --input .learning/report.local.json (deleted after a successful save)
   verify         Check a commit (default HEAD) against its report — used by CI   [--json]
   pre-push       Git pre-push hook entry point (reads refs from stdin)
-  claude-hook    Claude Code PreToolUse hook entry point (reads JSON from stdin)
-  session-start  Claude Code SessionStart hook (plugin): the always-on note; in gated repos, the git hook
-  install        Add the gate, config, CI workflow, Claude hook and git hook to a repo
+  agent-hook     PreToolUse hook entry point for AI tools (reads JSON from stdin)   [--agent ID]
+  claude-hook    The same as agent-hook. install and the plugin still call this name, which older gates know
+  session-start  SessionStart hook (plugin): the always-on note; in gated repos, the git hook   [--agent ID]
+  install        Add the gate, config, CI workflow, the AI tools' repo hook files and the git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
   protect        Create the GitHub ruleset that makes the check required (gh; dry run by default)
   version        Print the gate version
 
 Common options: --repo PATH  --base REF  --branch NAME
+--agent ID: the AI tool running the hook (${AGENTS.map((a) => a.id).join(", ")}). Without it, the payload tells.
 `;
 
 function readStdin(): string {
@@ -76,7 +80,7 @@ interface Args {
 
 const FLAGS = new Set(["json", "from-plugin", "upgrade", "apply", "no-code-owners", "help"]);
 
-const VALUE_OPTS = new Set(["repo", "base", "branch", "input", "rev", "labels-json", "owner", "approvals"]);
+const VALUE_OPTS = new Set(["repo", "base", "branch", "input", "rev", "labels-json", "owner", "approvals", "agent"]);
 
 function parseArgs(argv: string[]): Args {
   const [cmd = "", ...tail] = argv;
@@ -121,8 +125,25 @@ function testCall(fn: string, a: unknown[]): unknown {
     }
     case "read_report":
       return readReport(repoRoot(s(0)), String(a[1]), s(2));
-    case "merge_claude_settings":
-      return mergeClaudeSettings(String(a[0]));
+    case "merge_claude_settings": {
+      // The test suite's name for adding the hook to a .claude/settings.json at any path.
+      const file = PROJECT_HOOK_FILES.find((f) => f.path === ".claude/settings.json");
+      return file ? addProjectHook(String(a[0]), file) : null;
+    }
+    case "resolve_agent": {
+      // [payload JSON text, env, --agent]: which adapter runs, and what it reads.
+      const env = (a[1] ?? {}) as Record<string, string>;
+      let payload: unknown;
+      try {
+        payload = JSON.parse(String(a[0]));
+      } catch {
+        return null;
+      }
+      const agent = resolveAgent(payload, env, s(2));
+      return (
+        agent && { id: agent.id, command: agent.shellCommand(payload), projectDir: agent.projectDir(payload, env) }
+      );
+    }
     case "is_push_command":
       return isPushCommand(String(a[0]));
     case "is_plumbing":
@@ -226,10 +247,15 @@ export function main(argv: string[]): number {
       }
       case "pre-push":
         return prePush(readStdin(), o("repo"));
-      case "claude-hook":
-        return claudeHook(readStdin(), Boolean(opts["from-plugin"]));
+      case "agent-hook":
+      case "claude-hook": {
+        const reply = agentHook(readStdin(), Boolean(opts["from-plugin"]), o("agent"));
+        process.stdout.write(reply.stdout);
+        process.stderr.write(reply.stderr);
+        return reply.exitCode;
+      }
       case "session-start":
-        out(JSON.stringify(sessionStart(readStdin())));
+        out(sessionStart(readStdin(), o("agent")));
         return 0;
       case "install":
       case "install-hooks":

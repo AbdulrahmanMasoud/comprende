@@ -28,25 +28,9 @@ export const REPORT_INPUT = `${LEARNING}/report.local.json`;
 // to the plugin's, so SessionStart can't trust it and installs no pre-push hook.
 export const GATE_ATTRIBUTES_LINE = `${GATE_REL} -text`;
 
-// The tool names a PreToolUse payload uses for a shell command. Claude Code
-// calls it "Bash". Cursor runs Claude-format hooks (a "Bash" matcher still
-// fires) but calls it "Shell": https://cursor.com/docs/reference/third-party-hooks
-// Moves into the agent adapters in #18.
-export const SHELL_TOOL_NAMES: readonly string[] = ["Bash", "Shell"];
-
 export const ZERO_SHA = "0".repeat(40);
 
 export const REGULAR_MODES = ["100644", "100755"];
-
-// Files that control the gate. They're excluded from "the change to
-// understand" and protected by CODEOWNERS review instead.
-export const GATE_FILES = [
-  CONFIG_PATH,
-  GATE_REL,
-  ".github/workflows/ownership-check.yml",
-  ".claude/settings.json",
-  ".github/CODEOWNERS",
-];
 
 export class GateError extends Error {}
 

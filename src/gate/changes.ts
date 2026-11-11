@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { dict, get, isRecord, own } from "../util.js";
 import { type Config, isSensitive, needsNoQuestions } from "./config.js";
 import { ciGateHasFeature } from "./features.js";
+import { GATE_FILES } from "./gate-files.js";
 import {
   decodePath,
   git,
@@ -28,7 +29,7 @@ import {
 import { matches } from "./glob.js";
 import { isInstallLineEdit } from "./install-lines.js";
 import type { Report } from "./report.js";
-import { GATE_FILES, GateError, REGULAR_MODES, REPORT_INPUT, sorted, splitLines, ZERO_SHA } from "./shared.js";
+import { GateError, REGULAR_MODES, REPORT_INPUT, sorted, splitLines, ZERO_SHA } from "./shared.js";
 
 // Exact shapes only (no subfolders, markdown only), so nothing executable can hide here.
 const PLUMBING_RE = /^\.learning\/(checks\/[^/]+\.md|decisions\/[^/]+\.md|map\.md|[^/]+\.local\.md)$/;

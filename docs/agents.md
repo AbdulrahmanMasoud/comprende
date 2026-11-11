@@ -1,6 +1,6 @@
 # Comprende in other AI tools
 
-Comprende runs in Claude Code. This page collects what we know about running it in other tools, starting with Cursor ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)), and proposes a design. Nothing here has shipped except the 0.2.2 fix noted below.
+Comprende runs in Claude Code. This page collects what we know about running it in other tools, starting with Cursor ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)), and the design for supporting them. The adapter interface is built ([#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18)). Cursor support itself hasn't shipped yet, apart from the 0.2.2 fix noted below.
 
 - **Cursor:** tested on 2026-11-11 with the Cursor CLI (`cursor-agent`) `2026.11.10-731fb78` on macOS, plus the official docs.
 - **Codex:** from its docs only, to check that the design fits a third tool.
@@ -102,7 +102,7 @@ Terms used below:
 | Headless flags | `-p`, `--output-format stream-json`, `--trust`, `--force`, `--resume <chat>`, `--workspace` and `--plugin-dir`. `CURSOR_API_KEY` can stand in for a login | Tested (all but `CURSOR_API_KEY`). Docs: [parameters](https://cursor.com/docs/cli/reference/parameters) |
 | Shell commands in `-p` without `--force` | Unknown: we always passed `--force`. It matters only for the end-to-end script | Unknown |
 | Commit attribution | The CLI adds a "Made with Cursor" trailer by default (`attribution.attributeCommitsToAgent`). Contributors who use it must turn it off, because of our no-attribution rule | Docs: [CLI configuration](https://cursor.com/docs/cli/reference/configuration) |
-| `sessionStart` in the Agents window | Staff say the context arrives after the first request. That matters for the always-on line, see open question 4 | Unknown (IDE only). Docs: [forum](https://forum.cursor.com/t/174143) |
+| `sessionStart` in the Agents window | Staff say the context arrives after the first request. That matters for the always-on line (decision 4) | Unknown (IDE only). Docs: [forum](https://forum.cursor.com/t/174143) |
 
 ### Windows
 
@@ -171,67 +171,104 @@ Plugin roots differ too, but only in the hook files we ship, not in the gate's c
 
 ### The agent-adapter interface
 
-The interface goes in `src/gate/agents/agent.ts`, with one adapter per tool: `claude-code.ts`, `cursor.ts` and later `codex.ts`. They replace `SHELL_TOOL_NAMES` in `shared.ts`, and the `.claude/settings.json` reading in `hooks.ts` and `claude-settings.ts` ([#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18)).
+Built in [#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18):
+- the interface is [`src/gate/agents/types.ts`](../src/gate/agents/types.ts)
+- one adapter per tool: `claude-code.ts` and `cursor.ts`. Cursor's adapter only reads input for now.
+- the registry and the resolve step are in `index.ts`
+
+To add a tool, see "Adding an AI tool" in [CONTRIBUTING.md](../CONTRIBUTING.md#adding-an-ai-tool).
 
 ```ts
-/** The AI tools the gate knows. */
-export type AgentId = "claude-code" | "cursor" | "codex";
+/** The tools the gate has an adapter for. */
+export type AgentId = "claude-code" | "cursor";
 
 /** The environment a hook runs with, read-only. */
 export type HookEnv = Readonly<Record<string, string | undefined>>;
 
-/** One AI tool's hook input. Replies aren't here: a silent exit 0 allows, exit 2
- *  with stderr denies, and hookSpecificOutput.additionalContext adds session
- *  context, in every tool. The core builds them once. */
-export interface Agent {
-  /** For `--agent`, logs and messages. */
-  readonly id: AgentId;
+/** The core's verdict on a command: let it run, or block it with a reason the agent sees. */
+export type Decision = { readonly allow: true } | { readonly allow: false; readonly reason: string };
 
-  /** Is this hook run from this tool? Needed only for the Claude-format command,
-   *  which Claude Code and Cursor both run. `--agent` wins when it's given. Cursor
-   *  is checked first (it sets CURSOR_VERSION), and Claude Code is the default. */
-  detects(payload: unknown, env: HookEnv): boolean;
-
-  /** The shell command about to run, validated at the edge, or null when the
-   *  tool isn't this tool's shell ("Bash", "Shell"). */
-  shellCommand(payload: unknown): string | null;
-
-  /** The repo the hook is for: the payload's cwd, else this tool's project
-   *  variable, else the process's own cwd. Cursor always sends cwd "". */
-  projectDir(payload: unknown, env: HookEnv): string;
-
-  /** This tool's repo-level hook files, most specific first. A copy of the hook
-   *  steps aside when a more specific file already runs the gate. */
-  readonly projectHookFiles: readonly ProjectHookFile[];
+/** What a hook prints, and how it exits. Only 0 and 2: a hook blocks only on a deliberate exit 2. */
+export interface HookReply {
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly exitCode: 0 | 2;
 }
 
-/** A repo-level hook file that `install` manages, such as .claude/settings.json. */
+export interface Agent {
+  /** For `--agent`, and for the registry's order. */
+  readonly id: AgentId;
+
+  /** Is this hook run from this tool? Used only when the hook command doesn't
+   *  pass `--agent`: the Claude-format command runs in more than one tool. */
+  detects(payload: unknown, env: HookEnv): boolean;
+
+  /** The shell command about to run, or null when the payload isn't for this
+   *  tool's shell tool (Claude Code's "Bash", Cursor's "Shell"). */
+  shellCommand(payload: unknown): string | null;
+
+  /** The repo the hook is for, from the payload or this tool's project
+   *  variable, or null when neither says (the core then uses its own cwd). */
+  projectDir(payload: unknown, env: HookEnv): string | null;
+
+  /** This tool's repo-level hook files, most specific first. `install` writes
+   *  them, and the plugin's hook steps aside when one of them already runs the gate. */
+  readonly projectHookFiles: readonly ProjectHookFile[];
+
+  /** How this tool wants allow and deny. Leave it out for the core's default:
+   *  exit 0 with nothing printed, or exit 2 with the reason on stderr. */
+  formatDecision?(decision: Decision): HookReply;
+
+  /** The session-start reply (stdout) that adds `lines` to the agent's context.
+   *  Leave it out for the core's default: Claude Code's
+   *  hookSpecificOutput.additionalContext, which Cursor accepts too. */
+  formatSessionContext?(lines: readonly string[]): string;
+}
+
+/** A repo-level hook file that registers the gate's hook, such as .claude/settings.json. */
 export interface ProjectHookFile {
   /** The path from the repo root. */
   readonly path: string;
 
-  /** Does this content already run the gate? */
+  /** Does this file's content already run the gate's hook? */
   runsGate(content: string): boolean;
 
-  /** The content with the gate's hook added and every other entry kept, or null
-   *  for a shape it doesn't understand (install then skips the file and says so).
-   *  Pure: files.ts does the safe read and write. */
-  withGateHook(existing: string | null): string | null;
+  /** The content with the gate's hook added and everything else kept, plus what
+   *  install reports. No content means leave the file alone: the hook is already
+   *  there, or the file can't be read or has a shape this adapter doesn't
+   *  understand. Pure: the core does the safe read and the atomic write. */
+  withGateHook(existing: ExistingFile, shownPath: string): { readonly content?: string; readonly message: string };
 }
+
+/** (files.ts) A file install may change: missing, its text, or why it can't be read safely. */
+export type ExistingFile = { readonly text: string } | { readonly unreadable: string } | null;
 ```
+
+The default replies live in the core, in `src/gate/hook-replies.ts`. Claude-format payloads, which Claude Code and Cursor both send, are read and validated once, in `agents/claude-format.ts`.
+
+**The resolve step** (`resolveAgent` in `agents/index.ts`) picks the adapter for a hook run:
+1. `--agent <id>` wins.
+2. Otherwise, detection runs in registry order: Cursor first, then Claude Code, which accepts any payload.
+3. An unknown `--agent` resolves to no adapter, and the hook steps aside silently. At session start, the always-on line is still printed, in the default format.
+
+**The two optional methods** are there for tools that reply in JSON. Antigravity, explored in [#16](https://github.com/AbdulrahmanMasoud/comprende/pull/16), wants `{"decision": "deny", "reason": …}` and `injectSteps`. Such a tool fits without touching the core.
+
+**One command, two names.** The hook command is `agent-hook`, and `claude-hook` stays its alias, because existing `.claude/settings.json` files and the plugin's `hooks/hooks.json` call it.
 
 How each tool fills it in:
 
-| | Claude Code | Cursor | Codex (docs) |
-|---|---|---|---|
-| `detects` | the default | `CURSOR_VERSION` set, or `cursor_version` in the payload | only through `--agent codex` |
-| Shell tool | `Bash` | `Shell` | `Bash` |
-| `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR` | `CURSOR_PROJECT_DIR` (`CLAUDE_PROJECT_DIR` is the same path) | `cwd` |
-| `projectHookFiles` | `.claude/settings.json` | `.cursor/hooks.json`, then `.claude/settings.json` | `.codex/hooks.json` |
+| | Claude Code | Cursor | Codex (docs) | Antigravity ([#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25), from #16) |
+|---|---|---|---|---|
+| `detects` | any payload: the fallback | `cursor_version` in the payload, or the tool name `Shell`. Not the environment: Claude Code started from Cursor's terminal may inherit Cursor's variables | `--agent codex` in its hook file | `toolCall` and `workspacePaths` |
+| Shell tool | `Bash` | `Shell` | `Bash` | `run_command`, command in `toolCall.args.CommandLine` |
+| `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR` | `CLAUDE_PROJECT_DIR`, else `CURSOR_PROJECT_DIR` (`cwd` is `""`). Cursor sets both to the same path | `cwd` | `workspacePaths[0]` |
+| `projectHookFiles` | `.claude/settings.json` | `.claude/settings.json` now; `.cursor/hooks.json` first, from the Cursor PR | `.codex/hooks.json` | the plugin's `hooks.json` only |
+| `formatDecision` | the default | the default | the default | `{"decision": …}` |
+| `formatSessionContext` | the default | the default | the default | `injectSteps` |
 
-The core also strips a leading UTF-8 BOM before parsing any payload. The hook command gets a neutral name, `agent-hook`. `claude-hook` stays as an alias, so repos that already have the hook keep working.
+Still to do, in the Cursor PR: strip a leading UTF-8 BOM before parsing a payload. Cursor's CLI on Windows once sent one. Today a payload with a BOM fails to parse, so the hook steps aside.
 
-The platform adapter covers GitHub now and GitLab later ([#4](https://github.com/AbdulrahmanMasoud/comprende/issues/4)). It's the other half of #18: the CI workflow, CODEOWNERS, the PR's branch and labels, the reviewer summary, and `protect`.
+The platform adapter is the other half of #18: GitHub now, GitLab later ([#4](https://github.com/AbdulrahmanMasoud/comprende/issues/4)). It covers the CI workflow, CODEOWNERS, the PR's branch and labels, the reviewer summary, and `protect`.
 
 ### Step-aside rules
 
@@ -276,7 +313,7 @@ In a gated repo, exactly one copy checks. In a repo whose hook files were remove
 - **Shared as is:**
   - `skills/`, since Cursor reads `SKILL.md` and loads it by description.
   - The MCP server (`dist/server.mjs`, through `.mcp.json`). Whether Cursor reads `.mcp.json` through the manifest still needs a test.
-- **No rule file.** The always-on line keeps coming from `sessionStart` (open question 4).
+- **No rule file.** The always-on line keeps coming from `sessionStart` (decision 4).
 
 ### What `gate.mjs install` writes for teammates on Cursor
 
@@ -332,35 +369,32 @@ In a gated repo, exactly one copy checks. In a repo whose hook files were remove
 
 ### The order of PRs
 
-1. **The refactor, [#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18), with no change in behavior,** in two PRs:
-   - `chore:` split `setup.ts`, which is past 300 lines.
-   - `refactor:` extract the Claude Code and GitHub adapters, plus a `cursor.ts` that only reads input. It takes over what 0.2.2 does with `Shell` and `cwd: ""`, so nothing regresses. Claude Code fixtures come with it.
+1. **The refactor, [#18](https://github.com/AbdulrahmanMasoud/comprende/issues/18), with no change in behavior,** in three PRs:
+   - `chore:` split `setup.ts` ([#29](https://github.com/AbdulrahmanMasoud/comprende/pull/29)).
+   - `refactor:` the agent adapters. Claude Code and an input-only Cursor adapter, `agent-hook`, and the Claude Code fixtures.
+   - `refactor:` the platform adapters, with GitHub's.
 2. **`feat:` the Cursor adapter (part of [#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)).** It brings:
    - `.cursor-plugin/` and `hooks/cursor-hooks.json`
    - `install` writing `.cursor/hooks.json`, behind the `cursor-hooks` feature
-   - `agent-hook`, the BOM handling and the step-aside rules
+   - the BOM handling and the step-aside rules
    - the tests and the end-to-end script
    - the docs its changes touch: `docs/teams.md`, `docs/how-it-works.md`, `SECURITY.md` (the new gate file), and the CHANGELOG under Unreleased
 3. **`docs:` the READMEs, then `chore:` release 0.3.0.**
    - Both READMEs, where Cursor is announced, and this page's status.
    - The release, on `chore/release-0.3.0`.
 
-## Open questions
+## Decisions
 
-1. **Should `install` write `.cursor/hooks.json`?**
-   - Benefit: it works with Third-Party Imports off, and on Windows.
-   - Cost: a new gate file, and one question in each repo's upgrade PR until its base runs the new gate.
-   - The alternative is to rely on Cursor importing `.claude/settings.json`.
-2. **How do we distribute it?** Submit to the Cursor Marketplace (open source, reviewed, unknown wait), or ship first as a GitHub marketplace only (`agent plugin marketplace add`)?
-3. **Someone with Comprende in both Claude Code and Cursor.** In Cursor, the skill shows up twice, and both plugins' hooks run. The hooks are fine: in a gated repo both step aside, and elsewhere a double deny is harmless. For the duplicate skill, do we just document "in Cursor, keep one: the Claude Code import or the Cursor plugin"? Or should the Cursor plugin leave out the skill when it finds Comprende in `~/.claude/plugins/installed_plugins.json`? That's possible, but it depends on a Claude Code file format we don't own.
-4. **Where does the always-on line come from?** Keep it in `sessionStart`, as tested here? Or also ship an `alwaysApply` rule, which #2 first planned?
-   - The rule is there from the first turn, even in the Agents window.
-   - But it's a second copy of the text.
-5. **Windows.** Can we ship Cursor support with Windows as "experimental"? That would mean:
-   - not tested on Windows by us, and not in CI
-   - documented as such, with problems tracked in #10
-   - the git hook and CI still enforce
-6. **Codex:** in the v0.3.0 milestone, or later? Each hook has to be trusted by hand first, which makes the first run less smooth.
+The maintainer settled the open questions on 2026-11-11:
+
+1. **`install` writes `.cursor/hooks.json` too.**
+   - Its commands need no POSIX shell: `node .learning/gate.mjs <cmd> --agent cursor`. So they work in PowerShell on Windows, and a missing `node` fails open.
+   - A repo with both `.claude/settings.json` and `.cursor/hooks.json` runs the gate once in Cursor. `projectHookFiles` decides who steps aside.
+2. **The Cursor Marketplace comes after 0.3.0** has shipped from GitHub and passed a manual check in the IDE.
+3. **The skill loaded twice:** for now, document "install it in one place".
+4. **The always-on line stays in `sessionStart`.** There's no `alwaysApply` rule. The Cursor plugin's hook commands avoid shell syntax too.
+5. **Windows ships as "experimental" for Cursor**, tracked in [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10).
+6. **Release plan:** 0.3.0 is Cursor. 0.4.0 is Codex ([#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)) and Google Antigravity ([#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)). 0.5.0 is GitLab ([#4](https://github.com/AbdulrahmanMasoud/comprende/issues/4)).
 
 ## How we tested
 

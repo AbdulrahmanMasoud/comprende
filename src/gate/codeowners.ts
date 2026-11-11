@@ -4,7 +4,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWrite } from "./files.js";
-import { GATE_FILES, GateError, splitLines } from "./shared.js";
+import { GATE_FILES } from "./gate-files.js";
+import { GateError, splitLines } from "./shared.js";
 
 export function setUpCodeowners(root: string, owner?: string | null): string {
   const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);

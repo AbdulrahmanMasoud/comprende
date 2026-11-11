@@ -1,81 +1,76 @@
-// The hook entry points: Claude Code's PreToolUse and SessionStart (Cursor runs
-// them too), and git's pre-push, plus installing the pinned pre-push hook.
+// The hook entry points: the AI tools' PreToolUse and SessionStart, through their
+// adapters (agents/), and git's pre-push, plus installing the pinned pre-push hook.
 
 import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isFile, isSymlink, lstat } from "../util.js";
+import { type Agent, type HookEnv, type HookReply, resolveAgent } from "./agents/index.js";
 import { verify } from "./commands.js";
 import { loadConfig } from "./config.js";
-import { MAX_CONFIG_BYTES, readRepoFile } from "./files.js";
 import { git, repoRoot, resolveBase } from "./git.js";
+import { decisionReply, SILENT_ALLOW, sessionContextReply } from "./hook-replies.js";
+import { projectHookRunsGate } from "./project-hooks.js";
 import { isPushCommand } from "./push-detect.js";
 import { uncommittedReport } from "./report.js";
-import {
-  CONFIG_PATH,
-  GATE_ATTRIBUTES_LINE,
-  GATE_REL,
-  GateError,
-  SELF,
-  SHELL_TOOL_NAMES,
-  splitLines,
-  ZERO_SHA,
-} from "./shared.js";
+import { CONFIG_PATH, GATE_ATTRIBUTES_LINE, GATE_REL, GateError, SELF, splitLines, ZERO_SHA } from "./shared.js";
 
-function projectHasGateHook(root: string): boolean {
+/** The hook's payload and the adapter that reads it, or no adapter when stdin
+ *  isn't JSON or `--agent` names an unknown tool. Never throws. */
+function readHookInput(stdinText: string, requested: string | null): { payload: unknown; agent: Agent | null } {
   try {
-    const settings = JSON.parse(readRepoFile(join(root, ".claude", "settings.json"), MAX_CONFIG_BYTES));
-    const groups = settings?.hooks?.PreToolUse ?? [];
-    return groups.some((g: { hooks?: { command?: string }[] }) =>
-      (g.hooks ?? []).some((h) => (h.command ?? "").includes("gate.mjs") && (h.command ?? "").includes("claude-hook")),
-    );
+    const payload: unknown = JSON.parse(stdinText || "{}");
+    return { payload, agent: resolveAgent(payload, process.env, requested) };
   } catch {
-    return false;
+    return { payload: undefined, agent: null };
   }
 }
 
-/** PreToolUse hook for Claude Code, and for Cursor, which runs it too. Exit 2
- *  blocks the call and shows stderr to the agent. Allowing prints nothing:
- *  Cursor blocks the call when a hook's stdout isn't JSON. It checks the current
- *  branch; pushes of other branches are checked by the pre-push hook and CI.
- *  Outside a repo with the gate installed, or on an unexpected crash, it allows
- *  the call: this hook is a reminder; CI is the lock. fromPlugin: stays out of
- *  the way when the repo already registers the same hook, so the check never
- *  runs twice. The plugin never executes code from the repo it's looking at; it
- *  applies its own logic to the repo's data. */
-export function claudeHook(stdinText: string, fromPlugin = false): number {
+/** The PreToolUse hook, for every AI tool: the adapter reads the payload, and the
+ *  reply is in the adapter's format, by default exit 2 with stderr to block and
+ *  nothing to allow (hook-replies.ts). It checks the current branch; pushes of other
+ *  branches are checked by the pre-push hook and CI. Outside a repo with the gate
+ *  installed, for an unknown tool, or on an unexpected crash, it allows the call:
+ *  this hook is a reminder; CI is the lock. fromPlugin: stays out of the way when
+ *  the repo's own hook file already runs the gate, so the check never runs twice.
+ *  The plugin never executes code from the repo it's looking at; it applies its
+ *  own logic to the repo's data. */
+export function agentHook(stdinText: string, fromPlugin: boolean, requested: string | null): HookReply {
+  const { payload, agent } = readHookInput(stdinText, requested);
+  if (!agent) return SILENT_ALLOW;
+  const env: HookEnv = process.env;
+  const allow = decisionReply(agent, { allow: true });
   let root: string;
   try {
-    const payload = JSON.parse(stdinText || "{}");
-    const command = String(payload?.tool_input?.command ?? "");
-    if (!SHELL_TOOL_NAMES.includes(payload?.tool_name ?? "Bash") || !isPushCommand(command)) return 0;
-    root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
-    if (!lstat(join(root, CONFIG_PATH))) return 0;
-    if (fromPlugin && projectHasGateHook(root)) return 0;
+    const command = agent.shellCommand(payload);
+    if (command === null || !isPushCommand(command)) return allow;
+    root = repoRoot(agent.projectDir(payload, env) ?? process.cwd());
+    if (!lstat(join(root, CONFIG_PATH))) return allow;
+    if (fromPlugin && agent.projectHookFiles.some((f) => projectHookRunsGate(join(root, f.path), f))) return allow;
   } catch {
-    return 0;
+    return allow;
   }
   let passed: boolean, problems: string[], mode: string;
   try {
     [passed, problems, mode] = verify(root);
   } catch (e) {
-    if (!(e instanceof GateError)) return 0;
+    if (!(e instanceof GateError)) return allow;
     [passed, problems, mode] = [false, [e.message], "required"]; // e.g. a broken report
   }
-  if (passed || mode !== "required") return 0;
+  if (passed || mode !== "required") return allow;
   // The hook runs before the command, so `git commit … && git push` is checked
   // against the old HEAD. Say so when the fix is just a separate commit.
   const pending = uncommittedReport(root);
   if (pending) {
-    process.stderr.write(
-      `Blocked by the ownership gate: the report ${pending} is saved but not committed. Commit it first, then push as a separate command. ` +
-        "This hook checks the branch before a command runs, so a push in the same command as the commit is blocked too.\n",
-    );
-    return 2;
+    return decisionReply(agent, {
+      allow: false,
+      reason:
+        `Blocked by the ownership gate: the report ${pending} is saved but not committed. Commit it first, then push as a separate command. ` +
+        "This hook checks the branch before a command runs, so a push in the same command as the commit is blocked too.",
+    });
   }
-  process.stderr.write(`Blocked by the ownership gate:\n- ${problems.join("\n- ")}\n`);
-  return 2;
+  return decisionReply(agent, { allow: false, reason: `Blocked by the ownership gate:\n- ${problems.join("\n- ")}` });
 }
 
 const MIN_NODE = 20;
@@ -111,26 +106,25 @@ const UNTRUSTED_GATE_NOTE: Record<Exclude<GateCopyDifference, "none">, string> =
   "plugin-crlf": `The plugin's own copy of gate.mjs has CRLF line endings (git's core.autocrlf, in an install from before Comprende 0.2.1), so it differs from this repo's ${GATE_REL} only in its line endings, and the local pre-push hook was NOT installed automatically. Tell the user in one line to update the plugin: \`/plugin marketplace update comprende\`.`,
 };
 
-/** SessionStart hook (plugin). Never throws — a session must always start. */
-export function sessionStart(stdinText: string): Record<string, unknown> {
+/** SessionStart hook (plugin): the stdout that adds context for the agent, in the
+ *  adapter's format. Never throws — a session must always start. */
+export function sessionStart(stdinText: string, requested: string | null): string {
+  const { payload, agent } = readHookInput(stdinText, requested);
   const lines: string[] = [];
   const node = process.versions.node;
   if (Number.parseInt(node, 10) < MIN_NODE)
     lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
-  lines.push(...gatedRepoContext(stdinText));
-  return lines.length
-    ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } }
-    : {};
+  if (agent) lines.push(...gatedRepoContext(agent, payload));
+  return sessionContextReply(agent, lines);
 }
 
 /** In a repo that uses the gate: install the local pre-push hook if this clone
- *  lacks it, and tell Claude the repo is gated so the ownership-check protocol
+ *  lacks it, and tell the agent the repo is gated so the ownership-check protocol
  *  is followed. Elsewhere: nothing. */
-function gatedRepoContext(stdinText: string): string[] {
+function gatedRepoContext(agent: Agent, payload: unknown): string[] {
   try {
-    const payload = JSON.parse(stdinText || "{}");
-    const root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+    const root = repoRoot(agent.projectDir(payload, process.env) ?? process.cwd());
     if (!lstat(join(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];

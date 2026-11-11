@@ -81,22 +81,46 @@ Before opening a PR, get a review from someone who hasn't seen the work. That ca
 
 ### Adapters
 
-Comprende is adding more AI tools (Cursor, Codex) and git platforms (GitLab). Code that's specific to one of them lives in one adapter module, behind a small interface that every adapter of that kind implements:
+Code that's specific to one AI tool (Claude Code, Cursor, and later Codex and Antigravity) lives in one adapter module, behind a small interface that every adapter implements. The same goes for git platforms (GitHub, and later GitLab).
 
 ```
-src/gate/agents/      one module per AI tool: claude-code.ts, cursor.ts, codex.ts
-                      reads that tool's hook payload, answers in that tool's format
-src/gate/platforms/   one module per git platform: github.ts, gitlab.ts
-                      reads its CI environment, writes the reviewer summary, sets up branch protection
+src/gate/agents/      types.ts (the Agent interface), index.ts (the registry and the resolve step),
+                      one module per AI tool: claude-code.ts, cursor.ts, plus what they share:
+                      claude-format.ts (the payload) and claude-settings.ts (the hook file)
+src/gate/hook-replies.ts   the core's default replies, for adapters that don't format their own
+src/gate/platforms/   one module per git platform (next: the platform PR of #18)
 ```
 
-The core (`status`, `save`, `verify`, push detection) gets typed values from an adapter and never asks which tool or platform it runs under. So:
+The core (`status`, `save`, `verify`, push detection, the hooks) gets typed values from an adapter. It never asks which tool or platform it runs under. So:
 
 - there's no `if (tool === "cursor") … else if (tool === "codex") …` outside the adapters
 - adding a tool or a platform means adding one module, its tests and its fixtures, not editing ten files
 - each adapter validates its raw input (a hook payload, CI env vars) before anything else sees it
 
-Payload fixtures for each tool go in `test/fixtures/<tool>/`, captured from real runs.
+Payload fixtures for each tool go in `test/fixtures/<tool>/`, captured from real runs, never written by hand.
+
+#### Adding an AI tool
+
+The interface, with a comment on each member, is in `src/gate/agents/types.ts`. [docs/agents.md](docs/agents.md#the-agent-adapter-interface) shows how each tool fills it in.
+
+1. **Capture real payloads.** Register hooks in the tool that only record their stdin and environment, in a throwaway repo with a local bare remote. Capture its session start, and its pre-tool hook for a push, for `ls`, and for a tool that isn't the shell. Remove personal data: paths with a username, emails, tokens and session IDs. Save one file per case in `test/fixtures/<tool>/`, with a README saying how they were captured. [`test/fixtures/cursor/`](test/fixtures/cursor/) is an example.
+2. **Write `src/gate/agents/<tool>.ts`:**
+   - `id`: add it to `AgentId` in `types.ts`.
+   - `detects`: only if the tool runs another tool's hook command, the way Cursor runs Claude Code's. Detect from a field only that tool sends. Prefer `--agent <id>` in the tool's own hook files.
+   - `shellCommand`: the command, only for the tool's shell tool.
+   - `projectDir`: the repo, from the payload or the tool's project variable.
+   - `projectHookFiles`: the repo-level files that register the gate's hook, most specific first.
+   - `formatDecision` and `formatSessionContext`: only if the tool doesn't accept the defaults (exit 0 or exit 2 with stderr, and `hookSpecificOutput.additionalContext`).
+3. **Register it in `src/gate/agents/index.ts`.** In `AGENTS`, a tool that runs another tool's hook commands goes before that tool. `PROJECT_HOOK_FILES`, and from it `GATE_FILES`, pick up its files.
+4. **Hook commands for its plugin or settings file.** Run `node <gate.mjs> agent-hook --agent <id>` and `session-start --agent <id>`. Use no shell syntax, so they run in PowerShell too. Make sure a missing `node` fails open: any exit code but 2.
+5. **Tests from the fixtures,** in `test/agents.test.mjs`:
+   - its payloads resolve to it
+   - it reads the command and the repo
+   - an unverified push is blocked
+   - `ls` and other tools pass silently
+   - the step-aside rules
+6. **Check it end to end** in the tool itself, with a gated demo repo: an unverified push is blocked, a verified one goes through, and the session-start message arrives.
+7. **Docs:** `docs/agents.md`, the install steps in both READMEs, and `SECURITY.md` if it adds a gate file.
 
 The Claude Code and GitHub code was written before this rule and isn't behind these interfaces yet. The end of "Clean code" in [CLAUDE.md](CLAUDE.md) lists where today's code doesn't follow the rules, and the issue for each.
 

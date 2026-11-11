@@ -33,6 +33,135 @@ var isFile = (p) => {
   }
 };
 
+// src/gate/agents/claude-format.ts
+function readClaudeFormat(payload) {
+  const p = isRecord(payload) ? payload : {};
+  const input = isRecord(p.tool_input) ? p.tool_input : {};
+  return {
+    toolName: p.tool_name === void 0 || p.tool_name === null ? null : String(p.tool_name),
+    command: String(input.command ?? ""),
+    cwd: typeof p.cwd === "string" && p.cwd ? p.cwd : null
+  };
+}
+
+// src/gate/shared.ts
+import { fileURLToPath } from "node:url";
+var GATE_VERSION = 3;
+var LEARNING = ".learning";
+var CHECKS_DIR = `${LEARNING}/checks`;
+var CONFIG_PATH = `${LEARNING}/config.json`;
+var GATE_REL = `${LEARNING}/gate.mjs`;
+var REPORT_INPUT = `${LEARNING}/report.local.json`;
+var GATE_ATTRIBUTES_LINE = `${GATE_REL} -text`;
+var ZERO_SHA = "0".repeat(40);
+var REGULAR_MODES = ["100644", "100755"];
+var GateError = class extends Error {
+};
+var SELF = (() => {
+  try {
+    return fileURLToPath(import.meta.url);
+  } catch {
+    return "";
+  }
+})();
+var sorted = (xs) => [...xs].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+var splitLines = (s) => {
+  const parts = s.split(/\r\n|\r|\n/);
+  if (parts.length && parts[parts.length - 1] === "") parts.pop();
+  return parts;
+};
+var VERSION_RE = /^\/\/ ownership-gate-version: (\d+)/m;
+var FEATURES_RE = /^\/\/ ownership-gate-features: (.*)$/m;
+
+// src/gate/agents/claude-settings.ts
+var HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
+var HOOK_BY_HAND = "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-claude-hook-by-hand";
+var LABEL = "Claude hook";
+var isGateHookCommand = (command) => typeof command === "string" && command.includes("gate.mjs") && (command.includes("claude-hook") || command.includes("agent-hook"));
+var listsGateHook = (groups) => groups.some(
+  (g) => isRecord(g) && Array.isArray(g.hooks) && g.hooks.some((h) => isRecord(h) && isGateHookCommand(h.command))
+);
+var CLAUDE_SETTINGS = {
+  path: ".claude/settings.json",
+  runsGate(content) {
+    let settings;
+    try {
+      settings = JSON.parse(content);
+    } catch {
+      return false;
+    }
+    const groups = isRecord(settings) && isRecord(settings.hooks) ? settings.hooks.PreToolUse : void 0;
+    return Array.isArray(groups) && listsGateHook(groups);
+  },
+  withGateHook(existing, shownPath) {
+    if (existing !== null && "unreadable" in existing) return { message: `SKIPPED ${LABEL}: ${existing.unreadable}` };
+    let settings = {};
+    if (existing !== null) {
+      let parsed;
+      try {
+        parsed = JSON.parse(existing.text || "{}");
+      } catch {
+        return { message: `SKIPPED ${LABEL}: ${shownPath} is not valid JSON; ${HOOK_BY_HAND}` };
+      }
+      if (!isRecord(parsed)) return { message: `SKIPPED ${LABEL}: ${shownPath} is not a JSON object; ${HOOK_BY_HAND}` };
+      settings = parsed;
+    }
+    if (settings.hooks !== void 0 && !isRecord(settings.hooks))
+      return { message: `SKIPPED ${LABEL}: "hooks" in ${shownPath} is not an object; ${HOOK_BY_HAND}` };
+    settings.hooks ??= {};
+    const hooks = settings.hooks;
+    if (hooks.PreToolUse !== void 0 && !Array.isArray(hooks.PreToolUse))
+      return { message: `SKIPPED ${LABEL}: "hooks.PreToolUse" in ${shownPath} is not a list; ${HOOK_BY_HAND}` };
+    hooks.PreToolUse ??= [];
+    const groups = hooks.PreToolUse;
+    if (listsGateHook(groups)) return { message: `${LABEL} already present (${shownPath})` };
+    groups.push({ matcher: "Bash", hooks: [{ type: "command", command: HOOK_COMMAND, timeout: 60 }] });
+    return {
+      content: `${JSON.stringify(settings, null, 2)}
+`,
+      message: `merged a Claude Code PreToolUse hook into ${shownPath} (other settings kept)`
+    };
+  }
+};
+
+// src/gate/agents/claude-code.ts
+var claudeCode = {
+  id: "claude-code",
+  // The fallback for the Claude-format command: its payloads carry no marker of
+  // their own, and the tools that also run it are detected first (index.ts).
+  detects: () => true,
+  shellCommand(payload) {
+    const { toolName, command } = readClaudeFormat(payload);
+    return (toolName ?? "Bash") === "Bash" ? command : null;
+  },
+  projectDir: (payload, env) => readClaudeFormat(payload).cwd ?? (env.CLAUDE_PROJECT_DIR || null),
+  projectHookFiles: [CLAUDE_SETTINGS]
+};
+
+// src/gate/agents/cursor.ts
+var cursor = {
+  id: "cursor",
+  // Only Cursor sends cursor_version, or calls its shell tool "Shell". Not the
+  // environment: Claude Code started from Cursor's terminal may inherit Cursor's variables.
+  detects: (payload) => isRecord(payload) && (typeof payload.cursor_version === "string" || payload.tool_name === "Shell"),
+  shellCommand(payload) {
+    const { toolName, command } = readClaudeFormat(payload);
+    return (toolName ?? "Shell") === "Shell" ? command : null;
+  },
+  // Cursor sets both variables to the same path. CLAUDE_PROJECT_DIR comes first,
+  // as it did before this adapter existed.
+  projectDir: (payload, env) => readClaudeFormat(payload).cwd ?? (env.CLAUDE_PROJECT_DIR || env.CURSOR_PROJECT_DIR || null),
+  projectHookFiles: [CLAUDE_SETTINGS]
+};
+
+// src/gate/agents/index.ts
+var AGENTS = [cursor, claudeCode];
+function resolveAgent(payload, env, requested) {
+  if (requested) return AGENTS.find((a) => a.id === requested) ?? null;
+  return AGENTS.find((a) => a.detects(payload, env)) ?? null;
+}
+var PROJECT_HOOK_FILES = [...new Set(AGENTS.flatMap((a) => a.projectHookFiles))];
+
 // src/gate/changes.ts
 import { mkdtempSync as mkdtempSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
@@ -55,48 +184,16 @@ import {
   writeFileSync
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
-
-// src/gate/shared.ts
-import { fileURLToPath } from "node:url";
-var GATE_VERSION = 3;
-var LEARNING = ".learning";
-var CHECKS_DIR = `${LEARNING}/checks`;
-var CONFIG_PATH = `${LEARNING}/config.json`;
-var GATE_REL = `${LEARNING}/gate.mjs`;
-var REPORT_INPUT = `${LEARNING}/report.local.json`;
-var GATE_ATTRIBUTES_LINE = `${GATE_REL} -text`;
-var SHELL_TOOL_NAMES = ["Bash", "Shell"];
-var ZERO_SHA = "0".repeat(40);
-var REGULAR_MODES = ["100644", "100755"];
-var GATE_FILES = [
-  CONFIG_PATH,
-  GATE_REL,
-  ".github/workflows/ownership-check.yml",
-  ".claude/settings.json",
-  ".github/CODEOWNERS"
-];
-var GateError = class extends Error {
-};
-var SELF = (() => {
-  try {
-    return fileURLToPath(import.meta.url);
-  } catch {
-    return "";
-  }
-})();
-var sorted = (xs) => [...xs].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
-var splitLines = (s) => {
-  const parts = s.split(/\r\n|\r|\n/);
-  if (parts.length && parts[parts.length - 1] === "") parts.pop();
-  return parts;
-};
-var VERSION_RE = /^\/\/ ownership-gate-version: (\d+)/m;
-var FEATURES_RE = /^\/\/ ownership-gate-features: (.*)$/m;
-
-// src/gate/files.ts
 var MAX_CONFIG_BYTES = 256 * 1024;
 var MAX_REPORT_BYTES = 4 * 1024 * 1024;
 var MAX_GATE_BYTES = 8 * 1024 * 1024;
+function readExisting(path, limit = MAX_CONFIG_BYTES) {
+  try {
+    return { text: readRepoFile(path, limit) };
+  } catch (e) {
+    return { unreadable: e.message };
+  }
+}
 function readRepoFile(path, limit) {
   const st = lstat(path);
   if (!st || st.isSymbolicLink() || !st.isFile())
@@ -521,6 +618,15 @@ function ciGateHasFeature(root, baseRef, rev, feature) {
   const header = revHasFile(root, baseRef, GATE_REL) ? gateHeader(root, baseRef) : gateHeader(root, rev);
   return (FEATURES_RE.exec(header)?.[1] ?? "").trim().split(/\s+/).includes(feature);
 }
+
+// src/gate/gate-files.ts
+var GATE_FILES = [
+  CONFIG_PATH,
+  GATE_REL,
+  ".github/workflows/ownership-check.yml",
+  ...PROJECT_HOOK_FILES.map((f) => f.path),
+  ".github/CODEOWNERS"
+];
 
 // src/gate/install-lines.ts
 import { readFileSync } from "node:fs";
@@ -966,47 +1072,6 @@ jobs:
 `;
 var CHECK_NAME = "Ownership check";
 
-// src/gate/claude-settings.ts
-var CLAUDE_HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
-var HOOK_BY_HAND = "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-claude-hook-by-hand";
-function mergeClaudeSettings(path) {
-  let settings = {};
-  if (lstat(path)) {
-    let raw;
-    try {
-      raw = readRepoFile(path, MAX_CONFIG_BYTES);
-    } catch (e) {
-      return `SKIPPED Claude hook: ${e.message}`;
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(raw || "{}");
-    } catch {
-      return `SKIPPED Claude hook: ${path} is not valid JSON; ${HOOK_BY_HAND}`;
-    }
-    if (!isRecord(parsed)) return `SKIPPED Claude hook: ${path} is not a JSON object; ${HOOK_BY_HAND}`;
-    settings = parsed;
-  }
-  if (settings.hooks !== void 0 && !isRecord(settings.hooks))
-    return `SKIPPED Claude hook: "hooks" in ${path} is not an object; ${HOOK_BY_HAND}`;
-  settings.hooks ??= {};
-  const hooks = settings.hooks;
-  if (hooks.PreToolUse !== void 0 && !Array.isArray(hooks.PreToolUse))
-    return `SKIPPED Claude hook: "hooks.PreToolUse" in ${path} is not a list; ${HOOK_BY_HAND}`;
-  hooks.PreToolUse ??= [];
-  const groups = hooks.PreToolUse;
-  for (const g of groups) {
-    for (const h of g?.hooks ?? []) {
-      if ((h?.command ?? "").includes("gate.mjs") && (h?.command ?? "").includes("claude-hook"))
-        return `Claude hook already present (${path})`;
-    }
-  }
-  groups.push({ matcher: "Bash", hooks: [{ type: "command", command: CLAUDE_HOOK_COMMAND, timeout: 60 }] });
-  atomicWrite(path, `${JSON.stringify(settings, null, 2)}
-`);
-  return `merged a Claude Code PreToolUse hook into ${path} (other settings kept)`;
-}
-
 // src/gate/commands.ts
 import { existsSync as existsSync2, unlinkSync as unlinkSync2 } from "node:fs";
 import { basename as basename2, dirname as dirname3, join as join8, resolve as resolve2 } from "node:path";
@@ -1194,6 +1259,34 @@ import { chmodSync as chmodSync2, existsSync as existsSync3, mkdirSync as mkdirS
 import { homedir as homedir2 } from "node:os";
 import { isAbsolute as isAbsolute2, join as join9, relative, resolve as resolve3, sep } from "node:path";
 
+// src/gate/hook-replies.ts
+var SILENT_ALLOW = { stdout: "", stderr: "", exitCode: 0 };
+function decisionReply(agent, decision) {
+  if (agent.formatDecision) return agent.formatDecision(decision);
+  return decision.allow ? SILENT_ALLOW : { stdout: "", stderr: `${decision.reason}
+`, exitCode: 2 };
+}
+function sessionContextReply(agent, lines) {
+  if (agent?.formatSessionContext) return agent.formatSessionContext(lines);
+  return JSON.stringify(
+    lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {}
+  );
+}
+
+// src/gate/project-hooks.ts
+function addProjectHook(path, file) {
+  const { content, message } = file.withGateHook(lstat(path) ? readExisting(path) : null, path);
+  if (content !== void 0) atomicWrite(path, content);
+  return message;
+}
+function projectHookRunsGate(path, file) {
+  try {
+    return file.runsGate(readRepoFile(path, MAX_CONFIG_BYTES));
+  } catch {
+    return false;
+  }
+}
+
 // src/gate/push-detect.ts
 var WRAPPERS = /* @__PURE__ */ new Set(["sudo", "doas", "env", "command", "builtin", "exec", "time", "nohup", "nice", "stdbuf"]);
 var WRAPPER_ARG_OPTS = /* @__PURE__ */ new Set(["-u", "-g", "-C", "-h", "-p", "-n", "-f", "-o", "-i", "-e"]);
@@ -1313,49 +1406,46 @@ function isPushCommand(command, depth = 0) {
 }
 
 // src/gate/hooks.ts
-function projectHasGateHook(root) {
-  try {
-    const settings = JSON.parse(readRepoFile(join9(root, ".claude", "settings.json"), MAX_CONFIG_BYTES));
-    const groups = settings?.hooks?.PreToolUse ?? [];
-    return groups.some(
-      (g) => (g.hooks ?? []).some((h) => (h.command ?? "").includes("gate.mjs") && (h.command ?? "").includes("claude-hook"))
-    );
-  } catch {
-    return false;
-  }
-}
-function claudeHook(stdinText, fromPlugin = false) {
-  let root;
+function readHookInput(stdinText, requested) {
   try {
     const payload = JSON.parse(stdinText || "{}");
-    const command = String(payload?.tool_input?.command ?? "");
-    if (!SHELL_TOOL_NAMES.includes(payload?.tool_name ?? "Bash") || !isPushCommand(command)) return 0;
-    root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
-    if (!lstat(join9(root, CONFIG_PATH))) return 0;
-    if (fromPlugin && projectHasGateHook(root)) return 0;
+    return { payload, agent: resolveAgent(payload, process.env, requested) };
   } catch {
-    return 0;
+    return { payload: void 0, agent: null };
+  }
+}
+function agentHook(stdinText, fromPlugin, requested) {
+  const { payload, agent } = readHookInput(stdinText, requested);
+  if (!agent) return SILENT_ALLOW;
+  const env = process.env;
+  const allow = decisionReply(agent, { allow: true });
+  let root;
+  try {
+    const command = agent.shellCommand(payload);
+    if (command === null || !isPushCommand(command)) return allow;
+    root = repoRoot(agent.projectDir(payload, env) ?? process.cwd());
+    if (!lstat(join9(root, CONFIG_PATH))) return allow;
+    if (fromPlugin && agent.projectHookFiles.some((f) => projectHookRunsGate(join9(root, f.path), f))) return allow;
+  } catch {
+    return allow;
   }
   let passed, problems, mode;
   try {
     [passed, problems, mode] = verify(root);
   } catch (e) {
-    if (!(e instanceof GateError)) return 0;
+    if (!(e instanceof GateError)) return allow;
     [passed, problems, mode] = [false, [e.message], "required"];
   }
-  if (passed || mode !== "required") return 0;
+  if (passed || mode !== "required") return allow;
   const pending = uncommittedReport(root);
   if (pending) {
-    process.stderr.write(
-      `Blocked by the ownership gate: the report ${pending} is saved but not committed. Commit it first, then push as a separate command. This hook checks the branch before a command runs, so a push in the same command as the commit is blocked too.
-`
-    );
-    return 2;
+    return decisionReply(agent, {
+      allow: false,
+      reason: `Blocked by the ownership gate: the report ${pending} is saved but not committed. Commit it first, then push as a separate command. This hook checks the branch before a command runs, so a push in the same command as the commit is blocked too.`
+    });
   }
-  process.stderr.write(`Blocked by the ownership gate:
-- ${problems.join("\n- ")}
-`);
-  return 2;
+  return decisionReply(agent, { allow: false, reason: `Blocked by the ownership gate:
+- ${problems.join("\n- ")}` });
 }
 var MIN_NODE = 20;
 var NODE_NOTE = "Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of Claude Code.";
@@ -1371,19 +1461,19 @@ var UNTRUSTED_GATE_NOTE = {
   "repo-crlf": `This repo's ${GATE_REL} differs from the plugin's copy only in its line endings: git's core.autocrlf checked it out with CRLF. The local pre-push hook trusts only a byte-identical copy, so it was NOT installed automatically. Tell the user in one line to run \`git -c core.autocrlf=false checkout -- ${GATE_REL}\`, then \`node ${GATE_REL} install\`, which adds \`${GATE_ATTRIBUTES_LINE}\` to .gitattributes so it stays that way.`,
   "plugin-crlf": `The plugin's own copy of gate.mjs has CRLF line endings (git's core.autocrlf, in an install from before Comprende 0.2.1), so it differs from this repo's ${GATE_REL} only in its line endings, and the local pre-push hook was NOT installed automatically. Tell the user in one line to update the plugin: \`/plugin marketplace update comprende\`.`
 };
-function sessionStart(stdinText) {
+function sessionStart(stdinText, requested) {
+  const { payload, agent } = readHookInput(stdinText, requested);
   const lines = [];
   const node = process.versions.node;
   if (Number.parseInt(node, 10) < MIN_NODE)
     lines.push(`Comprende is running on Node.js ${node}, which is too old. ${NODE_NOTE}`);
   if (process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
-  lines.push(...gatedRepoContext(stdinText));
-  return lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {};
+  if (agent) lines.push(...gatedRepoContext(agent, payload));
+  return sessionContextReply(agent, lines);
 }
-function gatedRepoContext(stdinText) {
+function gatedRepoContext(agent, payload) {
   try {
-    const payload = JSON.parse(stdinText || "{}");
-    const root = repoRoot(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+    const root = repoRoot(agent.projectDir(payload, process.env) ?? process.cwd());
     if (!lstat(join9(root, CONFIG_PATH))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];
@@ -1588,7 +1678,7 @@ function install(repo, upgrade = false, owner) {
     atomicWrite(wf, WORKFLOW);
     done.push(`wrote ${wfRel}`);
   }
-  done.push(mergeClaudeSettings(join11(root, ".claude", "settings.json")));
+  for (const file of PROJECT_HOOK_FILES) done.push(addProjectHook(join11(root, file.path), file));
   for (const { file, line } of INSTALL_LINES) done.push(addInstallLine(root, file, line));
   done.push(...installHooks(root));
   done.push(
@@ -1702,14 +1792,16 @@ Commands (run from inside the repo, or pass --repo):
                  or --input .learning/report.local.json (deleted after a successful save)
   verify         Check a commit (default HEAD) against its report \u2014 used by CI   [--json]
   pre-push       Git pre-push hook entry point (reads refs from stdin)
-  claude-hook    Claude Code PreToolUse hook entry point (reads JSON from stdin)
-  session-start  Claude Code SessionStart hook (plugin): the always-on note; in gated repos, the git hook
-  install        Add the gate, config, CI workflow, Claude hook and git hook to a repo
+  agent-hook     PreToolUse hook entry point for AI tools (reads JSON from stdin)   [--agent ID]
+  claude-hook    The same as agent-hook. install and the plugin still call this name, which older gates know
+  session-start  SessionStart hook (plugin): the always-on note; in gated repos, the git hook   [--agent ID]
+  install        Add the gate, config, CI workflow, the AI tools' repo hook files and the git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
   protect        Create the GitHub ruleset that makes the check required (gh; dry run by default)
   version        Print the gate version
 
 Common options: --repo PATH  --base REF  --branch NAME
+--agent ID: the AI tool running the hook (${AGENTS.map((a) => a.id).join(", ")}). Without it, the payload tells.
 `;
 function readStdin() {
   const chunks = [];
@@ -1733,7 +1825,7 @@ function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 var FLAGS = /* @__PURE__ */ new Set(["json", "from-plugin", "upgrade", "apply", "no-code-owners", "help"]);
-var VALUE_OPTS = /* @__PURE__ */ new Set(["repo", "base", "branch", "input", "rev", "labels-json", "owner", "approvals"]);
+var VALUE_OPTS = /* @__PURE__ */ new Set(["repo", "base", "branch", "input", "rev", "labels-json", "owner", "approvals", "agent"]);
 function parseArgs(argv) {
   const [cmd = "", ...tail] = argv;
   const opts = {};
@@ -1775,8 +1867,21 @@ function testCall(fn, a) {
     }
     case "read_report":
       return readReport(repoRoot(s(0)), String(a[1]), s(2));
-    case "merge_claude_settings":
-      return mergeClaudeSettings(String(a[0]));
+    case "merge_claude_settings": {
+      const file = PROJECT_HOOK_FILES.find((f) => f.path === ".claude/settings.json");
+      return file ? addProjectHook(String(a[0]), file) : null;
+    }
+    case "resolve_agent": {
+      const env = a[1] ?? {};
+      let payload;
+      try {
+        payload = JSON.parse(String(a[0]));
+      } catch {
+        return null;
+      }
+      const agent = resolveAgent(payload, env, s(2));
+      return agent && { id: agent.id, command: agent.shellCommand(payload), projectDir: agent.projectDir(payload, env) };
+    }
     case "is_push_command":
       return isPushCommand(String(a[0]));
     case "is_plumbing":
@@ -1883,10 +1988,15 @@ ${HELP}`);
       }
       case "pre-push":
         return prePush(readStdin(), o("repo"));
-      case "claude-hook":
-        return claudeHook(readStdin(), Boolean(opts["from-plugin"]));
+      case "agent-hook":
+      case "claude-hook": {
+        const reply = agentHook(readStdin(), Boolean(opts["from-plugin"]), o("agent"));
+        process.stdout.write(reply.stdout);
+        process.stderr.write(reply.stderr);
+        return reply.exitCode;
+      }
       case "session-start":
-        out(JSON.stringify(sessionStart(readStdin())));
+        out(sessionStart(readStdin(), o("agent")));
         return 0;
       case "install":
       case "install-hooks":
