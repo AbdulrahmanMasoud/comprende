@@ -98,6 +98,8 @@ It is on when `.learning/config.json` says `"mode": "required"`, offered when `s
 
 When the gate is on, commit the report first, then push in a separate command: the push hook checks the branch before a command runs, so `git commit … && git push` is blocked.
 
+**No session-start note?** In a repo with `.learning/config.json` whose mode isn't `off`, the session starts with Comprende's note "This repository uses the ownership gate". If this session didn't get it, Comprende's hooks probably didn't run, so the push isn't guarded either. Tell the user in one line that the hooks probably need trusting again (in Codex: `/hooks`, which it asks for again after every plugin update).
+
 ## User controls
 
 Recognize natural phrasing in any language:

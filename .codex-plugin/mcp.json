@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "comprende": {
+      "command": "node",
+      "args": ["dist/server.mjs"],
+      "cwd": "."
+    }
+  }
+}

@@ -578,7 +578,7 @@ So each push is checked once, and each session gets each line once. `test/agents
 | `shellCommand` | `tool_input.command` when `tool_name` is `Bash`, read by `claude-format.ts` |
 | `projectDir` | the payload's `cwd`, which is the command's folder |
 | `names` | Codex, Codex |
-| `pluginUpdateHint` | `codex plugin marketplace upgrade comprende`, then trust the hooks again in `/hooks` (to confirm in the plugin PR) |
+| `pluginUpdateHint` | `codex plugin marketplace upgrade comprende`, then trust the hooks again in `/hooks`. Tested: the upgrade also updates the installed plugin (0.2.3 to 0.3.0, from this repo on GitHub) |
 | `projectHookFiles` | `.codex/hooks.json`, with `alwaysRuns: false`: Codex runs it only once the project and each hook are trusted |
 | `eventId` | the tool call's `tool_use_id`, or the session's `session_id` |
 | `formatDecision`, `formatSessionContext` | the defaults |
@@ -589,7 +589,7 @@ So each push is checked once, and each session gets each line once. `test/agents
   - `SessionStart`: `node "${PLUGIN_ROOT}/dist/gate.mjs" session-start --from-plugin --agent codex`
   - `PreToolUse`, `matcher: "Bash"`: `node "${PLUGIN_ROOT}/dist/gate.mjs" agent-hook --from-plugin --agent codex`
   - plain `node` lines, since Codex runs hooks in PowerShell on Windows. Without `node`, the command fails with an exit code other than 2, and Codex lets the tool run.
-- **A Codex MCP config** that starts the server. `${CLAUDE_PLUGIN_ROOT}` isn't expanded there. A relative `cwd` resolves against the plugin's folder, so `"command": "node", "args": ["./dist/server.mjs"], "cwd": "."` should work (to test in the plugin PR).
+- **A Codex MCP config,** `.codex-plugin/mcp.json`, that starts the server. `${CLAUDE_PLUGIN_ROOT}` isn't expanded there, but a relative `cwd` resolves against the plugin's folder: `"command": "node", "args": ["dist/server.mjs"], "cwd": "."`. Tested: Codex's app server lists all 10 tools, with no sign-in needed.
 
 **What `install` writes for teammates on Codex:** `.codex/hooks.json`, behind a `codex-hooks` feature, like `.cursor/hooks.json`. Its pros and cons, to decide (below):
 - **For:**
@@ -754,7 +754,7 @@ The maintainer settled the open questions on 2026-11-11:
 ### Open questions for 0.4.0
 
 1. **Codex: should `install` write `.codex/hooks.json`?** It survives plugin updates and works without the plugin. But each developer trusts the project and the hooks once, and the command needs `git rev-parse` to find the gate from a subfolder.
-2. **Codex: re-trusting after every update.** There's no way around it short of `--dangerously-bypass-hook-trust`, which is for automation, not users. A session-start message can't say so, since untrusted hooks don't run. The skill loads without trust, so proposal: the skill and the README say "after an update, trust Comprende's hooks again in `/hooks`". Also to find out: whether the MCP server needs approval again after an update, and whether `codex plugin marketplace upgrade` updates the installed plugin or only the marketplace.
+2. **Codex: re-trusting after every update.** There's no way around it short of `--dangerously-bypass-hook-trust`, which is for automation, not users. A session-start message can't say so, since untrusted hooks don't run. The skill loads without trust, so proposal: the skill and the README say "after an update, trust Comprende's hooks again in `/hooks`". Decided: yes, and the skill now says so when a gated repo's session got no session-start note. Found since: `codex plugin marketplace upgrade` updates the installed plugin too (tested). Still to find out: whether the MCP server needs approval again after an update.
 3. **Antigravity: plugin files at this repo's root.** A `hooks.json` and an `mcp_config.json`, maybe a `rules/` folder: Antigravity reads them only there.
 4. **Antigravity: the always-on line from a plugin rule** (`rules/AGENTS.md`) instead of `SessionStart`? A rule doesn't depend on hooks running, which is disputed in the IDE.
 5. **Antigravity: the CLI first?** We can test only the CLI, and the IDE may not run hooks.

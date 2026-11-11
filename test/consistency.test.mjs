@@ -307,28 +307,156 @@ test("without node, the Cursor plugin's hooks fail open", (t) => {
   }
 });
 
-// On Windows, Cursor runs hook commands in PowerShell, piping the payload in.
+/** The hook commands in a Codex-format (Claude-format) hooks file, by event. */
+const claudeFormatCommands = (hooks) =>
+  Object.entries(hooks).flatMap(([event, groups]) =>
+    groups.flatMap((g) => g.hooks.map((h) => ({ event, matcher: g.matcher, ...h }))),
+  );
+
+test("the Codex plugin shares the skill, has its own hooks, and its MCP config needs no variable", () => {
+  const codex = json(".codex-plugin/plugin.json");
+  assert.equal(codex.name, json(".claude-plugin/plugin.json").name);
+  assert.equal(codex.skills, "./skills/");
+  for (const rel of [codex.skills, codex.hooks, codex.mcpServers, codex.interface.logo, "skills/comprende/SKILL.md"])
+    assert.ok(existsSync(join(REPO, rel)), rel);
+  // Only the fields Codex reads (codex-rs/core-plugins/src/manifest.rs at rust-v0.167.1).
+  const fields = [
+    "name",
+    "version",
+    "description",
+    "keywords",
+    "skills",
+    "mcpServers",
+    "apps",
+    "hooks",
+    "interface",
+    "extensions",
+  ];
+  for (const key of Object.keys(codex)) assert.ok(fields.includes(key), `${key} isn't a Codex manifest field`);
+  // Codex doesn't expand ${CLAUDE_PLUGIN_ROOT} in a plugin's MCP config, but it
+  // resolves a relative cwd against the plugin's folder (docs/agents.md, "Codex: what we found").
+  const server = json(codex.mcpServers).mcpServers.comprende;
+  assert.deepEqual(server, { command: "node", args: ["dist/server.mjs"], cwd: "." });
+  assert.ok(existsSync(join(REPO, server.args[0])));
+});
+
+test("the Codex plugin's hook commands are plain node lines with --agent codex", () => {
+  const entries = claudeFormatCommands(json(json(".codex-plugin/plugin.json").hooks).hooks);
+  assert.deepEqual(entries.map((h) => h.event).sort(), ["PreToolUse", "SessionStart"]);
+  for (const h of entries) {
+    // One program and its arguments, so PowerShell runs it as sh does. Codex
+    // replaces ${PLUGIN_ROOT} as text before any shell runs.
+    assert.match(
+      h.command,
+      /^node "\$\{PLUGIN_ROOT\}\/dist\/gate\.mjs" (session-start|agent-hook) --from-plugin --agent codex$/,
+    );
+    assert.ok(h.timeout > 0);
+  }
+  assert.equal(entries.find((h) => h.event === "PreToolUse").matcher, "Bash");
+});
+
+test("without node, the Codex plugin's hooks fail open", (t) => {
+  const emptyPath = tmp(t);
+  for (const h of claudeFormatCommands(json(json(".codex-plugin/plugin.json").hooks).hooks)) {
+    const command = h.command.replaceAll("${PLUGIN_ROOT}", REPO);
+    // No input: without node the shell exits before reading it, and writing it would race (EPIPE).
+    const r = spawnSync("/bin/sh", ["-c", command], {
+      cwd: REPO,
+      stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf8",
+      env: { PATH: emptyPath },
+    });
+    assert.notEqual(r.status, 2, `${h.event}: ${r.stderr}`);
+    assert.equal(r.stdout, "", h.event);
+  }
+});
+
+// On Windows, Cursor and Codex run hook commands in PowerShell, piping the payload in.
 // GitHub's runners have pwsh, so this runs in CI. Locally it's skipped without it.
 const PWSH = spawnSync("/bin/sh", ["-c", "command -v pwsh"], { encoding: "utf8" }).stdout.trim();
 
-test("the Cursor plugin's hook commands run in PowerShell, and fail open there without node", { skip: !PWSH }, (t) => {
-  const { hooks } = json(json(".cursor-plugin/plugin.json").hooks);
-  const emptyPath = tmp(t);
-  const nodeDir = dirname(NODE);
-  for (const [event, [h]] of Object.entries(hooks)) {
-    const command = `$input | ${h.command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO)}`;
-    const run = (path, input) =>
-      spawnSync(PWSH, ["-NoProfile", "-NonInteractive", "-Command", command], {
-        cwd: REPO,
-        // Without node there's nothing to read the input, and writing it would race (EPIPE).
-        ...(input === undefined ? { stdio: ["ignore", "pipe", "pipe"] } : { input }),
-        encoding: "utf8",
-        env: { ...ENV, PATH: path },
-      });
-    const ok = run(`${nodeDir}${delimiter}${process.env.PATH}`, "{}");
-    assert.equal(ok.status, 0, `${event}: ${ok.stderr}`);
-    const noNode = run(emptyPath);
-    assert.notEqual(noNode.status, 2, `${event}: ${noNode.stderr}`);
-    assert.notEqual(noNode.status, 0, `${event} should report that node is missing`);
+for (const [tool, manifest, variable, commandsOf] of [
+  ["Cursor", ".cursor-plugin/plugin.json", "${CURSOR_PLUGIN_ROOT}", (hooks) => Object.values(hooks).flat()],
+  ["Codex", ".codex-plugin/plugin.json", "${PLUGIN_ROOT}", claudeFormatCommands],
+]) {
+  test(`the ${tool} plugin's hook commands run in PowerShell, and fail open there without node`, {
+    skip: !PWSH,
+  }, (t) => {
+    const emptyPath = tmp(t);
+    const nodeDir = dirname(NODE);
+    for (const h of commandsOf(json(json(manifest).hooks).hooks)) {
+      const command = `$input | ${h.command.replaceAll(variable, REPO)}`;
+      const run = (path, input) =>
+        spawnSync(PWSH, ["-NoProfile", "-NonInteractive", "-Command", command], {
+          cwd: REPO,
+          // Without node there's nothing to read the input, and writing it would race (EPIPE).
+          ...(input === undefined ? { stdio: ["ignore", "pipe", "pipe"] } : { input }),
+          encoding: "utf8",
+          env: { ...ENV, PATH: path },
+        });
+      const ok = run(`${nodeDir}${delimiter}${process.env.PATH}`, "{}");
+      assert.equal(ok.status, 0, `${h.command}: ${ok.stderr}`);
+      const noNode = run(emptyPath);
+      assert.notEqual(noNode.status, 2, `${h.command}: ${noNode.stderr}`);
+      assert.notEqual(noNode.status, 0, `${h.command} should report that node is missing`);
+    }
+  });
+}
+
+test("each tool picks up only its own manifest and hooks", () => {
+  // Where each tool looks for a plugin's manifest, first match wins, and where it
+  // looks for hooks when the manifest names none. From each tool's docs or source,
+  // as listed in docs/agents.md.
+  const tools = {
+    "Claude Code": { manifests: [".claude-plugin/plugin.json"], defaultHooks: "hooks/hooks.json", agent: null },
+    Cursor: {
+      manifests: [".cursor-plugin/plugin.json", "plugin.json"],
+      defaultHooks: "hooks/hooks.json",
+      agent: "cursor",
+    },
+    Codex: {
+      manifests: [
+        "plugin.json",
+        ".codex-plugin/plugin.json",
+        ".claude-plugin/plugin.json",
+        ".cursor-plugin/plugin.json",
+      ],
+      defaultHooks: "hooks/hooks.json",
+      agent: "codex",
+    },
+    Antigravity: {
+      manifests: [".antigravity-plugin/plugin.json", "plugin.json", ".gemini-plugin/plugin.json"],
+      defaultHooks: "hooks.json",
+      agent: "antigravity",
+    },
+  };
+  // A root plugin.json would be read by Cursor, Codex and Antigravity alike.
+  assert.ok(!existsSync(join(REPO, "plugin.json")), "no plugin.json at the root");
+  const own = {
+    "Claude Code": ".claude-plugin",
+    Cursor: ".cursor-plugin",
+    Codex: ".codex-plugin",
+    Antigravity: ".antigravity-plugin",
+  };
+  const hooksFiles = new Map();
+  for (const [tool, { manifests, defaultHooks, agent }] of Object.entries(tools)) {
+    const found = manifests.find((m) => existsSync(join(REPO, m)));
+    // Antigravity's comes in 0.5.0: until then it finds none of these.
+    if (!found) {
+      assert.equal(tool, "Antigravity", `${tool} finds no manifest`);
+      continue;
+    }
+    assert.equal(found, `${own[tool]}/plugin.json`, `${tool} reads another tool's manifest`);
+    const named = json(found).hooks;
+    const hooksFile = named ? named.replace(/^\.\//, "") : defaultHooks;
+    assert.ok(!hooksFiles.has(hooksFile), `${tool} and ${hooksFiles.get(hooksFile)} read the same hooks file`);
+    hooksFiles.set(hooksFile, tool);
+    // Every gate command in it says which tool runs it (Claude Code's detects instead).
+    const text = readFileSync(join(REPO, hooksFile), "utf8");
+    const agents = [...text.matchAll(/gate\.mjs\\?"? [a-z-]+ (?:--from-plugin )?(?:--agent ([a-z-]+))?/g)].map(
+      (m) => m[1] ?? null,
+    );
+    assert.ok(agents.length > 0, `${hooksFile} runs the gate`);
+    for (const a of agents) assert.equal(a, agent, `${hooksFile}: a hook for ${a ?? "no --agent"}`);
   }
 });
