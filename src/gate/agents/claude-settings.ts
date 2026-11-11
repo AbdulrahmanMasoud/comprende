@@ -4,7 +4,8 @@
 
 import { isRecord } from "../../util.js";
 import { GATE_REL } from "../shared.js";
-import type { ProjectHookFile } from "./types.js";
+import { isGateCommand } from "./gate-command.js";
+import type { HookEvent, ProjectHookFile } from "./types.js";
 
 // Without node, exit 0: any other non-2 code would still be shown as a hook error on every Bash call.
 // It stays `claude-hook`, not `agent-hook`: the plugin's hook in Comprende 0.2.x
@@ -17,31 +18,29 @@ const HOOK_BY_HAND =
 
 const LABEL = "Claude hook";
 
-/** A command that runs this gate's PreToolUse entry point, under either name. */
-const isGateHookCommand = (command: unknown): boolean =>
-  typeof command === "string" &&
-  command.includes("gate.mjs") &&
-  (command.includes("claude-hook") || command.includes("agent-hook"));
+/** Claude Code's name for each of the gate's events. */
+const EVENT_KEY: Record<HookEvent, string> = { shell: "PreToolUse", sessionStart: "SessionStart" };
 
-/** Does a PreToolUse list have the gate's hook? Entries of a shape we don't know
- *  are skipped, not trusted. */
-const listsGateHook = (groups: unknown[]): boolean =>
+/** Does a list of Claude Code hook groups run the gate? Entries of a shape we
+ *  don't know are skipped, not trusted. */
+const listsGateHook = (groups: unknown[], event: HookEvent): boolean =>
   groups.some(
-    (g) => isRecord(g) && Array.isArray(g.hooks) && g.hooks.some((h) => isRecord(h) && isGateHookCommand(h.command)),
+    (g) => isRecord(g) && Array.isArray(g.hooks) && g.hooks.some((h) => isRecord(h) && isGateCommand(h.command, event)),
   );
 
 export const CLAUDE_SETTINGS: ProjectHookFile = {
   path: ".claude/settings.json",
+  agentFlag: null,
 
-  runsGate(content) {
+  runsGate(content, event) {
     let settings: unknown;
     try {
       settings = JSON.parse(content);
     } catch {
       return false;
     }
-    const groups = isRecord(settings) && isRecord(settings.hooks) ? settings.hooks.PreToolUse : undefined;
-    return Array.isArray(groups) && listsGateHook(groups);
+    const groups = isRecord(settings) && isRecord(settings.hooks) ? settings.hooks[EVENT_KEY[event]] : undefined;
+    return Array.isArray(groups) && listsGateHook(groups, event);
   },
 
   withGateHook(existing, shownPath) {
@@ -66,7 +65,7 @@ export const CLAUDE_SETTINGS: ProjectHookFile = {
       return { message: `SKIPPED ${LABEL}: "hooks.PreToolUse" in ${shownPath} is not a list; ${HOOK_BY_HAND}` };
     hooks.PreToolUse ??= [];
     const groups = hooks.PreToolUse as unknown[];
-    if (listsGateHook(groups)) return { message: `${LABEL} already present (${shownPath})` };
+    if (listsGateHook(groups, "shell")) return { message: `${LABEL} already present (${shownPath})` };
     groups.push({ matcher: "Bash", hooks: [{ type: "command", command: HOOK_COMMAND, timeout: 60 }] } as never);
     return {
       content: `${JSON.stringify(settings, null, 2)}\n`,

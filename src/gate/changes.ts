@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { dict, get, isRecord, own } from "../util.js";
 import { type Config, isSensitive, needsNoQuestions } from "./config.js";
 import { ciGateHasFeature } from "./features.js";
-import { GATE_FILES } from "./gate-files.js";
+import { GATE_FILES, gateFileFeature } from "./gate-files.js";
 import {
   decodePath,
   git,
@@ -45,9 +45,13 @@ type Changes = Record<string, Change>;
 
 /** Gate-control files (CODEOWNERS-protected) by path; the team's notes and
  *  reports only as plain, non-executable files — a symlink, executable or
- *  submodule at those paths is a normal change like any other. */
-export function isPlumbing(path: string, mode = "100644"): boolean {
-  if (GATE_FILES.includes(path)) return true;
+ *  submodule at those paths is a normal change like any other. A gate file that
+ *  came with a later feature counts only when the CI gate knows it (`ciGateHas`). */
+export function isPlumbing(path: string, mode: string, ciGateHas: (feature: string) => boolean): boolean {
+  if (GATE_FILES.includes(path)) {
+    const feature = gateFileFeature(path);
+    return feature === undefined || ciGateHas(feature);
+  }
   // Exactly this path and only as a plain file: a pattern would let code hide in look-alikes.
   if (path === REPORT_INPUT) return mode === "100644";
   return PLUMBING_RE.test(path) && (mode === "100644" || mode === "000000");
@@ -91,7 +95,8 @@ export function collectChanges(root: string, base: string, rev?: string | null):
     const path = decodePath(fields[i + 1]);
     i += 2;
     const change = { mode: newmode, blob: newsha, base: oldsha, base_mode: oldmode };
-    if (!isPlumbing(path, newmode) && !isInstallLineEdit(root, path, change, ciGateHas)) changes[path] = change;
+    if (!isPlumbing(path, newmode, ciGateHas) && !isInstallLineEdit(root, path, change, ciGateHas))
+      changes[path] = change;
   }
   return [Object.fromEntries(sorted(Object.keys(changes)).map((k) => [k, changes[k]])), untracked, mb];
 }

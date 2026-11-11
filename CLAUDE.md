@@ -17,6 +17,7 @@ npm run format                    # apply Biome's formatting and safe fixes
 npm run build                     # rebuild dist/ and skills/comprende/scripts/
 npm test                          # tests only
 node tools/release.mjs check      # the version files agree with the newest CHANGELOG entry
+node tools/e2e-cursor.mjs --out <folder>   # the real Cursor CLI, end to end (needs a Cursor login)
 claude plugin validate ./.claude-plugin/plugin.json
 claude plugin validate ./.claude-plugin/marketplace.json
 actionlint                        # the GitHub workflows
@@ -25,7 +26,7 @@ actionlint                        # the GitHub workflows
 ## Layout
 
 - `.claude-plugin/`: `plugin.json`, `marketplace.json` (`source: "."`), `icon.png`
-- `hooks/hooks.json`: SessionStart (`gate.mjs session-start`), PreToolUse on Bash (`gate.mjs claude-hook --from-plugin`)
+- `hooks/hooks.json`: SessionStart (`gate.mjs session-start --from-plugin`), PreToolUse on Bash (`gate.mjs claude-hook --from-plugin`)
 - `.cursor-plugin/`: `plugin.json` (the same skill and MCP server, `hooks/cursor-hooks.json`) and `marketplace.json`. `hooks/cursor-hooks.json`: Cursor's format, plain `node "${CURSOR_PLUGIN_ROOT}/dist/gate.mjs" … --agent cursor` lines with no shell syntax, since Cursor runs hooks in PowerShell on Windows
 - `.mcp.json`: the `comprende` MCP server (`dist/server.mjs`)
 - `skills/comprende/SKILL.md` plus `references/` (signals, formats, examples, memory, ownership-check)
@@ -35,9 +36,10 @@ actionlint                        # the GitHub workflows
   - `git.ts` (safe git runner, temp index, inert repo config), `config.ts` (config, validation, rules from the base)
   - `changes.ts` (fingerprints, plumbing, 3-way replay, states, small changes), `report.ts` (the report file)
   - `commands.ts` (status, save, verify), `push-detect.ts`, `hooks.ts`, `ci-summary.ts` (the reviewer summary, in markdown), `cli.ts`
+  - `hook-copies.ts` (which copy of the gate's hook speaks, when several run on one event), `hook-claims.ts` (the claims it uses, in a private temp folder)
   - `install.ts` (writes the gate's files into a repo), `codeowners.ts` (CODEOWNERS entries for the gate files), `run.ts` (spawning a program without a shell), `test-hooks.ts` (`__test`, the internals the test suite calls)
   - `gate-files.ts` (the files that control the gate), `project-hooks.ts` (safe reads and writes of the agents' repo-level hook files)
-  - `agents/`: one adapter per AI tool behind one interface. `types.ts` (the `Agent` interface), `index.ts` (the registry and the resolve step), `claude-code.ts`, `cursor.ts`, and what both use: `claude-format.ts` (the payload) and `claude-settings.ts` (the `.claude/settings.json` hook file). `hook-replies.ts` holds the core's default replies. How to add a tool: CONTRIBUTING.md, "Adding an AI tool"
+  - `agents/`: one adapter per AI tool behind one interface. `types.ts` (the `Agent` interface), `index.ts` (the registry and the resolve step), `claude-code.ts`, `cursor.ts`, and what both use: `claude-format.ts` (the payload) and `claude-settings.ts` (the `.claude/settings.json` hook file), plus `cursor-hooks.ts` (the `.cursor/hooks.json` hook file). `gate-command.ts` tells whether a hook file's command runs the gate. `hook-replies.ts` holds the core's default replies How to add a tool: CONTRIBUTING.md, "Adding an AI tool"
   - `platforms/`: one adapter per git platform behind one interface. `types.ts` (the `Platform` interface), `index.ts` (the registry, the repo's platform and the CI's), `github.ts` (the Actions workflow, the job summary and annotations, CODEOWNERS, the ruleset through `gh`). How to add a platform: CONTRIBUTING.md, "Adding a git platform"
 - `src/store/`: the memory store. `profile.ts` (the learner profile), `project.ts` (`.learning/` map and decisions), `common.ts`
 - `src/server.ts`: the MCP server (thin: tools in, store or gate out). `src/learning.ts`: the skill's file-only helper
@@ -51,6 +53,7 @@ actionlint                        # the GitHub workflows
   - `workflows/windows.yml`: "Windows (experimental)", the tests on Windows. Not required, and never on PRs (see CONTRIBUTING.md)
   - `dependabot.yml`, the PR template, and the issue templates
 - `tools/release.mjs`: the version check and the release notes, for both workflows
+- `tools/e2e-cursor.mjs`: the end-to-end run in the real Cursor CLI. By hand, since it needs a Cursor login: CONTRIBUTING.md, "Testing in Cursor"
 - `CONTRIBUTING.md`: setup, the workflow, the code rules, layout, tests, the demo, releasing
 - `biome.json`: formatting and lint (Markdown is left alone). `build.mjs`: the bundler.
 - `.gitattributes`: keeps `dist/` and `skills/comprende/scripts/` byte for byte on every platform, since SessionStart compares the repo's `gate.mjs` with `dist/gate.mjs` byte for byte

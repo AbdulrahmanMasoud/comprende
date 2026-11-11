@@ -68,7 +68,8 @@ export function testCall(fn: string, a: unknown[]): unknown {
     case "is_push_command":
       return isPushCommand(String(a[0]));
     case "is_plumbing":
-      return isPlumbing(String(a[0]), a[1] === undefined ? undefined : String(a[1]));
+      // As with a CI gate that knows every feature.
+      return isPlumbing(String(a[0]), a[1] === undefined ? "100644" : String(a[1]), () => true);
     case "is_sensitive":
       return isSensitive(String(a[0]), String(a[1]), a[2] as Config);
     case "md_safe":

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "command -v node >/dev/null 2>&1 || { printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende could not start: node is not on PATH. Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of the app (Claude Code or Cursor).\"}}'; exit 0; }; node \"${CLAUDE_PLUGIN_ROOT}/dist/gate.mjs\" session-start || printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende could not start: this Node.js could not run it. Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of the app (Claude Code or Cursor).\"}}'",
+            "command": "command -v node >/dev/null 2>&1 || { printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende could not start: node is not on PATH. Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of the app (Claude Code or Cursor).\"}}'; exit 0; }; node \"${CLAUDE_PLUGIN_ROOT}/dist/gate.mjs\" session-start --from-plugin || printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende could not start: this Node.js could not run it. Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of the app (Claude Code or Cursor).\"}}'",
             "timeout": 30
           }
         ]

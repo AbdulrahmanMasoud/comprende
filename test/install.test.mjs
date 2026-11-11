@@ -408,3 +408,76 @@ test("install says when the gate differs only in line endings, and which side ha
   assert.match(pluginCrlf, /this gate's own CRLF line endings.*update the plugin/);
   assert.equal(read(dev, REPO_GATE), lf);
 });
+
+test("install writes .cursor/hooks.json with plain node commands, keeps other hooks, and adds them once", (t) => {
+  const { dev } = setup(t);
+  const fresh = JSON.parse(read(dev, ".cursor/hooks.json"));
+  assert.equal(fresh.version, 1);
+  assert.deepEqual(fresh.hooks.preToolUse, [
+    { matcher: "Shell", command: "node .learning/gate.mjs agent-hook --agent cursor", timeout: 60, failClosed: false },
+  ]);
+  assert.deepEqual(fresh.hooks.sessionStart, [
+    { command: "node .learning/gate.mjs session-start --from-repo --agent cursor", timeout: 30, failClosed: false },
+  ]);
+  // A file with the team's own hooks: they stay, and the gate's are added after them.
+  const theirs = {
+    version: 1,
+    hooks: { preToolUse: [{ command: "./lint.sh" }], afterFileEdit: [{ command: "./fmt.sh" }] },
+  };
+  write(dev, ".cursor/hooks.json", JSON.stringify(theirs));
+  const lines = gate.install(dev);
+  assert.ok(
+    lines.some((l) => l.startsWith("merged the gate's Cursor hooks into")),
+    lines.join("\n"),
+  );
+  const merged = JSON.parse(read(dev, ".cursor/hooks.json"));
+  assert.deepEqual(merged.hooks.afterFileEdit, [{ command: "./fmt.sh" }]);
+  assert.equal(merged.hooks.preToolUse[0].command, "./lint.sh");
+  assert.equal(merged.hooks.preToolUse.length, 2);
+  // Again: nothing to add.
+  const again = read(dev, ".cursor/hooks.json");
+  assert.ok(gate.install(dev).some((l) => l.startsWith("Cursor hooks already present")));
+  assert.equal(read(dev, ".cursor/hooks.json"), again);
+});
+
+test("install leaves a .cursor/hooks.json of a shape it doesn't know untouched", (t) => {
+  const { dev } = setup(t);
+  for (const body of ['{"hooks": []}', '{"hooks": {"preToolUse": {"command": "x"}}}', "not json", "[]"]) {
+    write(dev, ".cursor/hooks.json", body);
+    const line = gate.install(dev).find((l) => l.includes("Cursor hooks"));
+    assert.match(line ?? "", /^SKIPPED Cursor hooks: .*add the hooks by hand/, body);
+    assert.equal(read(dev, ".cursor/hooks.json"), body);
+  }
+});
+
+test("install --upgrade adds .cursor/hooks.json, which needs no report only once the gate CI runs knows it", (t) => {
+  const { dev } = setup(t);
+  const olderGate = read(dev, REPO_GATE).replace(
+    /^\/\/ ownership-gate-features: .*$/m,
+    "// ownership-gate-features: small-change gitattributes",
+  );
+  // main runs a gate from before Cursor support (0.2.x), and has no .cursor/hooks.json
+  git(dev, "checkout", "-q", "main");
+  writeFileSync(join(dev, REPO_GATE), olderGate);
+  git(dev, "rm", "-q", ".cursor/hooks.json");
+  commitAll(dev, "the gate as 0.2.x installed it");
+  git(dev, "push", "-q", "--no-verify", "origin", "main");
+  git(dev, "checkout", "-q", "-B", "chore/upgrade-gate");
+  const lines = gate.install(dev, { upgrade: true });
+  assert.ok(existsSync(join(dev, ".cursor/hooks.json")), lines.join("\n"));
+  commitAll(dev, "upgrade the gate");
+  // CI runs main's older gate, which counts the new file as a change: so does this one.
+  const [passed, problems] = gate.verify(dev);
+  assert.ok(!passed && problems[0].includes("No ownership report"), problems.join("\n"));
+  assert.equal(gate.status(dev).small_change, true); // a small change: one question
+
+  // Once main runs this gate, the file is one of the gate's own, and needs nothing.
+  git(dev, "checkout", "-q", "main");
+  git(dev, "checkout", "-q", "chore/upgrade-gate", "--", REPO_GATE);
+  commitAll(dev, "this gate, still without the file");
+  git(dev, "push", "-q", "--no-verify", "origin", "main");
+  git(dev, "checkout", "-q", "-B", "chore/cursor-hooks");
+  gate.install(dev);
+  commitAll(dev, "add the Cursor hooks");
+  assert.deepEqual(gate.verify(dev), [true, [], "required"]);
+});

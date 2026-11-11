@@ -22,7 +22,8 @@ node <plugin>/dist/gate.mjs install --repo . --owner @your-org/leads
 - `.learning/gate.mjs`: the gate itself
 - `.learning/config.json`: the settings
 - `.github/workflows/ownership-check.yml`: the CI check
-- `.claude/settings.json`: a hook that stops Claude from pushing unverified code (other settings kept)
+- `.claude/settings.json`: a hook that stops Claude Code from pushing unverified code (other settings kept)
+- `.cursor/hooks.json`: the same for Cursor, plus its session start, as plain `node .learning/gate.mjs … --agent cursor` lines that also run in PowerShell (other hooks kept)
 - `.gitignore`: one line, `.learning/report.local.json`
 - `.gitattributes`: one line, `.learning/gate.mjs -text`, so git never rewrites the gate's line endings (on Windows, `core.autocrlf` would)
 - CODEOWNERS (with `--owner`): the gate's files need the lead's review.
@@ -41,7 +42,7 @@ After the plugin updates, upgrade the repo's copy in its own PR:
 node <plugin>/dist/gate.mjs install --upgrade --repo .
 ```
 
-CI runs the base branch's gate. So when an upgrade brings something the older gate doesn't know yet, CI still checks the upgrade PR the old way. For example, the `.gitattributes` line from 0.2.1 counts as a change until the upgrade is merged: a one-line small change, so one question. Or use the skip label. The local checks follow the same rule, so they never pass what CI then fails.
+CI runs the base branch's gate. So when an upgrade brings something the older gate doesn't know yet, CI still checks the upgrade PR the old way. From 0.3.0, the upgrade also adds `.cursor/hooks.json`. Until the base branch runs a gate that knows it as one of its own files, CI counts it as a change: one small-change question, or the skip label. For example, the `.gitattributes` line from 0.2.1 counts as a change until the upgrade is merged: a one-line small change, so one question. Or use the skip label. The local checks follow the same rule, so they never pass what CI then fails.
 
 ## Make the check required
 
@@ -61,6 +62,24 @@ The ruleset applies to the default branch. It requires a pull request with 1 app
 
 - Require a pull request before merging, and Require review from Code Owners
 - Require status checks to pass, with the check **Ownership check**
+
+## Add the Cursor hooks by hand
+
+`install` merges two hooks into `.cursor/hooks.json`. If that file has a shape it doesn't understand, it prints `SKIPPED Cursor hooks` and leaves the file alone. Then add these yourself, keeping `"version": 1` at the top:
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      { "matcher": "Shell", "command": "node .learning/gate.mjs agent-hook --agent cursor", "timeout": 60, "failClosed": false }
+    ],
+    "sessionStart": [
+      { "command": "node .learning/gate.mjs session-start --from-repo --agent cursor", "timeout": 30, "failClosed": false }
+    ]
+  }
+}
+```
 
 ## Add the Claude hook by hand
 

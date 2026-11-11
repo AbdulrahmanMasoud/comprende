@@ -257,8 +257,11 @@ test("the plugin's hook still checks a repo whose gate copy is gone", (t) => {
   assert.ok(r.status === 2 && r.stderr.includes("No ownership report"));
 });
 
-test("from Cursor, the repo's Claude hook blocks an unverified push, with the reason on stderr", (t) => {
+// A repo installed before Cursor support has .claude/settings.json and no
+// .cursor/hooks.json: Cursor runs the Claude-format hook, and it checks.
+test("from Cursor, a repo's .claude/settings.json hook blocks an unverified push when it has no .cursor/hooks.json", (t) => {
   const { dev } = setup(t);
+  unlinkSync(join(dev, ".cursor/hooks.json"));
   write(dev, "src/app.js", "export const app = 2;\n");
   commitAll(dev, "unchecked");
   const r = cursorRunsProjectHook(dev, "pre-tool-use.shell.git-push.json");
@@ -269,7 +272,9 @@ test("from Cursor, the repo's Claude hook blocks an unverified push, with the re
 
 test("from Cursor, the plugin's hook finds the repo through CLAUDE_PROJECT_DIR and blocks an unverified push", (t) => {
   const { dev } = setup(t);
-  unlinkSync(join(dev, ".claude/settings.json")); // so the plugin's hook doesn't step aside
+  // No repo hook file, so the plugin's hook doesn't step aside.
+  unlinkSync(join(dev, ".claude/settings.json"));
+  unlinkSync(join(dev, ".cursor/hooks.json"));
   write(dev, "src/app.js", "export const app = 2;\n");
   commitAll(dev, "unchecked");
   // Cursor runs a plugin's hooks from the plugin's folder, and its payload's cwd is "".
@@ -288,6 +293,7 @@ test("from Cursor, the plugin's hook steps aside when the repo registers its own
 
 test("from Cursor, session start finds the repo through CLAUDE_PROJECT_DIR and prints only JSON", (t) => {
   const { dev } = setup(t);
+  unlinkSync(join(dev, ".cursor/hooks.json")); // else the repo's own file gives the gate's part
   // Cursor's sessionStart payload has no cwd, and the plugin's hook runs from the plugin's folder.
   const r = plugin(REPO, ["session-start"], fromCursor("session-start.json", dev));
   assert.equal(r.status, 0, r.stderr);
@@ -494,6 +500,7 @@ test("session start explains a gate copy that differs only in CRLF line endings,
   assert.match(pluginCrlf, /plugin's own copy .* line endings/);
   assert.ok(pluginCrlf.includes("/plugin marketplace update comprende"), pluginCrlf);
   // In Cursor the plugin may be Claude Code's, imported, or Cursor's own: the note names both ways.
+  unlinkSync(join(dev, ".cursor/hooks.json")); // else the repo's own file gives the gate's part
   const inCursor = JSON.parse(
     sh(tmp, NODE, [join(tmp, "old-plugin/gate.mjs"), "session-start", "--agent", "cursor"], { input: ev }).stdout,
   ).hookSpecificOutput.additionalContext;
@@ -522,6 +529,7 @@ test("a usage error in a hook entry point fails open with one short line, never 
     [["agent-hook", "stray"], AI_TOOL], // an argument it doesn't take
     [["agent-hook", "--agent", "cursor", "--format", "json"], AI_TOOL], // an option a later version might add
     [["session-start", "--from-plugin", "--format", "json"], AI_TOOL],
+    [["agent-hook", "--from-plugin", "--from-repo"], AI_TOOL], // two sources at once
     [["agent-hook-v2"], AI_TOOL], // a command a later version might add
     [["pre-push", "--repo"], GIT],
   ];

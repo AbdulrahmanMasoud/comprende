@@ -2,7 +2,18 @@
 // and nothing from the environment changes what the gate does.
 
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import {
@@ -14,6 +25,7 @@ import {
   git,
   plugin,
   pushEvent,
+  REPO,
   REPO_GATE,
   runGate,
   setup,
@@ -233,4 +245,87 @@ test("an option can't swallow the next option as its value", (t) => {
   const empty = gateCli(["protect", "--repo", dev, "--approvals", ""]);
   assert.notEqual(empty.status, 0);
   assert.match(empty.stderr, /--approvals must be between 0 and 10/);
+});
+
+// Claims (src/gate/hook-claims.ts) live under the system temp folder, which on
+// Linux every user shares. TMPDIR points each test at its own.
+const CURSOR_FIXTURES = join(REPO, "test/fixtures/cursor");
+const cursorEnv = (tmpdir) => ({
+  ...ENV,
+  ...JSON.parse(readFileSync(join(CURSOR_FIXTURES, "hook-env.json"), "utf8")),
+  TMPDIR: tmpdir,
+  OWNERSHIP_GATE_NO_AUTO_HOOK: "1",
+});
+const cursorPayload = (name, dev, fields) =>
+  JSON.stringify({
+    ...JSON.parse(readFileSync(join(CURSOR_FIXTURES, name), "utf8")),
+    workspace_roots: [dev],
+    ...fields,
+  });
+const claimsFolderIn = (tmpdir) => join(tmpdir, `comprende-hook-runs-${process.getuid?.()}`);
+
+test("a claims folder that's a symlink or that others can read isn't used: every copy checks", {
+  skip: process.platform === "win32",
+}, (t) => {
+  const { dev, tmp: dir } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  unlinkSync(join(dev, ".claude/settings.json"));
+  unlinkSync(join(dev, ".cursor/hooks.json"));
+  const tmpdir = join(dir, "tmp");
+  const folder = claimsFolderIn(tmpdir);
+  const elsewhere = join(dir, "elsewhere");
+  mkdirSync(elsewhere, { mode: 0o700 });
+  mkdirSync(tmpdir);
+  const setups = {
+    "a symlink to a private folder": () => symlinkSync(elsewhere, folder),
+    "readable by others": () => {
+      mkdirSync(folder);
+      chmodSync(folder, 0o755);
+    },
+  };
+  let call = 0;
+  for (const [name, makeFolder] of Object.entries(setups)) {
+    rmSync(folder, { recursive: true, force: true });
+    makeFolder();
+    const input = cursorPayload("pre-tool-use.shell.git-push.json", dev, { tool_use_id: `call-${++call}` });
+    const statuses = [1, 2].map(
+      () =>
+        plugin(REPO, ["agent-hook", "--from-plugin", "--agent", "cursor"], { input, env: cursorEnv(tmpdir) }).status,
+    );
+    assert.deepEqual(statuses, [2, 2], name);
+  }
+  assert.deepEqual(readdirSync(elsewhere), []);
+});
+
+test("pruning old claims deletes only claim files", { skip: process.platform === "win32" }, (t) => {
+  const dir = tmp(t);
+  const folder = claimsFolderIn(dir);
+  mkdirSync(folder, { mode: 0o700 });
+  const hour = Date.now() / 1000 - 3600;
+  const oldClaim = join(folder, "a".repeat(64));
+  const freshClaim = join(folder, "b".repeat(64));
+  const notAClaim = join(folder, "notes.txt");
+  for (const path of [oldClaim, freshClaim, notAClaim]) writeFileSync(path, "");
+  utimesSync(oldClaim, hour, hour);
+  utimesSync(notAClaim, hour, hour);
+  plugin(REPO, ["session-start", "--from-plugin", "--agent", "cursor"], {
+    input: cursorPayload("session-start.json", dir, { session_id: "session-prune" }),
+    env: cursorEnv(dir),
+  });
+  assert.deepEqual([existsSync(oldClaim), existsSync(freshClaim), existsSync(notAClaim)], [false, true, true]);
+});
+
+test("a session start from the repo's own hook file never installs the git hook, even for a changed gate.mjs", (t) => {
+  const { dev, tmp: dir } = setup(t);
+  const hook = join(dev, ".git/hooks/pre-push");
+  rmSync(hook, { force: true });
+  // Run from the repo's hook file, the repo's gate.mjs would compare itself with itself.
+  writeFileSync(join(dev, REPO_GATE), `${readFileSync(join(dev, REPO_GATE), "utf8")}// changed\n`);
+  const r = runGate(dev, ["session-start", "--from-repo", "--agent", "cursor"], {
+    input: cursorPayload("session-start.json", dev, { session_id: "session-repo-run" }),
+    env: { ...cursorEnv(dir), OWNERSHIP_GATE_NO_AUTO_HOOK: "" },
+  });
+  assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /This repository uses the ownership gate/);
+  assert.ok(!existsSync(hook), "the repo's gate installed a git hook pinned to itself");
 });

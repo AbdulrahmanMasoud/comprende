@@ -25,5 +25,9 @@ export const claudeCode: Agent = {
 
   pluginUpdateHint: "`/plugin marketplace update comprende`",
 
-  projectHookFiles: [CLAUDE_SETTINGS],
+  // Tool calls only: one Claude Code session runs one plugin copy, and a resumed
+  // session starts again under the same id.
+  eventId: (payload, event) => (event === "shell" ? readClaudeFormat(payload).toolUseId : null),
+
+  projectHookFiles: [{ file: CLAUDE_SETTINGS, alwaysRuns: true }],
 };

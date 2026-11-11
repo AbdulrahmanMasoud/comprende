@@ -53,6 +53,8 @@ refactor: move the GitHub summary behind the platform interface
 
 No AI attribution (`Co-Authored-By`, "Generated with", session links) in commits, PRs, tags or releases.
 
+Cursor's agent adds a `Co-authored-by: Cursor <cursoragent@cursor.com>` trailer to the commits it makes. If you work in Cursor, turn that off in its settings, or remove the line before you push.
+
 ### Versions
 
 [SemVer](https://semver.org/). While we're on 0.x:
@@ -86,8 +88,11 @@ Code that's specific to one AI tool (Claude Code, Cursor, and later Codex and An
 ```
 src/gate/agents/      types.ts (the Agent interface), index.ts (the registry and the resolve step),
                       one module per AI tool: claude-code.ts, cursor.ts, plus what they share:
-                      claude-format.ts (the payload) and claude-settings.ts (the hook file)
+                      claude-format.ts (the payload), the repo hook files claude-settings.ts and
+                      cursor-hooks.ts, and gate-command.ts (does a hook file's command run the gate)
 src/gate/hook-replies.ts   the core's default replies, for adapters that don't format their own
+src/gate/hook-copies.ts    which copy of the gate's hook speaks when several run on one event,
+                           with the claims in hook-claims.ts
 src/gate/platforms/   types.ts (the Platform interface), index.ts (the registry, the repo's platform
                       and the CI's), one module per git platform: github.ts
 ```
@@ -111,10 +116,11 @@ The interface, with a comment on each member, is in `src/gate/agents/types.ts`. 
    - `shellCommand`: the command, only for the tool's shell tool.
    - `projectDir`: the repo, from the payload or the tool's project variable. Return null when the run can't tell, and the hook steps aside. Never guess from the process's folder unless the tool always runs hooks from the project.
    - `names` and `pluginUpdateHint`: how messages name the tool, and how its users update the plugin. The core's own text never names a tool.
-   - `projectHookFiles`: the repo-level files that register the gate's hook, most specific first.
+   - `projectHookFiles`: the repo-level files that register the gate's hook, most specific first. Mark a file `alwaysRuns: false` when the tool runs it only while a setting is on: no other copy steps aside for it.
+   - `eventId`: the id the tool gives a tool call or a session, the same for every hook on it. Copies of the gate that can't step aside for each other claim it, so only one speaks. Return null when one session can't run two copies.
    - `formatDecision` and `formatSessionContext`: only if the tool doesn't accept the defaults (exit 0 or exit 2 with stderr, and `hookSpecificOutput.additionalContext`).
 3. **Register it in `src/gate/agents/index.ts`.** In `AGENTS`, a tool that runs another tool's hook commands goes before that tool. `PROJECT_HOOK_FILES`, and from it `GATE_FILES`, pick up its files.
-4. **Hook commands for its plugin or settings file.** Run `node <gate.mjs> agent-hook --agent <id>` and `session-start --agent <id>`. Use no shell syntax, so they run in PowerShell too. Make sure a missing `node` fails open: any exit code but 2.
+4. **Hook commands for its plugin or settings file.** Run `node <gate.mjs> agent-hook --agent <id>` and `session-start --agent <id>`, with `--from-plugin` in the plugin's file, and `session-start --from-repo` in the repo's. Use no shell syntax, so they run in PowerShell too. Make sure a missing `node` fails open: any exit code but 2.
 5. **Tests from the fixtures,** in `test/agents.test.mjs`:
    - its payloads resolve to it
    - it reads the command and the repo
@@ -239,6 +245,7 @@ src/server.ts         the MCP server; src/learning.ts, the skill's file-only hel
 dist/                 the built, dependency-free files the plugin runs (committed)
 test/                 node:test suites against real git repos, one file per topic
 tools/release.mjs     the version check and the release notes, for CI and releases
+tools/e2e-cursor.mjs  the end-to-end run in the real Cursor CLI (by hand, not in CI)
 docs/                 the longer docs, and the terminal demo (demo.tape, demo.gif)
 .github/              CI and release workflows, Dependabot, PR and issue templates
 .gitattributes        keeps dist/ and the skill's scripts byte for byte (no CRLF on Windows)
@@ -257,6 +264,25 @@ The tests run against real git repos and are grouped by topic, one file each in 
 - `release`: the version check and the release notes
 
 They include real pushes through the hooks, a fresh CI-style clone at the PR head, the workflow's actual shell step, and a regression test for every bug found so far.
+
+### Testing in Cursor
+
+`tools/e2e-cursor.mjs` drives the real `cursor-agent` through Comprende, headless. It isn't in CI, because it needs a logged-in Cursor CLI and uses the account's agent requests. Run it after a change to the hooks, the skill or the Cursor plugin:
+
+```bash
+cursor-agent login                  # once
+node tools/e2e-cursor.mjs --out /tmp/e2e
+node tools/e2e-cursor.mjs --out /tmp/e2e-2 --only explain,both-plugins   # some scenarios only
+```
+
+- **Scenarios**, each in its own demo repo:
+  - `main`: session start, an ordinary command, an unverified push, "check me" through to a push that goes through, and the memory server
+  - `no-memory`: "check me" with a plugin copy that has no memory server, so the report is saved with `save --input`
+  - `explain`: explain-as-you-build on a small retry function
+  - `both-plugins`: the Claude Code plugin imported as well. Each session line comes once, and each push is checked once
+- **Output:** one line per step: PASS, FAIL, or BLOCKED when Cursor refuses to run the agent (the account's usage limit, or a model not on its plan). Transcripts, replies, stderr and a log of every `gate.mjs` run are saved to `--out`.
+- **Isolation:** a throwaway `HOME` with a copy of your `~/.cursor/cli-config.json`, so none of your plugins or settings load, and a `COMPRENDE_HOME` inside `--out`. On macOS the login is in the keychain, which the throwaway `HOME` links to. Elsewhere, set `CURSOR_API_KEY`. Each demo's remote is a local folder, so nothing is pushed anywhere.
+- Delete the `--out` folder afterwards: it holds a copy of your CLI config.
 
 ## The demo
 

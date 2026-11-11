@@ -17,6 +17,7 @@ import { AGENTS } from "./agents/index.js";
 import { jobSummary } from "./ci-summary.js";
 import { deleteReportInputFile, formatStatus, save, status, verify } from "./commands.js";
 import { currentBranch, repoRoot } from "./git.js";
+import type { HookSource } from "./hook-copies.js";
 import { agentHook, installHooks, prePush, sessionStart } from "./hooks.js";
 import { install } from "./install.js";
 import { type AnnotationKind, ciPlatform, REPO_PLATFORM } from "./platforms/index.js";
@@ -33,7 +34,7 @@ Commands (run from inside the repo, or pass --repo):
   pre-push       Git pre-push hook entry point (reads refs from stdin)
   agent-hook     PreToolUse hook entry point for AI tools (reads JSON from stdin)   [--agent ID]
   claude-hook    The same as agent-hook. install and the plugin still call this name, which older gates know
-  session-start  SessionStart hook (plugin): the always-on note; in gated repos, the git hook   [--agent ID]
+  session-start  SessionStart hook: the always-on note; in gated repos, the git hook   [--agent ID]
   install        Add the gate, config, CI workflow, the AI tools' repo hook files and the git hook to a repo
   install-hooks  Install only the local git pre-push hook (once per clone)
   protect        Make the check required on the default branch (GitHub: a ruleset, through gh; dry run by default)
@@ -41,6 +42,8 @@ Commands (run from inside the repo, or pass --repo):
 
 Common options: --repo PATH  --base REF  --branch NAME
 --agent ID: the AI tool running the hook (${AGENTS.map((a) => a.id).join(", ")}). Without it, the payload tells.
+--from-plugin | --from-repo: which hook file runs a hook, a plugin's or the repo's. Without either,
+  agent-hook is the repo's and session-start the plugin's, as in older hook files.
 `;
 
 function readStdin(): string {
@@ -71,7 +74,7 @@ interface Args {
   rest: string[];
 }
 
-const FLAGS = new Set(["json", "from-plugin", "upgrade", "apply", "no-code-owners", "help"]);
+const FLAGS = new Set(["json", "from-plugin", "from-repo", "upgrade", "apply", "no-code-owners", "help"]);
 
 const VALUE_OPTS = new Set(["repo", "base", "branch", "input", "rev", "labels-json", "owner", "approvals", "agent"]);
 
@@ -99,6 +102,17 @@ function parseArgs(argv: string[]): Args {
 
 class UsageError extends Error {}
 
+/** Which hook file a hook run comes from. Older hook files pass neither flag:
+ *  the repo's .claude/settings.json runs `claude-hook`, and the plugin's
+ *  hooks.json ran `session-start`. */
+function hookSource(cmd: string, opts: Args["opts"]): HookSource {
+  if (opts["from-plugin"] && opts["from-repo"])
+    throw new UsageError("--from-plugin and --from-repo can't both be given");
+  if (opts["from-plugin"]) return "plugin";
+  if (opts["from-repo"]) return "repo";
+  return cmd === "session-start" ? "plugin" : "repo";
+}
+
 // A hook must never exit 2 by accident: Claude Code and Cursor read 2 as
 // "block", and git blocks a push on any non-zero exit. So a usage error in a
 // hook entry point fails open: an older gate that doesn't know an option a newer
@@ -113,8 +127,10 @@ const FAIL_OPEN_EXIT: Readonly<Record<string, number>> = {
 
 export function main(argv: string[]): number {
   let args: Args;
+  let source: HookSource;
   try {
     args = parseArgs(argv);
+    source = hookSource(args.cmd, args.opts);
   } catch (e) {
     const failOpen = Object.hasOwn(FAIL_OPEN_EXIT, argv[0] ?? "") ? FAIL_OPEN_EXIT[argv[0]] : undefined;
     if (failOpen !== undefined) {
@@ -212,13 +228,13 @@ export function main(argv: string[]): number {
         return prePush(readStdin(), o("repo"));
       case "agent-hook":
       case "claude-hook": {
-        const reply = agentHook(readStdin(), Boolean(opts["from-plugin"]), o("agent"));
+        const reply = agentHook(readStdin(), source, o("agent"));
         process.stdout.write(reply.stdout);
         process.stderr.write(reply.stderr);
         return reply.exitCode;
       }
       case "session-start":
-        out(sessionStart(readStdin(), o("agent")));
+        out(sessionStart(readStdin(), source, o("agent")));
         return 0;
       case "install":
       case "install-hooks":

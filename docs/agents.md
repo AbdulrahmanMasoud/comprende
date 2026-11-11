@@ -185,6 +185,9 @@ export type AgentId = "claude-code" | "cursor";
 /** The environment a hook runs with, read-only. */
 export type HookEnv = Readonly<Record<string, string | undefined>>;
 
+/** The hook events the gate takes part in: a shell command about to run, and a session starting. */
+export type HookEvent = "shell" | "sessionStart";
+
 /** The core's verdict on a command: let it run, or block it with a reason the agent sees. */
 export type Decision = { readonly allow: true } | { readonly allow: false; readonly reason: string };
 
@@ -219,9 +222,16 @@ export interface Agent {
   /** How the user updates the plugin in this tool, for a message. */
   readonly pluginUpdateHint: string;
 
-  /** This tool's repo-level hook files, most specific first. `install` writes
-   *  them, and the plugin's hook steps aside when one of them already runs the gate. */
-  readonly projectHookFiles: readonly ProjectHookFile[];
+  /** The repo-level hook files this tool runs, most specific first; `install`
+   *  writes them. `alwaysRuns` is false for a file the tool runs only while a
+   *  setting is on: no other copy of the gate can count on that one running
+   *  (hook-copies.ts). */
+  readonly projectHookFiles: readonly { readonly file: ProjectHookFile; readonly alwaysRuns: boolean }[];
+
+  /** The id this tool gives a hook event, the same for every hook it runs on it
+   *  (a tool call's id, a session's id), or null to claim nothing. Copies of the
+   *  gate that can't count on each other claim it, so only one of them speaks. */
+  eventId(payload: unknown, event: HookEvent): string | null;
 
   /** How this tool wants allow and deny. Leave it out for the core's default:
    *  exit 0 with nothing printed, or exit 2 with the reason on stderr. */
@@ -238,13 +248,22 @@ export interface ProjectHookFile {
   /** The path from the repo root. */
   readonly path: string;
 
-  /** Does this file's content already run the gate's hook? */
-  runsGate(content: string): boolean;
+  /** The `--agent` its commands pass, or null for Claude Code's format, whose
+   *  commands detect the tool. It tells the core which file started a run. */
+  readonly agentFlag: AgentId | null;
+
+  /** The gate feature (features.ts) that makes this a gate file, if it came after
+   *  the first release: a CI gate that predates it counts an edit as a change. */
+  readonly feature?: string;
+
+  /** Does this file's content already run the gate for `event`? */
+  runsGate(content: string, event: HookEvent): boolean;
 
   /** The content with the gate's hook added and everything else kept, plus what
    *  install reports. No content means leave the file alone: the hook is already
    *  there, or the file can't be read or has a shape this adapter doesn't
-   *  understand. Pure: the core does the safe read and the atomic write. */
+   *  understand. Pure: the core does the safe read and the atomic write.
+   *  `shownPath` is for messages. */
   withGateHook(existing: ExistingFile, shownPath: string): { readonly content?: string; readonly message: string };
 }
 
@@ -272,7 +291,8 @@ How each tool fills it in:
 | `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR`, else its own folder (Claude Code runs hooks from the project) | the one entry in `workspace_roots` (`cwd` is `""`), else `CURSOR_PROJECT_DIR` or `CLAUDE_PROJECT_DIR`, else step aside: Cursor runs plugin hooks from the plugin's folder. With several roots it steps aside, since it can't tell which one the command runs in | `cwd` | `workspacePaths[0]` |
 | `names` | Claude, Claude Code | Cursor, Cursor | Codex, Codex | Antigravity, Antigravity |
 | `pluginUpdateHint` | `/plugin marketplace update comprende` | the same, or `agent plugin marketplace update comprende` in Cursor's CLI: Cursor may be running the Claude Code plugin it imported | to be found | to be found |
-| `projectHookFiles` | `.claude/settings.json` | `.claude/settings.json` now; `.cursor/hooks.json` first, from the Cursor PR | `.codex/hooks.json` | the plugin's `hooks.json` only |
+| `projectHookFiles` | `.claude/settings.json`, always run | `.cursor/hooks.json`, always run, then `.claude/settings.json`, run only while Third-Party Imports is on | `.codex/hooks.json` | the plugin's `hooks.json` only |
+| `eventId` | the tool call's id; none for a session, since one session runs one plugin copy | the tool call's id, or the session's | to be found | to be found |
 | `formatDecision` | the default | the default | the default | `{"decision": …}` |
 | `formatSessionContext` | the default | the default | the default | `injectSteps` |
 
@@ -282,16 +302,32 @@ The platform adapter is the other half of #18: GitHub now, GitLab later ([#4](ht
 
 ### Step-aside rules
 
-In Cursor, up to four copies of Comprende's hook can run on the same command:
+In Cursor, up to four copies of Comprende's hook can run on the same command. Claude Code runs the two in its own format. Cursor runs its own two always, and Claude Code's two only while Third-Party Imports is on.
 
 | Copy | Format | Runs | Steps aside when |
 |---|---|---|---|
 | The repo's `.cursor/hooks.json` | Cursor | the repo's gate | never: it's the most specific |
 | The repo's `.claude/settings.json` | Claude | the repo's gate | it runs in Cursor, and `.cursor/hooks.json` runs the gate |
-| The native Cursor plugin (`hooks/cursor-hooks.json`) | Cursor | the plugin's gate | any repo hook file runs the gate |
-| The imported Claude Code plugin (`hooks/hooks.json`) | Claude | the plugin's gate | any repo hook file runs the gate |
+| The native Cursor plugin (`hooks/cursor-hooks.json`) | Cursor | the plugin's gate | `.cursor/hooks.json` runs the gate (in Claude Code: `.claude/settings.json`) |
+| The imported Claude Code plugin (`hooks/hooks.json`) | Claude | the plugin's gate | the same |
 
-In a gated repo, exactly one copy checks. In a repo whose hook files were removed, both plugin copies check. That's harmless: each denies with the same reason, and Cursor joins the two messages.
+A copy steps aside only for a file the tool is sure to run. In Cursor, a plugin doesn't step aside for `.claude/settings.json`: Cursor runs it only while Third-Party Imports is on, which a person or an admin can turn off, and Enterprise accounts start with it off. The repo's copy there may also be a gate from before 0.2.2, which let every Cursor push through.
+
+**The copies left claim the push.** Each claims the tool call's id: an empty file named after it, in a private folder under the system temp folder. Only the first to claim it checks (`src/gate/hook-copies.ts`, `src/gate/hook-claims.ts`). A claim is stale after two minutes, so a session that starts again later under the same id is a new one.
+
+The claims are safe from other users on a shared `/tmp`:
+- The folder must be a real folder (not a symlink), owned by you, and private. Otherwise nothing is claimed, and every copy checks.
+- The ids aren't known before the event, so no one can claim one in advance.
+- Pruning deletes only claim files.
+
+**Session start:**
+- The repo's `.cursor/hooks.json` gives only the gate's context. Only a `session-start --from-repo` there counts.
+- A plugin gives the always-on line, and the gate's context unless the repo's file already gives it. Two plugins claim the session's id, so only one speaks.
+- Only a plugin installs the git hook. A run from the repo's file is the repo's own `gate.mjs`, which can't vouch for itself.
+
+So each push is checked once, and each session gets each line once. `test/agents.test.mjs` checks all 16 combinations of the four copies, in Claude Code and in Cursor, with Third-Party Imports on and off.
+
+**Older copies.** The Claude Code and Cursor plugins update separately. A copy from before 0.3.0 doesn't claim, so next to a newer one it may check a push twice, or give the always-on line twice. That's noisy, never a missed check.
 
 ### Files to add for Cursor
 

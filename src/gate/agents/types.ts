@@ -10,6 +10,9 @@ export type AgentId = "claude-code" | "cursor";
 /** The environment a hook runs with, read-only. */
 export type HookEnv = Readonly<Record<string, string | undefined>>;
 
+/** The hook events the gate takes part in: a shell command about to run, and a session starting. */
+export type HookEvent = "shell" | "sessionStart";
+
 /** The core's verdict on a command: let it run, or block it with a reason the agent sees. */
 export type Decision = { readonly allow: true } | { readonly allow: false; readonly reason: string };
 
@@ -44,9 +47,16 @@ export interface Agent {
   /** How the user updates the plugin in this tool, for a message. */
   readonly pluginUpdateHint: string;
 
-  /** This tool's repo-level hook files, most specific first. `install` writes
-   *  them, and the plugin's hook steps aside when one of them already runs the gate. */
-  readonly projectHookFiles: readonly ProjectHookFile[];
+  /** The repo-level hook files this tool runs, most specific first; `install`
+   *  writes them. `alwaysRuns` is false for a file the tool runs only while a
+   *  setting is on: no other copy of the gate can count on that one running
+   *  (hook-copies.ts). */
+  readonly projectHookFiles: readonly { readonly file: ProjectHookFile; readonly alwaysRuns: boolean }[];
+
+  /** The id this tool gives a hook event, the same for every hook it runs on it
+   *  (a tool call's id, a session's id), or null to claim nothing. Copies of the
+   *  gate that can't count on each other claim it, so only one of them speaks. */
+  eventId(payload: unknown, event: HookEvent): string | null;
 
   /** How this tool wants allow and deny. Leave it out for the core's default:
    *  exit 0 with nothing printed, or exit 2 with the reason on stderr. */
@@ -63,8 +73,16 @@ export interface ProjectHookFile {
   /** The path from the repo root. */
   readonly path: string;
 
-  /** Does this file's content already run the gate's hook? */
-  runsGate(content: string): boolean;
+  /** The `--agent` its commands pass, or null for Claude Code's format, whose
+   *  commands detect the tool. It tells the core which file started a run. */
+  readonly agentFlag: AgentId | null;
+
+  /** The gate feature (features.ts) that makes this a gate file, if it came after
+   *  the first release: a CI gate that predates it counts an edit as a change. */
+  readonly feature?: string;
+
+  /** Does this file's content already run the gate for `event`? */
+  runsGate(content: string, event: HookEvent): boolean;
 
   /** The content with the gate's hook added and everything else kept, plus what
    *  install reports. No content means leave the file alone: the hook is already

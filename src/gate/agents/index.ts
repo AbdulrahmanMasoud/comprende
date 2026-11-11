@@ -21,6 +21,8 @@ export function resolveAgent(payload: unknown, env: HookEnv, requested?: string 
 export const UNKNOWN_AGENT_NAMES: Agent["names"] = { assistant: "your AI assistant", app: "your AI tool" };
 
 /** Every repo-level hook file, once each, for install and for GATE_FILES. */
-export const PROJECT_HOOK_FILES: readonly ProjectHookFile[] = [...new Set(AGENTS.flatMap((a) => a.projectHookFiles))];
+export const PROJECT_HOOK_FILES: readonly ProjectHookFile[] = [
+  ...new Set(AGENTS.flatMap((a) => a.projectHookFiles.map((h) => h.file))),
+];
 
-export type { Agent, AgentId, Decision, HookEnv, HookReply, ProjectHookFile } from "./types.js";
+export type { Agent, AgentId, Decision, HookEnv, HookEvent, HookReply, ProjectHookFile } from "./types.js";
