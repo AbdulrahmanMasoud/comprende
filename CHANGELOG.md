@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Docs:** [docs/agents.md](docs/agents.md) has what we tested about Cursor, and a design for Cursor support and agent adapters ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)).
+
 ## 0.2.2
 
 **Upgrading:** update the plugin, then upgrade the repo's copy of the gate in its own PR, with `node <plugin>/dist/gate.mjs install --upgrade --repo .` (see [Upgrading the gate](docs/teams.md#upgrading-the-gate)). The upgrade PR needs no report. Cursor users get the fix only once it's merged: the repo's Claude hook runs the repo's own copy, and the plugin's hook steps aside while the repo has its own. `GATE_VERSION` stays 3, since the report format is unchanged.

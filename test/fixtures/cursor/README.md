@@ -11,7 +11,7 @@ Don't write these by hand. To change one, capture it again from a real run.
 | `pre-tool-use.shell.git-status.json` | `preToolUse` before `git status` |
 | `pre-tool-use.shell.ls.json` | `preToolUse` before `ls` |
 | `pre-tool-use.read.json` | `preToolUse` before the Read tool (not a shell command) |
-| `before-shell-execution.git-push.json` | `beforeShellExecution` before `git push origin feature/probe`. Comprende doesn't use this event yet; it's here for the Cursor adapter ([#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)) |
+| `before-shell-execution.git-push.json` | `beforeShellExecution` before `git push origin feature/probe`. Comprende doesn't use this event: [the design](../../../docs/agents.md#design-proposal) uses `preToolUse`, whose payload has the same shape in Claude Code, Cursor and Codex. Kept for reference |
 | `before-shell-execution.git-status.json` | `beforeShellExecution` before `git status` |
 | `hook-env.json` | The `CURSOR_*` and `CLAUDE_*` environment variables a project hook got |
 
