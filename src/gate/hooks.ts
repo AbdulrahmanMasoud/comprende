@@ -14,13 +14,22 @@ import { claimed, type HookRun, type HookSource, stepsAside } from "./hook-copie
 import { decisionReply, SILENT_ALLOW, sessionContextReply } from "./hook-replies.js";
 import { isPushCommand } from "./push-detect.js";
 import { uncommittedReport } from "./report.js";
-import { CONFIG_PATH, GATE_ATTRIBUTES_LINE, GATE_REL, GateError, SELF, splitLines, ZERO_SHA } from "./shared.js";
+import {
+  CONFIG_PATH,
+  GATE_ATTRIBUTES_LINE,
+  GATE_REL,
+  GateError,
+  SELF,
+  splitLines,
+  withoutBom,
+  ZERO_SHA,
+} from "./shared.js";
 
 /** The hook's payload and the adapter that reads it, or no adapter when stdin
  *  isn't JSON or `--agent` names an unknown tool. Never throws. */
 function readHookInput(stdinText: string, requested: string | null): { payload: unknown; agent: Agent | null } {
   try {
-    const payload: unknown = JSON.parse(stdinText || "{}");
+    const payload: unknown = JSON.parse(withoutBom(stdinText) || "{}");
     return { payload, agent: resolveAgent(payload, process.env, requested) };
   } catch {
     return { payload: undefined, agent: null };

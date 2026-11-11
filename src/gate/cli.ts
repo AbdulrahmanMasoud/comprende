@@ -21,7 +21,7 @@ import type { HookSource } from "./hook-copies.js";
 import { agentHook, installHooks, prePush, sessionStart } from "./hooks.js";
 import { install } from "./install.js";
 import { type AnnotationKind, ciPlatform, REPO_PLATFORM } from "./platforms/index.js";
-import { GATE_VERSION, GateError, oneLine } from "./shared.js";
+import { GATE_VERSION, GateError, oneLine, withoutBom } from "./shared.js";
 import { testCall } from "./test-hooks.js";
 
 const HELP = `Ownership gate (comprende)
@@ -167,7 +167,7 @@ export function main(argv: string[]): number {
         const raw = o("input") ? readFileSync(o("input") as string, "utf8") : readStdin();
         let payload: unknown;
         try {
-          payload = JSON.parse(raw);
+          payload = JSON.parse(withoutBom(raw));
         } catch (e) {
           throw new GateError(`Input is not valid JSON: ${(e as Error).message}`);
         }

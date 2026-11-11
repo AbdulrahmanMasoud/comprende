@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **JSON that starts with a UTF-8 BOM is read like any other**, in a hook's payload and in `save --input`. Cursor's CLI on Windows has sent a payload with one. The hook then stepped aside: the push went unchecked, and the session got no gate context. PowerShell 5.1 writes files with one, and `save --input` then refused the report as invalid JSON.
 - **`install` writes `.cursor/hooks.json` too** (part of [#2](https://github.com/AbdulrahmanMasoud/comprende/issues/2)): the gate's shell hook and session start for teammates on Cursor, as plain `node .learning/gate.mjs … --agent cursor` lines that also run in PowerShell. It merges into an existing file, keeping its hooks, and `install --upgrade` adds it to repos that already have the gate.
   - **Upgrading:** until the base branch runs a gate that knows `.cursor/hooks.json` as one of its own files (the `cursor-hooks` feature), CI counts the new file as a change. The upgrade PR needs one small-change question, or the skip label.
 - **One check per push, wherever the hooks come from.** A copy of the hook steps aside for a repo hook file the tool always runs: `.cursor/hooks.json` in Cursor, `.claude/settings.json` in Claude Code. The copies left claim the push, and only the first checks it. In Cursor these are the plugins, and `.claude/settings.json` while Third-Party Imports is on. Each session gets the always-on line once, and the gate's context once. Only a plugin installs the git hook, never a run of the repo's own `gate.mjs`.
