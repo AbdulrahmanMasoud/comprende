@@ -9,10 +9,18 @@ import { GATE_FILES } from "./gate-files.js";
 import { REPO_PLATFORM } from "./platforms/index.js";
 import { GateError, splitLines } from "./shared.js";
 
+/** The CODEOWNERS the platform reads: the first that exists in its search order,
+ *  else the first place, which hides nothing. Adding anywhere else would either
+ *  be ignored or hide the repo's own file, whose rules would then stop applying. */
+function codeownersInUse(root: string, paths: readonly string[]): string {
+  return paths.find((p) => existsSync(join(root, p))) ?? paths[0];
+}
+
 export function setUpCodeowners(root: string, owner?: string | null): string {
   const { paths, ownerPattern, ownerHint, reviewSetting } = REPO_PLATFORM.codeowners;
-  const rel = paths[0]; // #33: should be the first one that exists
-  const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
+  const rel = codeownersInUse(root, paths);
+  // The entry that protects CODEOWNERS itself names the file in use.
+  const lines = GATE_FILES.map((p) => `/${paths.includes(p) ? rel : p} ${owner || "@your-team-lead"}`);
   if (!owner) {
     return (
       `MANUAL STEP 2: add to ${rel} (or rerun install with --owner @handle) and turn on ${reviewSetting} — otherwise a PR could edit the workflow to skip the check:\n  ` +
@@ -35,5 +43,5 @@ export function setUpCodeowners(root: string, owner?: string | null): string {
       `${existing + prefix}# Ownership gate: changes to the gate need lead review\n${fresh.join("\n")}\n`,
     );
   }
-  return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on ${reviewSetting} in branch protection.`;
+  return `CODEOWNERS: ${fresh.length} entries added to ${rel} for ${owner}. MANUAL STEP 2: turn on ${reviewSetting} in branch protection.`;
 }

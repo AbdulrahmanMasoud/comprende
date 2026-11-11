@@ -1760,10 +1760,13 @@ import { dirname as dirname4, join as join11, resolve as resolve4 } from "node:p
 // src/gate/codeowners.ts
 import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:fs";
 import { join as join10 } from "node:path";
+function codeownersInUse(root, paths) {
+  return paths.find((p) => existsSync4(join10(root, p))) ?? paths[0];
+}
 function setUpCodeowners(root, owner) {
   const { paths, ownerPattern, ownerHint, reviewSetting } = REPO_PLATFORM.codeowners;
-  const rel = paths[0];
-  const lines = GATE_FILES.map((p) => `/${p} ${owner || "@your-team-lead"}`);
+  const rel = codeownersInUse(root, paths);
+  const lines = GATE_FILES.map((p) => `/${paths.includes(p) ? rel : p} ${owner || "@your-team-lead"}`);
   if (!owner) {
     return `MANUAL STEP 2: add to ${rel} (or rerun install with --owner @handle) and turn on ${reviewSetting} \u2014 otherwise a PR could edit the workflow to skip the check:
   ` + lines.join("\n  ");
@@ -1784,7 +1787,7 @@ ${fresh.join("\n")}
 `
     );
   }
-  return `CODEOWNERS: ${fresh.length} entries added for ${owner}. MANUAL STEP 2: turn on ${reviewSetting} in branch protection.`;
+  return `CODEOWNERS: ${fresh.length} entries added to ${rel} for ${owner}. MANUAL STEP 2: turn on ${reviewSetting} in branch protection.`;
 }
 
 // src/gate/install.ts
