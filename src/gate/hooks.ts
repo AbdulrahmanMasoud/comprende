@@ -6,22 +6,12 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFile
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isFile, isSymlink, lstat } from "../util.js";
-import {
-  type Agent,
-  type HookEnv,
-  type HookEvent,
-  type HookReply,
-  type ProjectHookFile,
-  resolveAgent,
-  stepsAside,
-  UNKNOWN_AGENT_NAMES,
-} from "./agents/index.js";
+import { type Agent, type HookEnv, type HookReply, resolveAgent, UNKNOWN_AGENT_NAMES } from "./agents/index.js";
 import { verify } from "./commands.js";
 import { loadConfig } from "./config.js";
 import { git, repoRoot, resolveBase } from "./git.js";
-import { claimHookRun } from "./hook-claims.js";
+import { claimed, type HookRun, type HookSource, stepsAside } from "./hook-copies.js";
 import { decisionReply, SILENT_ALLOW, sessionContextReply } from "./hook-replies.js";
-import { projectHookRunsGate } from "./project-hooks.js";
 import { isPushCommand } from "./push-detect.js";
 import { uncommittedReport } from "./report.js";
 import { CONFIG_PATH, GATE_ATTRIBUTES_LINE, GATE_REL, GateError, SELF, splitLines, ZERO_SHA } from "./shared.js";
@@ -42,15 +32,15 @@ function readHookInput(stdinText: string, requested: string | null): { payload: 
  *  nothing to allow (hook-replies.ts). It checks the current branch; pushes of other
  *  branches are checked by the pre-push hook and CI. Outside a repo with the gate
  *  installed, for an unknown tool, or on an unexpected crash, it allows the call:
- *  this hook is a reminder; CI is the lock. fromPlugin: stays out of the way when
- *  the repo's own hook file already runs the gate, so the check never runs twice.
- *  The plugin never executes code from the repo it's looking at; it applies its
- *  own logic to the repo's data. */
-export function agentHook(stdinText: string, fromPlugin: boolean, requested: string | null): HookReply {
+ *  this hook is a reminder; CI is the lock. When several copies of the hook run
+ *  on the command, only one checks (hook-copies.ts). The plugin never executes
+ *  code from the repo it's looking at; it applies its own logic to the repo's data. */
+export function agentHook(stdinText: string, source: HookSource, requested: string | null): HookReply {
   const { payload, agent } = readHookInput(stdinText, requested);
   if (!agent) return SILENT_ALLOW;
   const env: HookEnv = process.env;
   const allow = decisionReply(agent, { allow: true });
+  const run: HookRun = { agent, event: "shell", source, requested };
   let root: string;
   try {
     const command = agent.shellCommand(payload);
@@ -59,8 +49,7 @@ export function agentHook(stdinText: string, fromPlugin: boolean, requested: str
     if (dir === null) return allow; // the tool didn't say which repo: step aside
     root = repoRoot(dir);
     if (!lstat(join(root, CONFIG_PATH))) return allow;
-    if (stepsAside(agent, "shell", fromPlugin, requested, repoHookRunsGate(root))) return allow;
-    if (fromPlugin && !claimed(agent, payload, "shell")) return allow;
+    if (stepsAside(run, root) || !claimed(run, payload, root)) return allow;
   } catch {
     return allow;
   }
@@ -120,71 +109,66 @@ const untrustedGateNote = (agent: Agent): Record<Exclude<GateCopyDifference, "no
   "plugin-crlf": `The plugin's own copy of gate.mjs has CRLF line endings (git's core.autocrlf, in an install from before Comprende 0.2.1), so it differs from this repo's ${GATE_REL} only in its line endings, and the local pre-push hook was NOT installed automatically. Tell the user in one line to update the plugin: ${agent.pluginUpdateHint}.`,
 });
 
-/** The repo's hook files, as stepsAside reads them: does `file` run the gate for `event`? */
-const repoHookRunsGate = (root: string) => (file: ProjectHookFile, event: HookEvent) =>
-  projectHookRunsGate(join(root, file.path), file, event);
-
-/** Did this run claim the event in this repo first? A copy of the gate in
- *  another plugin may run on it too. Events without an id aren't claimed, and
- *  every copy runs. */
-function claimed(agent: Agent, payload: unknown, event: HookEvent): boolean {
-  const id = agent.eventId(payload, event);
-  return id === null || claimHookRun(`${agent.id}:${event}:${id}:${agent.projectDir(payload, process.env) ?? ""}`);
-}
-
 /** SessionStart hook: the stdout that adds context for the agent, in the
- *  adapter's format. A plugin's run (the default) gives the always-on line and,
- *  unless the repo's own hook file starts the session, the gate's context. A
- *  run from the repo's hook file (fromRepo) gives only the gate's context.
- *  Never throws — a session must always start. */
-export function sessionStart(stdinText: string, requested: string | null, fromRepo = false): string {
+ *  adapter's format. A plugin's run gives the always-on line and, unless the
+ *  repo's own hook file starts the session, the gate's context. A run from the
+ *  repo's hook file gives only the gate's context. Never throws — a session
+ *  must always start. */
+export function sessionStart(stdinText: string, source: HookSource, requested: string | null): string {
   const { payload, agent } = readHookInput(stdinText, requested);
-  if (!fromRepo && agent && !claimed(agent, payload, "sessionStart")) return sessionContextReply(agent, []);
+  const run: HookRun | null = agent && { agent, event: "sessionStart", source, requested };
+  if (run && !claimed(run, payload, run.agent.projectDir(payload, process.env) ?? ""))
+    return sessionContextReply(agent, []);
   const lines: string[] = [];
   const node = process.versions.node;
   if (Number.parseInt(node, 10) < MIN_NODE)
     lines.push(
       `Comprende is running on Node.js ${node}, which is too old. ${nodeNote((agent?.names ?? UNKNOWN_AGENT_NAMES).app)}`,
     );
-  if (!fromRepo && process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
-  if (agent) lines.push(...gatedRepoContext(agent, payload, requested, fromRepo));
+  if (source === "plugin" && process.env.COMPRENDE_QUIET !== "1") lines.push(ALWAYS_ON);
+  if (run) lines.push(...gatedRepoContext(run, payload));
   return sessionContextReply(agent, lines);
 }
 
-/** In a repo that uses the gate: install the local pre-push hook if this clone
- *  lacks it, and tell the agent the repo is gated so the ownership-check protocol
- *  is followed. Elsewhere: nothing. */
-function gatedRepoContext(agent: Agent, payload: unknown, requested: string | null, fromRepo: boolean): string[] {
+/** In a repo that uses the gate: tell the agent the repo is gated so the
+ *  ownership-check protocol is followed, and, from a plugin, install the local
+ *  pre-push hook if this clone lacks it. Elsewhere: nothing. */
+function gatedRepoContext(run: HookRun, payload: unknown): string[] {
   try {
-    const dir = agent.projectDir(payload, process.env);
+    const dir = run.agent.projectDir(payload, process.env);
     if (dir === null) return [];
     const root = repoRoot(dir);
     if (!lstat(join(root, CONFIG_PATH))) return [];
-    if (stepsAside(agent, "sessionStart", !fromRepo, requested, repoHookRunsGate(root))) return [];
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];
-    const lines = [
-      `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`,
-    ];
-    const repoGate = join(root, GATE_REL);
-    if (process.env.OWNERSHIP_GATE_NO_AUTO_HOOK !== "1" && isFile(repoGate) && !isSymlink(repoGate)) {
-      // The installed hook runs the repo's gate on every push. Only set that up
-      // automatically when it's byte-identical to this (trusted) copy.
-      const difference = SELF ? gateCopyDifference(readFileSync(repoGate), readFileSync(SELF)) : "content";
-      if (difference !== "none") lines.push(untrustedGateNote(agent)[difference]);
-      else {
-        const result = installHooks(root, true)[0];
-        if (result.startsWith("installed") || result.startsWith("re-pinned")) {
-          lines.push(
-            "The local pre-push git hook was just installed in this clone; mention it to the user in one line (set OWNERSHIP_GATE_NO_AUTO_HOOK=1 to opt out).",
-          );
-        } else if (result.startsWith("SKIPPED")) lines.push(`The gate's pre-push hook wasn't added: ${result}`);
-      }
-    }
+    const lines = stepsAside(run, root)
+      ? []
+      : [
+          `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`,
+        ];
+    // A run from the repo's hook file is the repo's own gate.mjs: it can't vouch
+    // for itself, so only a plugin's copy may set up the git hook.
+    if (run.source === "plugin") lines.push(...autoInstallGitHook(run.agent, root));
     return lines;
   } catch {
     return [];
   }
+}
+
+/** Install the pre-push hook, which runs the repo's gate on every push, but only
+ *  when the repo's gate.mjs is byte-identical to this (trusted) copy. Returns
+ *  what to tell the agent. */
+function autoInstallGitHook(agent: Agent, root: string): string[] {
+  const repoGate = join(root, GATE_REL);
+  if (process.env.OWNERSHIP_GATE_NO_AUTO_HOOK === "1" || !isFile(repoGate) || isSymlink(repoGate)) return [];
+  const difference = SELF ? gateCopyDifference(readFileSync(repoGate), readFileSync(SELF)) : "content";
+  if (difference !== "none") return [untrustedGateNote(agent)[difference]];
+  const result = installHooks(root, true)[0];
+  if (result.startsWith("installed") || result.startsWith("re-pinned"))
+    return [
+      "The local pre-push git hook was just installed in this clone; mention it to the user in one line (set OWNERSHIP_GATE_NO_AUTO_HOOK=1 to opt out).",
+    ];
+  return result.startsWith("SKIPPED") ? [`The gate's pre-push hook wasn't added: ${result}`] : [];
 }
 
 export function prePush(stdinText: string, repo?: string | null): number {

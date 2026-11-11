@@ -29,5 +29,5 @@ export const claudeCode: Agent = {
   // session starts again under the same id.
   eventId: (payload, event) => (event === "shell" ? readClaudeFormat(payload).toolUseId : null),
 
-  projectHookFiles: [CLAUDE_SETTINGS],
+  projectHookFiles: [{ file: CLAUDE_SETTINGS, alwaysRuns: true }],
 };

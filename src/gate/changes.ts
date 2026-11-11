@@ -45,12 +45,9 @@ type Changes = Record<string, Change>;
 
 /** Gate-control files (CODEOWNERS-protected) by path; the team's notes and
  *  reports only as plain, non-executable files — a symlink, executable or
- *  submodule at those paths is a normal change like any other. */
-export function isPlumbing(
-  path: string,
-  mode = "100644",
-  ciGateHas: (feature: string) => boolean = () => true,
-): boolean {
+ *  submodule at those paths is a normal change like any other. A gate file that
+ *  came with a later feature counts only when the CI gate knows it (`ciGateHas`). */
+export function isPlumbing(path: string, mode: string, ciGateHas: (feature: string) => boolean): boolean {
   if (GATE_FILES.includes(path)) {
     const feature = gateFileFeature(path);
     return feature === undefined || ciGateHas(feature);

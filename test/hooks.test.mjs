@@ -529,6 +529,7 @@ test("a usage error in a hook entry point fails open with one short line, never 
     [["agent-hook", "stray"], AI_TOOL], // an argument it doesn't take
     [["agent-hook", "--agent", "cursor", "--format", "json"], AI_TOOL], // an option a later version might add
     [["session-start", "--from-plugin", "--format", "json"], AI_TOOL],
+    [["agent-hook", "--from-plugin", "--from-repo"], AI_TOOL], // two sources at once
     [["agent-hook-v2"], AI_TOOL], // a command a later version might add
     [["pre-push", "--repo"], GIT],
   ];

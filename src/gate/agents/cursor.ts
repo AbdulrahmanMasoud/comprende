@@ -57,6 +57,12 @@ export const cursor: Agent = {
     return event === "shell" ? toolUseId : sessionId;
   },
 
-  // Its own file first: when both run the gate, the run from .claude/settings.json steps aside.
-  projectHookFiles: [CURSOR_HOOKS, CLAUDE_SETTINGS],
+  // Its own file first: when both run the gate, the run from .claude/settings.json
+  // steps aside. Cursor runs .claude/settings.json only while Third-Party Imports
+  // is on, which a person or an admin can turn off (and Enterprise accounts start
+  // with it off), so a plugin can't step aside for it: they claim the event instead.
+  projectHookFiles: [
+    { file: CURSOR_HOOKS, alwaysRuns: true },
+    { file: CLAUDE_SETTINGS, alwaysRuns: false },
+  ],
 };

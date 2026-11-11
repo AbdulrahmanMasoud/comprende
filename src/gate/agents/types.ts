@@ -47,15 +47,15 @@ export interface Agent {
   /** How the user updates the plugin in this tool, for a message. */
   readonly pluginUpdateHint: string;
 
-  /** This tool's repo-level hook files, most specific first. `install` writes
-   *  them. A run from one of them steps aside when a more specific one already
-   *  runs the gate, and the plugin's hook steps aside when any of them does. */
-  readonly projectHookFiles: readonly ProjectHookFile[];
+  /** The repo-level hook files this tool runs, most specific first; `install`
+   *  writes them. `alwaysRuns` is false for a file the tool runs only while a
+   *  setting is on: no other copy of the gate can count on that one running
+   *  (hook-copies.ts). */
+  readonly projectHookFiles: readonly { readonly file: ProjectHookFile; readonly alwaysRuns: boolean }[];
 
   /** The id this tool gives a hook event, the same for every hook it runs on it
-   *  (a tool call's id, a session's id), or null to claim nothing. Two plugin
-   *  copies of the gate (Claude Code's, imported, and Cursor's own) claim it, so
-   *  only one of them speaks. */
+   *  (a tool call's id, a session's id), or null to claim nothing. Copies of the
+   *  gate that can't count on each other claim it, so only one of them speaks. */
   eventId(payload: unknown, event: HookEvent): string | null;
 
   /** How this tool wants allow and deny. Leave it out for the core's default:

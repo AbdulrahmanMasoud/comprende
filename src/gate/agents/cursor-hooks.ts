@@ -6,6 +6,7 @@
 
 import { isRecord } from "../../util.js";
 import { GATE_REL } from "../shared.js";
+import { isGateCommand } from "./gate-command.js";
 import type { HookEvent, ProjectHookFile } from "./types.js";
 
 const LABEL = "Cursor hooks";
@@ -28,16 +29,7 @@ const ENTRIES: Record<HookEvent, { key: string; entry: Record<string, unknown> }
 
 const runsGateFor = (hooks: Record<string, unknown>, event: HookEvent): boolean => {
   const list = hooks[ENTRIES[event].key];
-  return (
-    Array.isArray(list) &&
-    list.some(
-      (h) =>
-        isRecord(h) &&
-        typeof h.command === "string" &&
-        h.command.includes("gate.mjs") &&
-        (event === "shell" ? /\b(agent|claude)-hook\b/.test(h.command) : h.command.includes("session-start")),
-    )
-  );
+  return Array.isArray(list) && list.some((h) => isRecord(h) && isGateCommand(h.command, event));
 };
 
 /** The file as install writes it: one line per key, and each event's hooks on one

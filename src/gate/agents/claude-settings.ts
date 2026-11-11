@@ -4,6 +4,7 @@
 
 import { isRecord } from "../../util.js";
 import { GATE_REL } from "../shared.js";
+import { isGateCommand } from "./gate-command.js";
 import type { HookEvent, ProjectHookFile } from "./types.js";
 
 // Without node, exit 0: any other non-2 code would still be shown as a hook error on every Bash call.
@@ -19,14 +20,6 @@ const LABEL = "Claude hook";
 
 /** Claude Code's name for each of the gate's events. */
 const EVENT_KEY: Record<HookEvent, string> = { shell: "PreToolUse", sessionStart: "SessionStart" };
-
-/** A command that runs this gate for `event`: the hook under either name, or session start. */
-export const isGateCommand = (command: unknown, event: HookEvent): boolean =>
-  typeof command === "string" &&
-  command.includes("gate.mjs") &&
-  (event === "shell"
-    ? command.includes("claude-hook") || command.includes("agent-hook")
-    : command.includes("session-start"));
 
 /** Does a list of Claude Code hook groups run the gate? Entries of a shape we
  *  don't know are skipped, not trusted. */

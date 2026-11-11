@@ -86,8 +86,11 @@ Code that's specific to one AI tool (Claude Code, Cursor, and later Codex and An
 ```
 src/gate/agents/      types.ts (the Agent interface), index.ts (the registry and the resolve step),
                       one module per AI tool: claude-code.ts, cursor.ts, plus what they share:
-                      claude-format.ts (the payload) and claude-settings.ts (the hook file)
+                      claude-format.ts (the payload), the repo hook files claude-settings.ts and
+                      cursor-hooks.ts, and gate-command.ts (does a hook file's command run the gate)
 src/gate/hook-replies.ts   the core's default replies, for adapters that don't format their own
+src/gate/hook-copies.ts    which copy of the gate's hook speaks when several run on one event,
+                           with the claims in hook-claims.ts
 src/gate/platforms/   types.ts (the Platform interface), index.ts (the registry, the repo's platform
                       and the CI's), one module per git platform: github.ts
 ```
@@ -111,10 +114,11 @@ The interface, with a comment on each member, is in `src/gate/agents/types.ts`. 
    - `shellCommand`: the command, only for the tool's shell tool.
    - `projectDir`: the repo, from the payload or the tool's project variable. Return null when the run can't tell, and the hook steps aside. Never guess from the process's folder unless the tool always runs hooks from the project.
    - `names` and `pluginUpdateHint`: how messages name the tool, and how its users update the plugin. The core's own text never names a tool.
-   - `projectHookFiles`: the repo-level files that register the gate's hook, most specific first.
+   - `projectHookFiles`: the repo-level files that register the gate's hook, most specific first. Mark a file `alwaysRuns: false` when the tool runs it only while a setting is on: no other copy steps aside for it.
+   - `eventId`: the id the tool gives a tool call or a session, the same for every hook on it. Copies of the gate that can't step aside for each other claim it, so only one speaks. Return null when one session can't run two copies.
    - `formatDecision` and `formatSessionContext`: only if the tool doesn't accept the defaults (exit 0 or exit 2 with stderr, and `hookSpecificOutput.additionalContext`).
 3. **Register it in `src/gate/agents/index.ts`.** In `AGENTS`, a tool that runs another tool's hook commands goes before that tool. `PROJECT_HOOK_FILES`, and from it `GATE_FILES`, pick up its files.
-4. **Hook commands for its plugin or settings file.** Run `node <gate.mjs> agent-hook --agent <id>` and `session-start --agent <id>`. Use no shell syntax, so they run in PowerShell too. Make sure a missing `node` fails open: any exit code but 2.
+4. **Hook commands for its plugin or settings file.** Run `node <gate.mjs> agent-hook --agent <id>` and `session-start --agent <id>`, with `--from-plugin` in the plugin's file, and `session-start --from-repo` in the repo's. Use no shell syntax, so they run in PowerShell too. Make sure a missing `node` fails open: any exit code but 2.
 5. **Tests from the fixtures,** in `test/agents.test.mjs`:
    - its payloads resolve to it
    - it reads the command and the repo
