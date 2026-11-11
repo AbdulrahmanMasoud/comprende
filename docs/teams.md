@@ -24,7 +24,7 @@ node <plugin>/dist/gate.mjs install --repo . --owner @your-org/leads
 - `.github/workflows/ownership-check.yml`: the CI check
 - `.claude/settings.json`: a hook that stops Claude Code from pushing unverified code (other settings kept)
 - `.cursor/hooks.json`: the same for Cursor, plus its session start, as plain `node .learning/gate.mjs … --agent cursor` lines that also run in PowerShell (other hooks kept)
-- `.codex/hooks.json`: the same for Codex: a shell hook that finds the repo's root with `git rev-parse`, since Codex may run from a subfolder, and a session start that tells the agent when Codex skipped the plugin's hooks (other hooks kept). Codex runs them once each developer trusts the project and the hooks in `/hooks`
+- `.codex/hooks.json`: the same for Codex: a shell hook that finds the repo's root with `git rev-parse`, since Codex may run from a subfolder, and a session start that tells the agent when the plugin isn't running: not installed, or its hooks skipped (other hooks kept). Codex runs them once each developer trusts the project and the hooks in `/hooks`
 - `.gitignore`: one line, `.learning/report.local.json`
 - `.gitattributes`: one line, `.learning/gate.mjs -text`, so git never rewrites the gate's line endings (on Windows, `core.autocrlf` would)
 - CODEOWNERS (with `--owner`): the gate's files need the lead's review.

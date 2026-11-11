@@ -94,10 +94,12 @@ export const ALWAYS_ON =
 // all reads to the skill as hooks that didn't run.
 export const QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
 
-/** What the repo's hook file says at session start, in a tool that may skip the
- *  plugin's hooks without a word: how the agent tells, and the tool's advice. */
-const skippedPluginHooksNote = (agent: Agent, hint: string) =>
-  `If this session didn't also get a note starting with "${PLUGIN_LINE_START}", ${agent.names.app} skipped Comprende's plugin hooks. Tell the user once, in one line: ${hint}`;
+/** What the repo's hook file says at session start, in a tool where a session can
+ *  start without the plugin's hooks: how the agent tells, and the exact line for the
+ *  user. The plugin may not be installed at all, so the note doesn't guess which:
+ *  a real run had the agent tell such a user to re-trust hooks they never had. */
+const pluginNotRunningNote = (agent: Agent, hint: string) =>
+  `If this session didn't also get a note starting with "${PLUGIN_LINE_START}", Comprende's plugin isn't running in ${agent.names.app}: either it isn't installed, or its hooks were skipped. Tell the user once, in exactly this line: "${hint}"`;
 
 const withLfEndings = (bytes: Buffer) => Buffer.from(bytes.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
 
@@ -161,8 +163,8 @@ function gatedRepoContext(run: HookRun, payload: unknown): string[] {
           `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`,
         ]
       : [];
-    const hint = run.agent.skippedPluginHooksHint;
-    if (run.source === "repo" && hint) lines.push(skippedPluginHooksNote(run.agent, hint));
+    const hint = run.agent.pluginNotRunningHint;
+    if (run.source === "repo" && hint) lines.push(pluginNotRunningNote(run.agent, hint));
     // A run from the repo's hook file is the repo's own gate.mjs: it can't vouch
     // for itself, so only a plugin's copy may set up the git hook.
     if (run.source === "plugin") lines.push(...autoInstallGitHook(run.agent, root));

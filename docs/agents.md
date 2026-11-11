@@ -623,11 +623,11 @@ So each push is checked once, and each session gets each line once. `test/agents
 - **Against:**
   - Each developer has to trust the project, and then each hook, once.
   - Codex runs hooks in the session's folder, which may be a subfolder. So the command can't be a plain relative path: it's `node "$(git rev-parse --show-toplevel)/.learning/gate.mjs" agent-hook --agent codex`, and `$(…)` works in PowerShell too, so it needs no `commandWindows`. Tested: from a subfolder it blocks an unverified push, and without `git` or `node` it fails open.
-  - The shell hook, and since 0.4.1 a session start: its trust lasts across plugin updates, so after one it still runs, and tells the agent the plugin's hooks were skipped. See below.
+  - The shell hook, and since 0.4.1 a session start: its trust lasts across plugin updates, so after one it still runs, and tells the agent the plugin isn't running. See below.
 
 **No double runs:**
 - The plugin and `.codex/hooks.json` both run when both are trusted. Neither can count on the other, so both claim the `tool_use_id`, and only the first checks.
-- **Session start comes from both, each line once.** Unlike Cursor's `.cursor/hooks.json`, `.codex/hooks.json` isn't sure to run (`alwaysRuns: false`), so the plugin never steps aside for it. The plugin gives the always-on line, the repo's file gives Codex's note for skipped plugin hooks (`skippedPluginHooksNote`), and both claim the gate's message under one key, so it comes once.
+- **Session start comes from both, each line once.** Unlike Cursor's `.cursor/hooks.json`, `.codex/hooks.json` isn't sure to run (`alwaysRuns: false`), so the plugin never steps aside for it. The plugin gives the always-on line, the repo's file gives Codex's note for when the plugin isn't running (`pluginNotRunningHint`: not installed, or its hooks skipped; one line for both, since the note can't tell which), and both claim the gate's message under one key, so it comes once.
 - **A known limit: two plugin copies in one Codex session.** `/import` from Claude Code can bring over Claude Code's copy of Comprende as a second plugin. For a push, both copies detect Codex from `turn_id` and claim the tool call, so it's checked once. A session start has no `turn_id`, so the Claude Code copy reads it as Claude Code's and claims nothing: the always-on line and the gate's message come twice, one naming Claude Code. And its always-on line hides the repo's note when the Codex plugin's hooks were skipped. Install it in one place. The matrix test asserts the counts.
 - The matrix test gains a Codex column, trusted and not.
 

@@ -307,6 +307,7 @@ CODEX_API_KEY=… node tools/e2e-codex.mjs --out /tmp/e2e-codex-2 --only explain
   - `explain`: explain-as-you-build on a small retry function
   - `repo-hook`: the plugin and the repo's `.codex/hooks.json` both trusted: one check per push
   - `after-update`: a file changed in the installed plugin, so Codex skips its hooks, and the repo's session start has the agent say to trust them again
+  - `no-plugin`: a gated repo, and Codex without the plugin: only the repo's hooks run, and the agent says how to install it. It runs first, before the plugin is installed
 - **Isolation:** a throwaway `HOME` and `CODEX_HOME`. This repo is installed as the plugin (`codex plugin marketplace add <this repo>`), and its hooks are trusted the way `/hooks` does it, through Codex's app server. It doesn't use `--dangerously-bypass-hook-trust`.
 - **Output:** PASS, FAIL or BLOCKED per step, and transcripts, replies, stderr and a log of every `gate.mjs` run in `--out`. To quote a reply in the READMEs, copy its `.reply.md` into [`docs/recordings/codex/`](docs/recordings/codex/), checked for anything personal, with its run and prompt in that folder's README.
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Codex: the repo's note no longer tells a teammate without the plugin to trust its hooks again.** In a gated repo with only the repo's `.codex/hooks.json`, a real run had the agent say "Codex skips Comprende's plugin hooks after every plugin update until they're trusted again in `/hooks`", and not how to install the plugin. The note now says the plugin isn't running, and gives the agent one line for the user: install it, or, if it's installed, trust its hooks again in `/hooks`.
+
 ## 0.4.1
 
 - **Codex: after a plugin update, the agent now tells you to trust Comprende's hooks again.** Codex skips a plugin's hooks without a word after every update. In 0.4.0 the skill was to notice, but in two real runs Codex's agent didn't open the skill for a small code change. Now `install` gives the repo's `.codex/hooks.json` a session start too. Its trust lasts across plugin updates, so it still runs, and tells the agent what to say. Each Codex user trusts it once in `/hooks`, after `install --upgrade`. Tested in the real Codex CLI ([recording](docs/recordings/codex/0.4.1-after-update/)).

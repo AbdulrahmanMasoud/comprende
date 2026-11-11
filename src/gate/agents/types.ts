@@ -49,10 +49,11 @@ export interface Agent {
   /** How the user updates the plugin in this tool, for a message. */
   readonly pluginUpdateHint: string;
 
-  /** For a tool that may skip the plugin's hooks without a word: what to tell the
-   *  user then. The repo's own hook file says it at session start, in a gated repo
-   *  (hooks.ts). Leave it out for a tool that always runs the plugin's hooks. */
-  readonly skippedPluginHooksHint?: string;
+  /** For a tool where a session can start without the plugin's hooks, and without a
+   *  word (not installed, or skipped until trusted again): the one line to tell the
+   *  user, covering both. The repo's own hook file says it at session start, in a
+   *  gated repo (hooks.ts). Leave it out for a tool that always runs the plugin's hooks. */
+  readonly pluginNotRunningHint?: string;
 
   /** The repo-level hook files this tool runs, most specific first; `install`
    *  writes them. `alwaysRuns` is false for a file the tool runs only while a

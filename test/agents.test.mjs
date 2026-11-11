@@ -514,7 +514,7 @@ test("each session gets the always-on line, the gate's context and Codex's skipp
       const label = `${tool} ${JSON.stringify(combo)}`;
       assert.equal(count(/Comprende is installed\./), expected.alwaysOn, `always-on: ${label}`);
       assert.equal(count(/This repository uses the ownership gate/), expected.gateContext, `gate: ${label}`);
-      assert.equal(count(/Codex skipped Comprende's plugin hooks/), expected.note, `note: ${label}`);
+      assert.equal(count(/Comprende's plugin isn't running in Codex/), expected.note, `note: ${label}`);
     }
   }
 });
@@ -779,9 +779,9 @@ test("the repo's .codex/hooks.json session start, from a subfolder, gives the ga
   assert.match(context, /This repository uses the ownership gate/);
   assert.match(
     context,
-    /didn't also get a note starting with "Comprende is installed", Codex skipped Comprende's plugin hooks/,
+    /didn't also get a note starting with "Comprende is installed", Comprende's plugin isn't running in Codex/,
   );
-  assert.match(context, /trusted again in `\/hooks`/);
+  assert.match(context, /trust its hooks again in `\/hooks`/);
   assert.doesNotMatch(context, /Comprende is installed\./, "the always-on line is the plugin's to give");
   assert.ok(context.includes(`"${gate.const("PLUGIN_LINE_START")}"`), "the note quotes how the plugin's line starts");
 
@@ -790,6 +790,23 @@ test("the repo's .codex/hooks.json session start, from a subfolder, gives the ga
   config.ownership_check.mode = "off";
   writeFileSync(join(dev, ".learning/config.json"), JSON.stringify(config));
   assert.equal(start(), "", "mode off");
+});
+
+// A teammate on Codex may never have installed the plugin: only the repo's hooks run.
+// A real run had the agent tell them to "trust the hooks again", which they never had.
+test("the repo's Codex note doesn't assume the plugin is installed: it gives one line, to install it or trust its hooks again", {
+  skip: process.platform === "win32",
+}, (t) => {
+  const { dev } = setup(t);
+  const [{ hooks }] = JSON.parse(readFileSync(join(dev, ".codex/hooks.json"), "utf8")).hooks.SessionStart;
+  const input = JSON.stringify({ ...JSON.parse(codexPayload("session-start.json", dev)), session_id: "no-plugin" });
+  const r = sh(dev, "/bin/sh", ["-c", hooks[0].command], { check: false, input, env: ENV });
+  const context = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(context, /Codex skipped/, "skipped hooks are only one of the two cases");
+  const line = /Tell the user once, in exactly this line: "(.+)"$/.exec(context)?.[1] ?? "";
+  assert.match(line, /codex plugin marketplace add AbdulrahmanMasoud\/comprende.*codex plugin add comprende@comprende/);
+  assert.match(line, /trust its hooks again in `\/hooks`/);
+  assert.ok(!line.includes("\n"), "one line");
 });
 
 test("the repo's .codex/hooks.json blocks an unverified push from a subfolder, and fails open without git or node", {
