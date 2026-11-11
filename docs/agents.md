@@ -290,7 +290,7 @@ How each tool fills it in:
 | Shell tool | `Bash` | `Shell` | `Bash` | `run_command`, command in `toolCall.args.CommandLine` |
 | `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR`, else its own folder (Claude Code runs hooks from the project) | the one entry in `workspace_roots` (`cwd` is `""`), else `CURSOR_PROJECT_DIR` or `CLAUDE_PROJECT_DIR`, else step aside: Cursor runs plugin hooks from the plugin's folder. With several roots it steps aside, since it can't tell which one the command runs in | `cwd` | `workspacePaths[0]` |
 | `names` | Claude, Claude Code | Cursor, Cursor | Codex, Codex | Antigravity, Antigravity |
-| `pluginUpdateHint` | `/plugin marketplace update comprende` | the same, or `agent plugin marketplace update comprende` in Cursor's CLI: Cursor may be running the Claude Code plugin it imported | to be found | to be found |
+| `pluginUpdateHint` | `/plugin marketplace update comprende` | the same, since Cursor may be running the Claude Code plugin it imported, or `git -C ~/.cursor/plugins/local/comprende pull` for its own copy | to be found | to be found |
 | `projectHookFiles` | `.claude/settings.json`, always run | `.cursor/hooks.json`, always run, then `.claude/settings.json`, run only while Third-Party Imports is on | `.codex/hooks.json` | the plugin's `hooks.json` only |
 | `eventId` | the tool call's id; none for a session, since one session runs one plugin copy | the tool call's id, or the session's | to be found | to be found |
 | `formatDecision` | the default | the default | the default | `{"decision": …}` |
