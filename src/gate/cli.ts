@@ -99,11 +99,28 @@ function parseArgs(argv: string[]): Args {
 
 class UsageError extends Error {}
 
+// A hook must never exit 2 by accident: Claude Code and Cursor read 2 as
+// "block", and git blocks a push on any non-zero exit. So a usage error in a
+// hook entry point fails open: an older gate that doesn't know an option a newer
+// hook file passes must not block every command. The value is the exit code that
+// fails open for whoever runs that entry point.
+const FAIL_OPEN_EXIT: Readonly<Record<string, number>> = {
+  "agent-hook": 1,
+  "claude-hook": 1,
+  "session-start": 1,
+  "pre-push": 0,
+};
+
 export function main(argv: string[]): number {
   let args: Args;
   try {
     args = parseArgs(argv);
   } catch (e) {
+    const failOpen = Object.hasOwn(FAIL_OPEN_EXIT, argv[0] ?? "") ? FAIL_OPEN_EXIT[argv[0]] : undefined;
+    if (failOpen !== undefined) {
+      process.stderr.write(`ownership gate: ${(e as Error).message}; skipping this hook\n`);
+      return failOpen;
+    }
     process.stderr.write(`${(e as Error).message}\n\n${HELP}`);
     return 2;
   }
@@ -222,8 +239,10 @@ export function main(argv: string[]): number {
         return 0;
       }
       default:
-        process.stderr.write(`unknown command ${cmd}\n\n${HELP}`);
-        return 2;
+        // Exit 1, not 2: the unknown command may be a hook entry point that a
+        // newer hook file calls on this older gate.
+        process.stderr.write(`ownership gate: unknown command ${cmd}; run \`gate.mjs help\` for the list\n`);
+        return 1;
     }
   } catch (e) {
     const msg = (e as Error).message;

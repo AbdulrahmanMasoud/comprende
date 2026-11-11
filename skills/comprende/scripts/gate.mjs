@@ -1949,11 +1949,23 @@ function parseArgs(argv) {
 }
 var UsageError = class extends Error {
 };
+var FAIL_OPEN_EXIT = {
+  "agent-hook": 1,
+  "claude-hook": 1,
+  "session-start": 1,
+  "pre-push": 0
+};
 function main(argv) {
   let args;
   try {
     args = parseArgs(argv);
   } catch (e) {
+    const failOpen = Object.hasOwn(FAIL_OPEN_EXIT, argv[0] ?? "") ? FAIL_OPEN_EXIT[argv[0]] : void 0;
+    if (failOpen !== void 0) {
+      process.stderr.write(`ownership gate: ${e.message}; skipping this hook
+`);
+      return failOpen;
+    }
     process.stderr.write(`${e.message}
 
 ${HELP}`);
@@ -2074,10 +2086,9 @@ ${HELP}`);
         return 0;
       }
       default:
-        process.stderr.write(`unknown command ${cmd}
-
-${HELP}`);
-        return 2;
+        process.stderr.write(`ownership gate: unknown command ${cmd}; run \`gate.mjs help\` for the list
+`);
+        return 1;
     }
   } catch (e) {
     const msg = e.message;

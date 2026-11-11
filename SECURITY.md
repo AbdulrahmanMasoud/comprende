@@ -28,6 +28,7 @@ The plugin runs in every repo you open with Claude, including ones you just clon
   - If Node can't run the gate (a missing file, or a Node too old to load it), SessionStart prints the same note and exits 0. PreToolUse exits 1, which Claude Code and Cursor both treat as a non-blocking error.
   - When PreToolUse allows a command, it prints nothing. Cursor blocks a command when a hook's stdout isn't JSON, so a stray line would block every command.
   - The hook commands are plain POSIX `sh`, with no syntax that a shell could reject with its own exit code 2.
+  - A usage error in a hook fails open too: an option or a command this gate doesn't know, which a newer hook file might pass to an older copy, gives exit 1 for the AI tools' hooks and 0 for `pre-push`, with one line on stderr. It never gives 2.
 - **Exemptions are exact.** Only these skip the check:
   - the gate's own files;
   - the report and notes shapes in `.learning/`;
