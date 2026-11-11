@@ -43,6 +43,11 @@ export const SELF = (() => {
   }
 })();
 
+/** JSON text without a leading UTF-8 BOM, which JSON.parse rejects. Windows
+ *  tools add one: Cursor's CLI to a hook payload (https://forum.cursor.com/t/166794),
+ *  and PowerShell 5.1's `Out-File -Encoding UTF8` to a file. */
+export const withoutBom = (text: string): string => text.replace(/^\uFEFF/, "");
+
 export const sorted = <T>(xs: Iterable<T>): T[] => [...xs].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 export const splitLines = (s: string): string[] => {

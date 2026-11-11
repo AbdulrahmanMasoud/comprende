@@ -61,6 +61,15 @@ for (const bad of ["# no data block\n", null]) {
   });
 }
 
+test("save --input reads a file that starts with a UTF-8 BOM, as PowerShell 5.1 writes it", (t) => {
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  write(dev, INPUT, `\uFEFF${JSON.stringify(payload())}`);
+  const r = runGate(dev, ["save", "--input", INPUT]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(existsSync(join(dev, gate.reportRelpath("feature/rate-limit"))));
+});
+
 test("save --input deletes report.local.json only after the report is written", (t) => {
   const { dev } = setup(t);
   write(dev, "src/app.js", "export const app = 2;\n");

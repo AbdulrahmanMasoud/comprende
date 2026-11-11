@@ -66,6 +66,7 @@ var SELF = (() => {
     return "";
   }
 })();
+var withoutBom = (text) => text.replace(/^\uFEFF/, "");
 var sorted = (xs) => [...xs].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
 var splitLines = (s) => {
   const parts = s.split(/\r\n|\r|\n/);
@@ -1749,7 +1750,7 @@ function isPushCommand(command, depth = 0) {
 // src/gate/hooks.ts
 function readHookInput(stdinText, requested) {
   try {
-    const payload = JSON.parse(stdinText.replace(/^\uFEFF/, "") || "{}");
+    const payload = JSON.parse(withoutBom(stdinText) || "{}");
     return { payload, agent: resolveAgent(payload, process.env, requested) };
   } catch {
     return { payload: void 0, agent: null };
@@ -2243,7 +2244,7 @@ ${HELP}`);
         const raw = o("input") ? readFileSync4(o("input"), "utf8") : readStdin();
         let payload;
         try {
-          payload = JSON.parse(raw);
+          payload = JSON.parse(withoutBom(raw));
         } catch (e) {
           throw new GateError(`Input is not valid JSON: ${e.message}`);
         }
