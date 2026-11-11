@@ -40,7 +40,7 @@ actionlint                        # the GitHub workflows
   - `hook-copies.ts` (which copy of the gate's hook speaks, when several run on one event), `hook-claims.ts` (the claims it uses, in a private temp folder)
   - `install.ts` (writes the gate's files into a repo), `codeowners.ts` (CODEOWNERS entries for the gate files), `run.ts` (spawning a program without a shell), `test-hooks.ts` (`__test`, the internals the test suite calls)
   - `gate-files.ts` (the files that control the gate), `project-hooks.ts` (safe reads and writes of the agents' repo-level hook files)
-  - `agents/`: one adapter per AI tool behind one interface. `types.ts` (the `Agent` interface), `index.ts` (the registry and the resolve step), `claude-code.ts`, `cursor.ts`, `codex.ts`, and what they share: `claude-format.ts` (the payload) and `claude-settings.ts` (the `.claude/settings.json` hook file), plus `cursor-hooks.ts` (the `.cursor/hooks.json` hook file). `gate-command.ts` tells whether a hook file's command runs the gate. `hook-replies.ts` holds the core's default replies. How to add a tool: CONTRIBUTING.md, "Adding an AI tool"
+  - `agents/`: one adapter per AI tool behind one interface. `types.ts` (the `Agent` interface), `index.ts` (the registry and the resolve step), `claude-code.ts`, `cursor.ts`, `codex.ts`, and what they share: `claude-format.ts` (the payload), the repo hook files `claude-settings.ts` (`.claude/settings.json`), `cursor-hooks.ts` (`.cursor/hooks.json`) and `codex-hooks.ts` (`.codex/hooks.json`), `claude-format-hooks.ts` (the merge both Claude-format files share) and `compact-hooks-json.ts` (how install writes a hooks file). `gate-command.ts` tells whether a hook file's command runs the gate. `hook-replies.ts` holds the core's default replies. How to add a tool: CONTRIBUTING.md, "Adding an AI tool"
   - `platforms/`: one adapter per git platform behind one interface. `types.ts` (the `Platform` interface), `index.ts` (the registry, the repo's platform and the CI's), `github.ts` (the Actions workflow, the job summary and annotations, CODEOWNERS, the ruleset through `gh`). How to add a platform: CONTRIBUTING.md, "Adding a git platform"
 - `src/store/`: the memory store. `profile.ts` (the learner profile), `project.ts` (`.learning/` map and decisions), `common.ts`
 - `src/server.ts`: the MCP server (thin: tools in, store or gate out). `src/learning.ts`: the skill's file-only helper
@@ -55,6 +55,7 @@ actionlint                        # the GitHub workflows
   - `dependabot.yml`, the PR template, and the issue templates
 - `tools/release.mjs`: the version check and the release notes, for both workflows
 - `tools/e2e-cursor.mjs`: the end-to-end run in the real Cursor CLI. By hand, since it needs a Cursor login: CONTRIBUTING.md, "Testing in Cursor"
+- `tools/e2e-codex.mjs`: the same in the real Codex CLI: CONTRIBUTING.md, "Testing in Codex"
 - `CONTRIBUTING.md`: setup, the workflow, the code rules, layout, tests, the demo, releasing
 - `biome.json`: formatting and lint (Markdown is left alone). `build.mjs`: the bundler.
 - `.gitattributes`: keeps `dist/` and `skills/comprende/scripts/` byte for byte on every platform, since SessionStart compares the repo's `gate.mjs` with `dist/gate.mjs` byte for byte

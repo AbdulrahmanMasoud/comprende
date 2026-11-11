@@ -591,19 +591,19 @@ So each push is checked once, and each session gets each line once. `test/agents
   - plain `node` lines, since Codex runs hooks in PowerShell on Windows. Without `node`, the command fails with an exit code other than 2, and Codex lets the tool run.
 - **A Codex MCP config,** `.codex-plugin/mcp.json`, that starts the server. `${CLAUDE_PLUGIN_ROOT}` isn't expanded there, but a relative `cwd` resolves against the plugin's folder: `"command": "node", "args": ["dist/server.mjs"], "cwd": "."`. Tested: Codex's app server lists all 10 tools, with no sign-in needed.
 
-**What `install` writes for teammates on Codex:** `.codex/hooks.json`, behind a `codex-hooks` feature, like `.cursor/hooks.json`. Its pros and cons, to decide (below):
+**What `install` writes for teammates on Codex:** `.codex/hooks.json`, behind a `codex-hooks` feature, like `.cursor/hooks.json` (decided, and built in 0.4.0). Its pros and cons:
 - **For:**
   - It works without the plugin.
-  - It doesn't go untrusted when Comprende updates. Codex checks a project hook against its own declaration; only plugin hooks are checked against the whole folder (to confirm).
+  - It doesn't go untrusted when Comprende updates. Codex checks a project hook against its own declaration; only plugin hooks are checked against the whole folder. Tested: after `.learning/gate.mjs` changed, the hook stayed trusted; after its command changed, it was "modified".
 - **Against:**
   - Each developer has to trust the project, and then each hook, once.
-  - Codex runs hooks in the session's folder, which may be a subfolder. So the command can't be a plain relative path: `command` would find the repo with `node "$(git rev-parse --show-toplevel)/.learning/gate.mjs" agent-hook --agent codex`, and Codex's documented `commandWindows` would hold the PowerShell form. A failed `git` gives a wrong path, and `node` fails open (to test).
+  - Codex runs hooks in the session's folder, which may be a subfolder. So the command can't be a plain relative path: it's `node "$(git rev-parse --show-toplevel)/.learning/gate.mjs" agent-hook --agent codex`, and `$(…)` works in PowerShell too, so it needs no `commandWindows`. Tested: from a subfolder it blocks an unverified push, and without `git` or `node` it fails open.
   - Only the shell hook. A session start there would give the gate's message a second time: see below.
 
 **No double runs:**
 - The plugin and `.codex/hooks.json` both run when both are trusted. Neither can count on the other, so both claim the `tool_use_id`, and only the first checks.
 - **Session start comes from the plugin only.** Unlike Cursor's `.cursor/hooks.json`, `.codex/hooks.json` isn't sure to run (`alwaysRuns: false`), so the plugin never steps aside for it, and a plugin's claim and a repo file's claim use different keys. A session start in both would give the gate's message twice. Without the plugin there's no skill either, so the message would have nothing to point to.
-- `/import` from Claude Code can bring over Claude Code's copy of Comprende as a second plugin. Both copies detect Codex from the payload and claim with the same key.
+- **A known limit: two plugin copies in one Codex session.** `/import` from Claude Code can bring over Claude Code's copy of Comprende as a second plugin. For a push, both copies detect Codex from `turn_id` and claim the tool call, so it's checked once. A session start has no `turn_id`, so the Claude Code copy reads it as Claude Code's and claims nothing: the always-on line and the gate's message come twice, one naming Claude Code. Install it in one place. The matrix test asserts both.
 - The matrix test gains a Codex column, trusted and not.
 
 **The user's install steps:**
@@ -614,6 +614,8 @@ So each push is checked once, and each session gets each line once. `test/agents
 **What's weaker than in Claude Code:**
 - **Hooks need trust,** after the install and after every update, and Codex skips them without a word until then. The git hook and CI still check. So does `.codex/hooks.json`, if it's written and trusted.
 - **Codex's `workspace-write` sandbox keeps `.git` read-only,** so the agent asks before it commits.
+- **On Windows, a block doesn't reach Codex as exit 2.** Codex runs hooks in PowerShell with `-Command`, which turns a program's exit 2 into 1 unless the command ends with `exit $LASTEXITCODE`. So the push guard fails open there, and the git hook and CI still check. Tested in `pwsh` in CI. Cursor, which also runs hooks in PowerShell on Windows, has the same limit. The fix, a JSON deny that doesn't depend on exit codes, needs a Windows run: [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10).
+- **The repo's `.codex/hooks.json` needs a common shell.** Its `$(git rev-parse …)` works in sh, bash, zsh, fish 3.4+ and PowerShell. With another `$SHELL` (tcsh, nu) that copy fails open, and the plugin's hook still checks.
 - **The commit trailer** depends on an account setting that Codex has no config key for.
 - **Windows is untested.**
 
@@ -621,7 +623,7 @@ So each push is checked once, and each session gets each line once. `test/agents
 - A throwaway `CODEX_HOME` with a copied `auth.json`, or `CODEX_API_KEY`.
 - `codex plugin marketplace add` and `codex plugin add` with this repo.
 - It trusts the hooks the way `/hooks` does: the app server's `hooks/list`, then `config/batchWrite`.
-- Each turn is `codex exec --json -C <demo> -s workspace-write --add-dir <origin.git> --add-dir <demo>/.git`, with stdin closed.
+- Each turn is `codex exec --json -o <reply> "<prompt>"` from the demo's folder, or `codex exec … resume <session>` for the next one, with stdin closed. `exec resume` takes no sandbox flags, so the sandbox goes through config: `-c sandbox_mode="workspace-write"` and `-c sandbox_workspace_write.writable_roots=[<demo>/.git, <origin.git>]`.
 - **The steps:**
   - session start
   - `ls`, with the hook silent

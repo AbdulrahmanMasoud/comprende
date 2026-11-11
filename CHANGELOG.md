@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **`install` writes `.codex/hooks.json` too** (part of [#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)): the gate's shell hook for teammates on Codex. Its command finds the repo's root with `git rev-parse`, since Codex may run from a subfolder, and it fails open without `git` or `node`. Each developer trusts the project and the hook once in Codex. The trust lasts across gate upgrades, since the command doesn't change. `install` merges it into an existing file, and `install --upgrade` adds it.
+  - **Upgrading:** until the base branch runs a gate that knows `.codex/hooks.json` as one of its own files (the `codex-hooks` feature), CI counts the new file as a change: one small-change question, or the skip label.
+  - **One check per push in Codex, too:** the plugin and `.codex/hooks.json` claim the push, and only the first checks it.
+- **`tools/e2e-codex.mjs`:** the end-to-end run in the real Codex CLI, by hand (CONTRIBUTING.md, "Testing in Codex"). Its real replies are kept in `docs/recordings/codex/`.
+- **The skill loads for any code change in a gated repo** (one with `.learning/config.json`), not only when the user wants to learn. In Codex, with the hooks skipped, nothing else made it load, so its "no session-start note" rule couldn't fire.
+
 - **A Codex plugin** (part of [#3](https://github.com/AbdulrahmanMasoud/comprende/issues/3)): `.codex-plugin/plugin.json`, which Codex reads before `.claude-plugin/`, with the same skill.
   - **Its hooks,** in `hooks/codex-hooks.json`, pass `--agent codex`. They're plain `node` lines, so they also run in PowerShell, and a missing `node` fails open.
   - **The memory server now starts in Codex,** all 10 tools. Codex doesn't expand `${CLAUDE_PLUGIN_ROOT}` in a plugin's MCP config, so Codex gets its own, with a relative path.

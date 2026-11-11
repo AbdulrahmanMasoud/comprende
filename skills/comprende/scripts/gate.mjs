@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Generated from src/gate/ by build.mjs. Edit the source, then run `npm run build`.
 // ownership-gate-version: 3
-// ownership-gate-features: small-change gitattributes cursor-hooks
+// ownership-gate-features: small-change gitattributes cursor-hooks codex-hooks
 
 // src/gate/cli.ts
 import { appendFileSync, readFileSync as readFileSync4, readSync as readSync2 } from "node:fs";
@@ -93,57 +93,72 @@ function oneLine(text) {
 // src/gate/agents/gate-command.ts
 var isGateCommand = (command, event) => typeof command === "string" && command.includes("gate.mjs") && (event === "shell" ? /\b(agent|claude)-hook\b/.test(command) : /\bsession-start\b/.test(command) && /(^|\s)--from-repo(\s|$)/.test(command));
 
-// src/gate/agents/claude-settings.ts
-var HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
-var HOOK_BY_HAND = "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-claude-hook-by-hand";
-var LABEL = "Claude hook";
+// src/gate/agents/claude-format-hooks.ts
 var EVENT_KEY = { shell: "PreToolUse", sessionStart: "SessionStart" };
 var listsGateHook = (groups, event) => groups.some(
   (g) => isRecord(g) && Array.isArray(g.hooks) && g.hooks.some((h) => isRecord(h) && isGateCommand(h.command, event))
 );
-var CLAUDE_SETTINGS = {
+function claudeFormatHookFile(spec) {
+  const { label, byHand } = spec;
+  return {
+    path: spec.path,
+    agentFlag: spec.agentFlag,
+    ...spec.feature ? { feature: spec.feature } : {},
+    runsGate(content, event) {
+      let file;
+      try {
+        file = JSON.parse(content);
+      } catch {
+        return false;
+      }
+      const groups = isRecord(file) && isRecord(file.hooks) ? file.hooks[EVENT_KEY[event]] : void 0;
+      return Array.isArray(groups) && listsGateHook(groups, event);
+    },
+    withGateHook(existing, shownPath) {
+      if (existing !== null && "unreadable" in existing) return { message: `SKIPPED ${label}: ${existing.unreadable}` };
+      let file = {};
+      if (existing !== null) {
+        let parsed;
+        try {
+          parsed = JSON.parse(existing.text || "{}");
+        } catch {
+          return { message: `SKIPPED ${label}: ${shownPath} is not valid JSON; ${byHand}` };
+        }
+        if (!isRecord(parsed)) return { message: `SKIPPED ${label}: ${shownPath} is not a JSON object; ${byHand}` };
+        file = parsed;
+      }
+      if (file.hooks !== void 0 && !isRecord(file.hooks))
+        return { message: `SKIPPED ${label}: "hooks" in ${shownPath} is not an object; ${byHand}` };
+      file.hooks ??= {};
+      const hooks = file.hooks;
+      if (hooks.PreToolUse !== void 0 && !Array.isArray(hooks.PreToolUse))
+        return { message: `SKIPPED ${label}: "hooks.PreToolUse" in ${shownPath} is not a list; ${byHand}` };
+      hooks.PreToolUse ??= [];
+      const groups = hooks.PreToolUse;
+      if (listsGateHook(groups, "shell")) return { message: `${label} already present (${shownPath})` };
+      groups.push({ matcher: "Bash", hooks: [{ type: "command", command: spec.command, timeout: 60 }] });
+      return {
+        content: spec.format(file),
+        message: `merged a ${spec.tool} PreToolUse hook into ${shownPath} (other ${spec.keeps} kept)`
+      };
+    }
+  };
+}
+
+// src/gate/agents/claude-settings.ts
+var HOOK_COMMAND = `command -v node >/dev/null 2>&1 || exit 0; exec node "$CLAUDE_PROJECT_DIR/${GATE_REL}" claude-hook`;
+var HOOK_BY_HAND = "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-claude-hook-by-hand";
+var CLAUDE_SETTINGS = claudeFormatHookFile({
   path: ".claude/settings.json",
   agentFlag: null,
-  runsGate(content, event) {
-    let settings;
-    try {
-      settings = JSON.parse(content);
-    } catch {
-      return false;
-    }
-    const groups = isRecord(settings) && isRecord(settings.hooks) ? settings.hooks[EVENT_KEY[event]] : void 0;
-    return Array.isArray(groups) && listsGateHook(groups, event);
-  },
-  withGateHook(existing, shownPath) {
-    if (existing !== null && "unreadable" in existing) return { message: `SKIPPED ${LABEL}: ${existing.unreadable}` };
-    let settings = {};
-    if (existing !== null) {
-      let parsed;
-      try {
-        parsed = JSON.parse(existing.text || "{}");
-      } catch {
-        return { message: `SKIPPED ${LABEL}: ${shownPath} is not valid JSON; ${HOOK_BY_HAND}` };
-      }
-      if (!isRecord(parsed)) return { message: `SKIPPED ${LABEL}: ${shownPath} is not a JSON object; ${HOOK_BY_HAND}` };
-      settings = parsed;
-    }
-    if (settings.hooks !== void 0 && !isRecord(settings.hooks))
-      return { message: `SKIPPED ${LABEL}: "hooks" in ${shownPath} is not an object; ${HOOK_BY_HAND}` };
-    settings.hooks ??= {};
-    const hooks = settings.hooks;
-    if (hooks.PreToolUse !== void 0 && !Array.isArray(hooks.PreToolUse))
-      return { message: `SKIPPED ${LABEL}: "hooks.PreToolUse" in ${shownPath} is not a list; ${HOOK_BY_HAND}` };
-    hooks.PreToolUse ??= [];
-    const groups = hooks.PreToolUse;
-    if (listsGateHook(groups, "shell")) return { message: `${LABEL} already present (${shownPath})` };
-    groups.push({ matcher: "Bash", hooks: [{ type: "command", command: HOOK_COMMAND, timeout: 60 }] });
-    return {
-      content: `${JSON.stringify(settings, null, 2)}
-`,
-      message: `merged a Claude Code PreToolUse hook into ${shownPath} (other settings kept)`
-    };
-  }
-};
+  label: "Claude hook",
+  tool: "Claude Code",
+  byHand: HOOK_BY_HAND,
+  keeps: "settings",
+  command: HOOK_COMMAND,
+  format: (settings) => `${JSON.stringify(settings, null, 2)}
+`
+});
 
 // src/gate/agents/claude-code.ts
 var claudeCode = {
@@ -165,6 +180,34 @@ var claudeCode = {
   projectHookFiles: [{ file: CLAUDE_SETTINGS, alwaysRuns: true }]
 };
 
+// src/gate/agents/compact-hooks-json.ts
+function compactHooksJson(file) {
+  const line = (key, value) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`;
+  const top = Object.entries(file).map(
+    ([key, value]) => key === "hooks" && isRecord(value) ? `  "hooks": {
+${Object.entries(value).map(([event, list]) => `    ${line(event, list)}`).join(",\n")}
+  }` : `  ${line(key, value)}`
+  );
+  return `{
+${top.join(",\n")}
+}
+`;
+}
+
+// src/gate/agents/codex-hooks.ts
+var HOOK_COMMAND2 = `node "$(git rev-parse --show-toplevel)/${GATE_REL}" agent-hook --agent codex`;
+var CODEX_HOOKS = claudeFormatHookFile({
+  path: ".codex/hooks.json",
+  agentFlag: "codex",
+  feature: "codex-hooks",
+  label: "Codex hook",
+  tool: "Codex",
+  byHand: "add the hook by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-codex-hook-by-hand",
+  keeps: "hooks",
+  command: HOOK_COMMAND2,
+  format: compactHooksJson
+});
+
 // src/gate/agents/codex.ts
 var codex = {
   id: "codex",
@@ -185,19 +228,24 @@ var codex = {
   // Codex skips a plugin's hooks after any change to its files, until they're
   // trusted again, so an update needs both steps.
   pluginUpdateHint: "`codex plugin marketplace upgrade comprende`, then trust Comprende's hooks again in `/hooks`",
-  // A tool call's id, or the session's: a Codex session may run two copies of the
-  // gate's hooks, Comprende's Codex hooks and a Claude Code copy brought over by `/import`.
+  // A tool call's id, or the session's. With two plugin copies in one session (the
+  // Codex plugin, and a Claude Code copy brought over by `/import`), both detect a
+  // tool call as Codex's and claim it, so a push is checked once. A session start
+  // has no turn_id, so that copy reads it as Claude Code's, claims nothing, and the
+  // session lines come twice (docs/agents.md, "Codex: the design").
   eventId: (payload, event) => {
     const { toolUseId, sessionId } = readClaudeFormat(payload);
     return event === "shell" ? toolUseId : sessionId;
   },
-  // None yet. Codex never runs .claude/settings.json or .cursor/hooks.json, so a
-  // plugin's hook must not step aside for them.
-  projectHookFiles: []
+  // Codex never runs .claude/settings.json or .cursor/hooks.json, so a plugin's
+  // hook must not step aside for them. It runs .codex/hooks.json only once the
+  // project and the hook are trusted, so it can't count on that one either: the
+  // copies claim the tool call instead (hook-copies.ts).
+  projectHookFiles: [{ file: CODEX_HOOKS, alwaysRuns: false }]
 };
 
 // src/gate/agents/cursor-hooks.ts
-var LABEL2 = "Cursor hooks";
+var LABEL = "Cursor hooks";
 var HOOK_BY_HAND2 = "add the hooks by hand: https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/teams.md#add-the-cursor-hooks-by-hand";
 var ENTRIES = {
   shell: {
@@ -213,18 +261,6 @@ var runsGateFor = (hooks, event) => {
   const list = hooks[ENTRIES[event].key];
   return Array.isArray(list) && list.some((h) => isRecord(h) && isGateCommand(h.command, event));
 };
-function formatHooksFile(file) {
-  const line = (key, value) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`;
-  const top = Object.entries(file).map(
-    ([key, value]) => key === "hooks" && isRecord(value) ? `  "hooks": {
-${Object.entries(value).map(([event, list]) => `    ${line(event, list)}`).join(",\n")}
-  }` : `  ${line(key, value)}`
-  );
-  return `{
-${top.join(",\n")}
-}
-`;
-}
 var CURSOR_HOOKS = {
   path: ".cursor/hooks.json",
   agentFlag: "cursor",
@@ -239,20 +275,20 @@ var CURSOR_HOOKS = {
     return isRecord(file) && isRecord(file.hooks) && runsGateFor(file.hooks, event);
   },
   withGateHook(existing, shownPath) {
-    if (existing !== null && "unreadable" in existing) return { message: `SKIPPED ${LABEL2}: ${existing.unreadable}` };
+    if (existing !== null && "unreadable" in existing) return { message: `SKIPPED ${LABEL}: ${existing.unreadable}` };
     let file = { version: 1 };
     if (existing !== null) {
       let parsed;
       try {
         parsed = JSON.parse(existing.text || "{}");
       } catch {
-        return { message: `SKIPPED ${LABEL2}: ${shownPath} is not valid JSON; ${HOOK_BY_HAND2}` };
+        return { message: `SKIPPED ${LABEL}: ${shownPath} is not valid JSON; ${HOOK_BY_HAND2}` };
       }
-      if (!isRecord(parsed)) return { message: `SKIPPED ${LABEL2}: ${shownPath} is not a JSON object; ${HOOK_BY_HAND2}` };
+      if (!isRecord(parsed)) return { message: `SKIPPED ${LABEL}: ${shownPath} is not a JSON object; ${HOOK_BY_HAND2}` };
       file = parsed;
     }
     if (file.hooks !== void 0 && !isRecord(file.hooks))
-      return { message: `SKIPPED ${LABEL2}: "hooks" in ${shownPath} is not an object; ${HOOK_BY_HAND2}` };
+      return { message: `SKIPPED ${LABEL}: "hooks" in ${shownPath} is not an object; ${HOOK_BY_HAND2}` };
     file.version ??= 1;
     file.hooks ??= {};
     const hooks = file.hooks;
@@ -260,14 +296,14 @@ var CURSOR_HOOKS = {
     for (const event of ["shell", "sessionStart"]) {
       const { key, entry } = ENTRIES[event];
       if (hooks[key] !== void 0 && !Array.isArray(hooks[key]))
-        return { message: `SKIPPED ${LABEL2}: "hooks.${key}" in ${shownPath} is not a list; ${HOOK_BY_HAND2}` };
+        return { message: `SKIPPED ${LABEL}: "hooks.${key}" in ${shownPath} is not a list; ${HOOK_BY_HAND2}` };
       if (runsGateFor(hooks, event)) continue;
       hooks[key] = [...hooks[key] ?? [], entry];
       added++;
     }
-    if (!added) return { message: `${LABEL2} already present (${shownPath})` };
+    if (!added) return { message: `${LABEL} already present (${shownPath})` };
     return {
-      content: formatHooksFile(file),
+      content: compactHooksJson(file),
       message: `merged the gate's Cursor hooks into ${shownPath} (other hooks kept)`
     };
   }

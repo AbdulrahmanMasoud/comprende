@@ -24,6 +24,7 @@ node <plugin>/dist/gate.mjs install --repo . --owner @your-org/leads
 - `.github/workflows/ownership-check.yml`: the CI check
 - `.claude/settings.json`: a hook that stops Claude Code from pushing unverified code (other settings kept)
 - `.cursor/hooks.json`: the same for Cursor, plus its session start, as plain `node .learning/gate.mjs … --agent cursor` lines that also run in PowerShell (other hooks kept)
+- `.codex/hooks.json`: the same for Codex: a shell hook that finds the repo's root with `git rev-parse`, since Codex may run from a subfolder (other hooks kept). Codex runs it once each developer trusts the project and the hook in `/hooks`
 - `.gitignore`: one line, `.learning/report.local.json`
 - `.gitattributes`: one line, `.learning/gate.mjs -text`, so git never rewrites the gate's line endings (on Windows, `core.autocrlf` would)
 - CODEOWNERS (with `--owner`): the gate's files need the lead's review.
@@ -42,7 +43,7 @@ After the plugin updates, upgrade the repo's copy in its own PR:
 node <plugin>/dist/gate.mjs install --upgrade --repo .
 ```
 
-CI runs the base branch's gate. So when an upgrade brings something the older gate doesn't know yet, CI still checks the upgrade PR the old way. From 0.3.0, the upgrade also adds `.cursor/hooks.json`. Until the base branch runs a gate that knows it as one of its own files, CI counts it as a change: one small-change question, or the skip label. For example, the `.gitattributes` line from 0.2.1 counts as a change until the upgrade is merged: a one-line small change, so one question. Or use the skip label. The local checks follow the same rule, so they never pass what CI then fails.
+CI runs the base branch's gate. So when an upgrade brings something the older gate doesn't know yet, CI still checks the upgrade PR the old way. From 0.3.0, the upgrade also adds `.cursor/hooks.json`, and from 0.4.0 `.codex/hooks.json`. Until the base branch runs a gate that knows each as one of its own files, CI counts it as a change: one small-change question, or the skip label. For example, the `.gitattributes` line from 0.2.1 counts as a change until the upgrade is merged: a one-line small change, so one question. Or use the skip label. The local checks follow the same rule, so they never pass what CI then fails.
 
 ## Mixed teams: Claude Code and Cursor
 
@@ -108,6 +109,25 @@ The ruleset applies to the default branch. It requires a pull request with 1 app
   ]
 }
 ```
+
+## Add the Codex hook by hand
+
+`install` merges a hook into `.codex/hooks.json`. If that file has a shape it doesn't understand, it prints `SKIPPED Codex hook` and leaves the file alone. Then add this entry under `hooks.PreToolUse` yourself:
+
+```json
+{
+  "matcher": "Bash",
+  "hooks": [
+    {
+      "type": "command",
+      "command": "node \"$(git rev-parse --show-toplevel)/.learning/gate.mjs\" agent-hook --agent codex",
+      "timeout": 60
+    }
+  ]
+}
+```
+
+Codex runs it once you trust the project, and then the hook in `/hooks`. The trust lasts across gate upgrades, since the command doesn't change.
 
 ## What the developer experiences
 

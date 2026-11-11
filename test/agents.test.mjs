@@ -3,9 +3,19 @@
 // are real captures, in test/fixtures/<tool>/.
 
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { readdirSync, readFileSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { spawn, spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import {
@@ -298,6 +308,7 @@ test("GATE_FILES lists the gate's own files, in a fixed order", () => {
     ".github/workflows/ownership-check.yml",
     ".cursor/hooks.json",
     ".claude/settings.json",
+    ".codex/hooks.json",
     ".github/CODEOWNERS",
   ]);
 });
@@ -340,46 +351,88 @@ test("the Cursor plugin's hooks, run as Cursor runs them, block an unverified pu
   assert.match(context, /This repository uses the ownership gate/);
 });
 
-// The four places a copy of the gate's hook can come from. Claude Code runs the
-// two in its own format. Cursor runs its own two, and Claude Code's two only while
-// Third-Party Imports is on (on by default, but a person or an admin can turn it off).
-const COPIES = ["settings", "cursorHooks", "claudePlugin", "cursorPlugin"];
-const combinations = (tool) =>
-  Array.from({ length: 16 }, (_, n) => Object.fromEntries(COPIES.map((c, i) => [c, Boolean(n & (1 << i))]))).flatMap(
-    (combo) => (tool === "cursor" ? [true, false] : [true]).map((imports) => ({ ...combo, imports })),
+// The places a copy of the gate's hook can come from, and which tool runs each:
+// - Claude Code runs the two in its own format.
+// - Cursor runs its own two, and Claude Code's two only while Third-Party Imports
+//   is on (on by default, but a person or an admin can turn it off).
+// - Codex runs its own two, and a Claude Code plugin it installed from
+//   .claude-plugin/ (an older install, or one brought over by /import), each only
+//   once trusted. It never runs .claude/settings.json or .cursor/hooks.json, which
+//   stay in its cases, since a gated repo has them.
+const COPIES = ["settings", "cursorHooks", "claudePlugin", "cursorPlugin", "codexHooks", "codexPlugin"];
+const bits = (names, n) => Object.fromEntries(names.map((c, i) => [c, Boolean(n & (1 << i))]));
+function combinations(tool) {
+  if (tool === "codex") {
+    // Each copy absent, there but not trusted, or trusted: Codex trusts each hook on its own.
+    const states = (copy) => [
+      { [copy]: false },
+      { [copy]: true, [`${copy}Trusted`]: false },
+      { [copy]: true, [`${copy}Trusted`]: true },
+    ];
+    return states("codexHooks").flatMap((a) =>
+      states("codexPlugin").flatMap((b) =>
+        states("claudePlugin").map((c) => ({ settings: true, cursorHooks: true, ...a, ...b, ...c })),
+      ),
+    );
+  }
+  const four = Array.from({ length: 16 }, (_, n) => bits(COPIES.slice(0, 4), n));
+  return four.flatMap((combo) =>
+    (tool === "cursor" ? [true, false] : [true]).map((imports) => ({ ...combo, imports })),
   );
+}
 
 /** Does `tool` run this copy of the hook, in `combo`? */
 function runs(tool, combo, copy) {
   if (!combo[copy]) return false;
   if (tool === "claude-code") return copy === "settings" || copy === "claudePlugin";
+  if (tool === "codex") return ["codexHooks", "codexPlugin", "claudePlugin"].includes(copy) && combo[`${copy}Trusted`];
   return combo.imports || copy === "cursorHooks" || copy === "cursorPlugin";
 }
+
+/** The repo's hook files, by copy, as install writes them. */
+const REPO_HOOK_FILES = [
+  ["settings", ".claude/settings.json"],
+  ["cursorHooks", ".cursor/hooks.json"],
+  ["codexHooks", ".codex/hooks.json"],
+];
 
 /** Runs every copy present in `combo`, for `event`, as `tool` runs it. Returns their results. */
 function runCopies(dev, combo, tool, event, payload, files) {
   const PLUGIN_HOOKS = JSON.parse(readFileSync(join(REPO, "hooks/hooks.json"), "utf8")).hooks;
   const CURSOR_PLUGIN_HOOKS = JSON.parse(readFileSync(join(REPO, "hooks/cursor-hooks.json"), "utf8")).hooks;
+  const CODEX_PLUGIN_HOOKS = JSON.parse(readFileSync(join(REPO, "hooks/codex-hooks.json"), "utf8")).hooks;
   const claude = event === "shell" ? "PreToolUse" : "SessionStart";
   const cursor = event === "shell" ? "preToolUse" : "sessionStart";
   const commands = [];
   const repoSettings = files.settings && JSON.parse(files.settings).hooks[claude]?.[0].hooks[0].command;
   const repoCursor = files.cursorHooks && JSON.parse(files.cursorHooks).hooks[cursor]?.[0].command;
+  const repoCodex = files.codexHooks && JSON.parse(files.codexHooks).hooks[claude]?.[0].hooks[0].command;
   if (runs(tool, combo, "settings") && repoSettings) commands.push([repoSettings, dev]);
+  // Cursor runs a plugin's hooks from the plugin's folder; Claude Code and Codex from the session's.
   if (runs(tool, combo, "claudePlugin"))
     commands.push([PLUGIN_HOOKS[claude][0].hooks[0].command, tool === "cursor" ? REPO : dev]);
   if (runs(tool, combo, "cursorHooks") && repoCursor) commands.push([repoCursor, dev]);
   if (runs(tool, combo, "cursorPlugin")) commands.push([CURSOR_PLUGIN_HOOKS[cursor][0].command, REPO]);
+  if (runs(tool, combo, "codexHooks") && repoCodex) commands.push([repoCodex, dev]);
+  if (runs(tool, combo, "codexPlugin")) commands.push([CODEX_PLUGIN_HOOKS[claude][0].hooks[0].command, dev]);
   const env = {
     ...ENV,
-    ...(tool === "cursor" ? envOf("cursor") : {}),
-    CLAUDE_PROJECT_DIR: dev,
+    ...(tool === "claude-code" ? {} : envOf(tool)),
+    // Claude Code and Cursor set CLAUDE_PROJECT_DIR; Codex doesn't.
+    CLAUDE_PROJECT_DIR: tool === "codex" ? "" : dev,
     CURSOR_PROJECT_DIR: tool === "cursor" ? dev : "",
     CLAUDE_PLUGIN_ROOT: REPO,
     OWNERSHIP_GATE_NO_AUTO_HOOK: "1",
   };
+  // Cursor and Codex replace their plugin-root variables as text before the shell
+  // runs. Claude Code leaves ${CLAUDE_PLUGIN_ROOT} to the shell, which reads env.
+  const asRun = (command) => {
+    let text = command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO).replaceAll("${PLUGIN_ROOT}", REPO);
+    if (tool !== "claude-code") text = text.replaceAll("${CLAUDE_PLUGIN_ROOT}", REPO);
+    return text;
+  };
   return commands.map(([command, cwd]) =>
-    sh(cwd, "/bin/sh", ["-c", command.replaceAll("${CURSOR_PLUGIN_ROOT}", REPO)], {
+    sh(cwd, "/bin/sh", ["-c", asRun(command)], {
       check: false,
       input: payload,
       env,
@@ -387,35 +440,37 @@ function runCopies(dev, combo, tool, event, payload, files) {
   );
 }
 
+/** The repo's hook files as install wrote them, to put back or take away per case. */
+const readRepoHookFiles = (dev) =>
+  Object.fromEntries(REPO_HOOK_FILES.map(([copy, path]) => [copy, readFileSync(join(dev, path), "utf8")]));
+function placeRepoHookFiles(dev, combo, files) {
+  for (const [copy, path] of REPO_HOOK_FILES) {
+    if (combo[copy]) writeFileSync(join(dev, path), files[copy]);
+    else rmSync(join(dev, path), { force: true });
+  }
+}
+
+/** Each tool's own payload for `event` in `dev`, as tool call or session `id`. */
+function payloadFor(tool, event, dev, id) {
+  const key = event === "shell" ? "tool_use_id" : "session_id";
+  if (tool === "cursor") {
+    const name = event === "shell" ? "pre-tool-use.shell.git-push.json" : "session-start.json";
+    return JSON.stringify({ ...JSON.parse(fixture("cursor", name)), workspace_roots: [dev], [key]: id });
+  }
+  const name = event === "shell" ? "pre-tool-use.bash.git-push.json" : "session-start.json";
+  const text = tool === "codex" ? codexPayload(name, dev) : claudeCodePayload(name, dev);
+  return JSON.stringify({ ...JSON.parse(text), [key]: id });
+}
+
 test("exactly one copy of the gate checks each push, whatever hook files and plugins are present", (t) => {
   const { dev } = unverifiedRepo(t);
-  const files = {
-    settings: readFileSync(join(dev, ".claude/settings.json"), "utf8"),
-    cursorHooks: readFileSync(join(dev, ".cursor/hooks.json"), "utf8"),
-  };
+  const files = readRepoHookFiles(dev);
   let call = 0;
-  for (const tool of ["cursor", "claude-code"]) {
+  for (const tool of ["cursor", "claude-code", "codex"]) {
     for (const combo of combinations(tool)) {
-      for (const [copy, path] of [
-        ["settings", ".claude/settings.json"],
-        ["cursorHooks", ".cursor/hooks.json"],
-      ]) {
-        if (combo[copy]) writeFileSync(join(dev, path), files[copy]);
-        else rmSync(join(dev, path), { force: true });
-      }
+      placeRepoHookFiles(dev, combo, files);
       // A fresh tool call each time, as each real push is.
-      const id = `call-${++call}`;
-      const payload =
-        tool === "cursor"
-          ? JSON.stringify({
-              ...JSON.parse(fixture("cursor", "pre-tool-use.shell.git-push.json")),
-              workspace_roots: [dev],
-              tool_use_id: id,
-            })
-          : JSON.stringify({
-              ...JSON.parse(claudeCodePayload("pre-tool-use.bash.git-push.json", dev)),
-              tool_use_id: id,
-            });
+      const payload = payloadFor(tool, "shell", dev, `call-${++call}`);
       const results = runCopies(dev, combo, tool, "shell", payload, files);
       const checked = results.filter((r) => r.status === 2).length;
       const label = `${tool} ${JSON.stringify(combo)}`;
@@ -427,38 +482,31 @@ test("exactly one copy of the gate checks each push, whatever hook files and plu
 
 test("each session starts with the always-on line once, and the gate's context once", (t) => {
   const { dev } = setup(t);
-  const files = {
-    settings: readFileSync(join(dev, ".claude/settings.json"), "utf8"),
-    cursorHooks: readFileSync(join(dev, ".cursor/hooks.json"), "utf8"),
-  };
+  const files = readRepoHookFiles(dev);
   let session = 0;
-  for (const tool of ["cursor", "claude-code"]) {
+  for (const tool of ["cursor", "claude-code", "codex"]) {
     for (const combo of combinations(tool)) {
-      for (const [copy, path] of [
-        ["settings", ".claude/settings.json"],
-        ["cursorHooks", ".cursor/hooks.json"],
-      ]) {
-        if (combo[copy]) writeFileSync(join(dev, path), files[copy]);
-        else rmSync(join(dev, path), { force: true });
-      }
-      const id = `session-${++session}`;
-      const payload =
-        tool === "cursor"
-          ? JSON.stringify({
-              ...JSON.parse(fixture("cursor", "session-start.json")),
-              workspace_roots: [dev],
-              session_id: id,
-            })
-          : JSON.stringify({ ...JSON.parse(claudeCodePayload("session-start.json", dev)), session_id: id });
+      placeRepoHookFiles(dev, combo, files);
+      const payload = payloadFor(tool, "sessionStart", dev, `session-${++session}`);
       const contexts = runCopies(dev, combo, tool, "sessionStart", payload, files).map(
         (r) => JSON.parse(r.stdout).hookSpecificOutput?.additionalContext ?? "",
       );
       const count = (re) => contexts.filter((c) => re.test(c)).length;
-      const plugins = runs(tool, combo, "claudePlugin") || runs(tool, combo, "cursorPlugin");
+      const plugins = ["claudePlugin", "cursorPlugin", "codexPlugin"].some((copy) => runs(tool, combo, copy));
+      // A known limit (docs/agents.md, "Codex: the design"): two plugin copies in one
+      // Codex session. A Codex session start has no turn_id, so the Claude-format copy
+      // reads it as Claude Code's and claims nothing, and both speak. The push is
+      // still checked once (above).
+      const twoCopies = tool === "codex" && runs(tool, combo, "codexPlugin") && runs(tool, combo, "claudePlugin");
+      const once = twoCopies ? 2 : 1;
       const label = `${tool} ${JSON.stringify(combo)}`;
-      assert.equal(count(/Comprende is installed\./), plugins ? 1 : 0, `always-on: ${label}`);
+      assert.equal(count(/Comprende is installed\./), plugins ? once : 0, `always-on: ${label}`);
       const repoStarts = runs(tool, combo, "cursorHooks");
-      assert.equal(count(/This repository uses the ownership gate/), plugins || repoStarts ? 1 : 0, `gate: ${label}`);
+      assert.equal(
+        count(/This repository uses the ownership gate/),
+        plugins ? once : repoStarts ? 1 : 0,
+        `gate: ${label}`,
+      );
     }
   }
 });
@@ -695,4 +743,51 @@ test("a report from another gate version blocks the git hook, but not the agents
   });
   assert.notEqual(prePush.status, 0);
   assert.match(prePush.stderr, /Report was made by gate v999/);
+});
+
+// GitHub's runners have pwsh, so the PowerShell case runs in CI. Locally it's skipped without it.
+const PWSH = spawnSync("/bin/sh", ["-c", "command -v pwsh"], { encoding: "utf8" }).stdout.trim();
+
+test("the repo's .codex/hooks.json blocks an unverified push from a subfolder, and fails open without git or node", {
+  skip: process.platform === "win32",
+}, (t) => {
+  const { dev: made, tmp } = unverifiedRepo(t);
+  // A path with a space and a literal $HOME: the command's own $(…) must not expand them.
+  const dev = join(tmp, "my repo $HOME", "dev");
+  mkdirSync(dirname(dev));
+  renameSync(made, dev);
+  const [{ hooks }] = JSON.parse(readFileSync(join(dev, ".codex/hooks.json"), "utf8")).hooks.PreToolUse;
+  const command = hooks[0].command;
+  // Codex runs hooks in the session's folder, which may be a subfolder.
+  const sub = join(dev, "src");
+  let call = 0;
+  const input = () =>
+    JSON.stringify({
+      ...JSON.parse(codexPayload("pre-tool-use.bash.git-push.json", sub)),
+      tool_use_id: `call-${++call}`,
+    });
+  const run = (env) => sh(sub, "/bin/sh", ["-c", command], { check: false, input: input(), env });
+  const push = run(ENV);
+  assert.equal(push.status, 2, push.stderr);
+  assert.match(push.stderr, /Ask Codex to run the ownership check/);
+  // Only node on PATH, no git: the command can't find the gate, and fails open.
+  const nodeOnly = join(tmpDir(t), "node-only");
+  mkdirSync(nodeOnly);
+  symlinkSync(NODE, join(nodeOnly, "node"));
+  assert.notEqual(run({ ...ENV, PATH: nodeOnly }).status, 2, "without git");
+  assert.notEqual(run({ ...ENV, PATH: tmpDir(t) }).status, 2, "without node");
+  // On Windows, Codex runs hooks in PowerShell (-Command), which reads the same $(…):
+  // the gate finds the repo and blocks. But -Command turns a program's exit 2 into
+  // 1 unless the command ends with `exit $LASTEXITCODE`, so the block doesn't reach
+  // the tool as exit 2: on Windows the push guard fails open (#10).
+  if (PWSH) {
+    const ps = spawnSync(PWSH, ["-NoProfile", "-NonInteractive", "-Command", `$input | ${command}`], {
+      cwd: sub,
+      input: input(),
+      encoding: "utf8",
+      env: ENV,
+    });
+    assert.match(ps.stderr, /Blocked by the ownership gate/, "PowerShell finds the gate and it blocks");
+    assert.equal(ps.status, 1, "PowerShell's -Command turns exit 2 into 1");
+  }
 });
