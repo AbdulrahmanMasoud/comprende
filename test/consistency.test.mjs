@@ -6,7 +6,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { test } from "node:test";
 import { parse as parseYaml } from "yaml";
-import { commitAll, ENV, gate, git, NODE, REPO, SUMMARY, setup, sh, tmp, write } from "./helpers.mjs";
+import { commitAll, ENV, GATE, gate, git, NODE, REPO, SUMMARY, setup, sh, tmp, write } from "./helpers.mjs";
 
 const read = (rel) => readFileSync(join(REPO, rel));
 
@@ -468,6 +468,189 @@ for (const plugin of NODE_LINE_PLUGINS) {
   });
 }
 
+/** The hook commands in Antigravity's hooks.json, by event: named groups of events, where
+ *  a tool event holds matcher groups, as in Claude Code's format, and SessionStart a flat list. */
+const antigravityFormatCommands = (file) =>
+  Object.values(file).flatMap((group) =>
+    Object.entries(group).flatMap(([event, list]) =>
+      list.flatMap((entry) =>
+        entry.hooks ? entry.hooks.map((h) => ({ event, matcher: entry.matcher, ...h })) : [{ event, ...entry }],
+      ),
+    ),
+  );
+const antigravityHookCommands = () => antigravityFormatCommands(json("hooks.json"));
+const antigravityPayload = (name) => read(`test/fixtures/antigravity/${name}`).toString("utf8");
+
+test("the Antigravity plugin has its own manifest, with the plugin's name and version", () => {
+  const antigravity = json(".antigravity-plugin/plugin.json");
+  const claude = json(".claude-plugin/plugin.json");
+  assert.equal(antigravity.name, claude.name);
+  // Antigravity detects an update by the version, so it must move with the others.
+  assert.equal(antigravity.version, claude.version);
+  // Only the fields Antigravity documents (antigravity.google/docs/build-plugins): it rejects unknown ones.
+  const documented = [
+    "$schema",
+    "name",
+    "displayName",
+    "description",
+    "version",
+    "logo",
+    "suggestedPrompts",
+    "skills",
+    "disabled",
+    "author",
+    "homepage",
+    "repository",
+    "license",
+    "keywords",
+    "extensions",
+  ];
+  for (const key of Object.keys(antigravity))
+    assert.ok(documented.includes(key), `${key} isn't an Antigravity manifest field`);
+});
+
+test("the Antigravity plugin's MCP config starts the plugin's own server", () => {
+  // Antigravity expands ${PLUGIN_ROOT} in MCP args. A relative path could resolve in the user's repo.
+  assert.deepEqual(json("mcp_config.json"), {
+    mcpServers: { comprende: { command: "node", args: ["${PLUGIN_ROOT}/dist/server.mjs"] } },
+  });
+  assert.ok(existsSync(join(REPO, "dist/server.mjs")));
+});
+
+test("the Antigravity plugin's hook commands run the plugin's gate, and the shell turns a failure into exit 0", () => {
+  const entries = antigravityHookCommands();
+  assert.deepEqual(entries.map((h) => h.event).sort(), ["PreToolUse", "SessionStart"]);
+  for (const h of entries) {
+    // Antigravity blocks the command on any non-zero exit, so the shell, not node, turns
+    // every failure into exit 0 with nothing on stdout. Plugin hooks run in the plugin's
+    // folder, so ./dist/gate.mjs is the plugin's own (docs/agents.md, "Antigravity: what we found").
+    assert.match(
+      h.command,
+      /^out=\$\(node "\.\/dist\/gate\.mjs" (session-start|claude-hook) --from-plugin\) && printf '%s' "\$out" \|\| exit 0$/,
+    );
+    assert.ok(h.timeout > 0);
+  }
+  assert.equal(entries.find((h) => h.event === "PreToolUse").matcher, "run_command");
+  assert.ok(existsSync(join(REPO, "dist/gate.mjs")));
+});
+
+test("Antigravity's hooks let the command run when the gate fails: no node, no gate.mjs, a crash after partial output, exit 2", {
+  skip: process.platform === "win32" && "sh only: which shell Antigravity runs hooks in on Windows is unknown",
+}, (t) => {
+  // A plugin folder like the installed one, whose dist/gate.mjs each case swaps out.
+  const plugin = tmp(t);
+  const useGate = (source) => {
+    rmSync(join(plugin, "dist"), { recursive: true, force: true });
+    if (source !== null) write(plugin, "dist/gate.mjs", source);
+  };
+  const run = (command, input, path = process.env.PATH) =>
+    spawnSync("/bin/sh", ["-c", command], {
+      cwd: plugin,
+      // Without node or gate.mjs nothing may read the input, and writing it would race (EPIPE).
+      ...(input === undefined ? { stdio: ["ignore", "pipe", "pipe"] } : { input }),
+      encoding: "utf8",
+      env: { ...ENV, PATH: path },
+    });
+  const [sessionStart] = antigravityHookCommands().filter((h) => h.event === "SessionStart");
+  const [preToolUse] = antigravityHookCommands().filter((h) => h.event === "PreToolUse");
+  const payloads = [
+    [sessionStart, "session-start.json"],
+    [preToolUse, "pre-tool-use.run-command.ls.json"],
+    [preToolUse, "pre-tool-use.run-command.git-push.json"],
+  ];
+
+  // The real gate: the session start replies, and a command gets an empty allow.
+  useGate(readFileSync(GATE));
+  for (const [h, name] of payloads) {
+    const r = run(h.command, antigravityPayload(name));
+    assert.equal(r.status, 0, `${name}: ${r.stderr}`);
+    if (h === sessionStart) assert.match(r.stdout, /Comprende is installed/, name);
+    else assert.equal(r.stdout, "", name);
+  }
+
+  const allowsSilently = (label, input, path) => {
+    for (const h of [sessionStart, preToolUse]) {
+      const r = run(h.command, input, path);
+      assert.equal(r.status, 0, `${label}, ${h.event}: ${r.stderr}`);
+      assert.equal(r.stdout, "", `${label}, ${h.event}`);
+    }
+  };
+  allowsSilently("node missing from PATH", undefined, tmp(t));
+  useGate(null);
+  allowsSilently("gate.mjs missing");
+
+  // Partial JSON on stdout, written for sure (writeSync), then a crash.
+  const partial = '{"decision": "de';
+  useGate(
+    `import { writeSync } from "node:fs";\nwriteSync(1, ${JSON.stringify(partial)});\nthrow new Error("a crash");\n`,
+  );
+  const crash = sh(plugin, NODE, ["dist/gate.mjs"], { check: false });
+  assert.equal(crash.stdout, partial, "the stand-in gate prints partial output");
+  assert.notEqual(crash.status, 0, "and then crashes");
+  allowsSilently("a crash after partial output", antigravityPayload("pre-tool-use.run-command.ls.json"));
+
+  useGate('process.stderr.write("Blocked by the ownership gate\\n");\nprocess.exitCode = 2;\n');
+  allowsSilently("exit 2", antigravityPayload("pre-tool-use.run-command.git-push.json"));
+
+  // A deliberate deny, which Antigravity reads as JSON on exit 0, still gets through.
+  const deny = '{"decision":"deny","reason":"No ownership report"}';
+  useGate(`process.stdout.write(${JSON.stringify(deny)});\n`);
+  const denied = run(preToolUse.command, antigravityPayload("pre-tool-use.run-command.git-push.json"));
+  assert.equal(denied.status, 0, denied.stderr);
+  assert.equal(denied.stdout, deny);
+});
+
+test("Antigravity's hook commands exit 0 in PowerShell 7 too, with or without node", { skip: !PWSH }, (t) => {
+  for (const h of antigravityHookCommands()) {
+    for (const path of [`${dirname(NODE)}${delimiter}${process.env.PATH}`, tmp(t)]) {
+      const r = spawnSync(PWSH, ["-NoProfile", "-NonInteractive", "-Command", h.command], {
+        cwd: REPO,
+        stdio: ["ignore", "pipe", "pipe"],
+        encoding: "utf8",
+        env: { ...ENV, PATH: path },
+      });
+      assert.equal(r.status, 0, `${h.event}: ${r.stderr}`);
+      assert.equal(r.stdout, "", h.event);
+    }
+  }
+});
+
+// On Windows, which shell Antigravity runs hooks in isn't documented. These record what
+// the shells there do with the commands. Only the Windows workflow runs them.
+test("Antigravity's hook commands exit 0 in cmd.exe, with or without node", {
+  skip: process.platform !== "win32" && "Windows only",
+}, (t) => {
+  for (const h of antigravityHookCommands()) {
+    for (const path of [`${dirname(NODE)}${delimiter}${process.env.PATH}`, tmp(t)]) {
+      const r = spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `"${h.command}"`], {
+        cwd: REPO,
+        stdio: ["ignore", "pipe", "pipe"],
+        encoding: "utf8",
+        windowsVerbatimArguments: true,
+        env: { ...ENV, PATH: path },
+      });
+      assert.equal(r.status, 0, `${h.event}: ${r.stderr}`);
+      assert.equal(r.stdout, "", h.event);
+    }
+  }
+});
+
+test("what Windows PowerShell 5.1 does with Antigravity's hook commands (recorded, not asserted)", {
+  skip: process.platform !== "win32" && "Windows only",
+}, (t) => {
+  for (const h of antigravityHookCommands()) {
+    const r = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", h.command], {
+      cwd: REPO,
+      stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf8",
+      env: { ...ENV, PATH: process.env.PATH },
+    });
+    t.diagnostic(
+      `${h.event}: exit ${r.status}, stdout ${JSON.stringify(r.stdout)}, stderr ${JSON.stringify(r.stderr?.slice(0, 300))}`,
+    );
+  }
+});
+
 test("each tool picks up only its own manifest, hooks and MCP config", () => {
   // How each tool finds a plugin's parts, from its docs or source (docs/agents.md):
   // - manifests: where it looks, in order; the first one found wins
@@ -478,13 +661,23 @@ test("each tool picks up only its own manifest, hooks and MCP config", () => {
     "Claude Code": {
       own: ".claude-plugin",
       manifests: [".claude-plugin/plugin.json"],
-      hooks: { default: "hooks/hooks.json", named: "adds", commandsOf: claudeFormatCommands, agent: null },
+      hooks: {
+        default: "hooks/hooks.json",
+        named: "adds",
+        commandsOf: (f) => claudeFormatCommands(f.hooks),
+        agent: null,
+      },
       mcp: { default: ".mcp.json", expands: ["${CLAUDE_PLUGIN_ROOT}"] },
     },
     Cursor: {
       own: ".cursor-plugin",
       manifests: [".cursor-plugin/plugin.json", "plugin.json"],
-      hooks: { default: "hooks/hooks.json", named: "replaces", commandsOf: cursorFormatCommands, agent: "cursor" },
+      hooks: {
+        default: "hooks/hooks.json",
+        named: "replaces",
+        commandsOf: (f) => cursorFormatCommands(f.hooks),
+        agent: "cursor",
+      },
       mcp: { default: "mcp.json", expands: ["${CURSOR_PLUGIN_ROOT}", "${CLAUDE_PLUGIN_ROOT}"] },
     },
     Codex: {
@@ -497,18 +690,20 @@ test("each tool picks up only its own manifest, hooks and MCP config", () => {
         ".claude-plugin/plugin.json",
         ".cursor-plugin/plugin.json",
       ],
-      hooks: { default: "hooks/hooks.json", named: "replaces", commandsOf: claudeFormatCommands, agent: "codex" },
+      hooks: {
+        default: "hooks/hooks.json",
+        named: "replaces",
+        commandsOf: (f) => claudeFormatCommands(f.hooks),
+        agent: "codex",
+      },
       mcp: { default: ".mcp.json", expands: [] },
     },
     Antigravity: {
       own: ".antigravity-plugin",
       manifests: [".antigravity-plugin/plugin.json", "plugin.json", ".gemini-plugin/plugin.json"],
-      hooks: {
-        default: "hooks.json",
-        named: "replaces",
-        commandsOf: (h) => Object.values(h).flatMap((g) => claudeFormatCommands(g)),
-        agent: "antigravity",
-      },
+      // Its manifest can't name a hooks file. Until its adapter (0.5.0), its commands
+      // detect the tool from the payload, as Claude Code's do.
+      hooks: { default: "hooks.json", named: "replaces", commandsOf: antigravityFormatCommands, agent: null },
       mcp: { default: "mcp_config.json", expands: ["${PLUGIN_ROOT}"] },
     },
   };
@@ -517,11 +712,7 @@ test("each tool picks up only its own manifest, hooks and MCP config", () => {
   const readers = new Map();
   for (const [tool, { own, manifests, hooks, mcp }] of Object.entries(tools)) {
     const found = manifests.find((m) => existsSync(join(REPO, m)));
-    // Antigravity's comes in 0.5.0: until then it finds none of these.
-    if (!found) {
-      assert.equal(tool, "Antigravity", `${tool} finds no manifest`);
-      continue;
-    }
+    assert.ok(found, `${tool} finds no manifest`);
     assert.equal(found, `${own}/plugin.json`, `${tool} reads another tool's manifest`);
     const manifest = json(found);
     const relative = (path) => path.replace(/^\.\//, "");
@@ -535,7 +726,7 @@ test("each tool picks up only its own manifest, hooks and MCP config", () => {
       readers.set(file, tool);
       // Every gate command in it says which tool runs it (Claude Code's detects instead).
       const commands = hooks
-        .commandsOf(json(file).hooks)
+        .commandsOf(json(file))
         .map((h) => h.command)
         .filter((c) => c.includes("gate.mjs"));
       assert.ok(commands.length > 0, `${file} runs the gate`);
