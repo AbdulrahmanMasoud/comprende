@@ -1,0 +1,36 @@
+== 1-gated-ls (agy's cli-20261112_144351.log)
+I1112 14:43:51.587038       1 cli_setting_manager.go:97] CLI settings initialized: permissions=<nil>, toolPermission=request-review
+I1112 14:43:51.590276       1 hooks_manager.go:53] loaded 1 named hooks from 1 hooks.json file(s)
+I1112 14:43:51.599697       1 hooks_manager.go:53] loaded 1 named hooks from 1 hooks.json file(s)
+E1112 14:43:54.073748     589 provider.go:80] session start hook "jsonhook__comprende_SessionStart_0_0" failed: failed to unmarshal result from hook jsonhook__comprende_SessionStart_0_0 via protojson: {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before co
+== 2-gated-ls-allowed (agy's cli-20261112_144434.log)
+I1112 14:44:34.856199       1 cli_setting_manager.go:97] CLI settings initialized: permissions=&{Allow:[command(ls)] Deny:[] Ask:[]}, toolPermission=request-review
+I1112 14:44:34.860231       1 hooks_manager.go:53] loaded 1 named hooks from 1 hooks.json file(s)
+I1112 14:44:34.864562       1 hooks_manager.go:53] loaded 1 named hooks from 1 hooks.json file(s)
+E1112 14:44:37.862354     587 provider.go:80] session start hook "jsonhook__comprende_SessionStart_0_0" failed: failed to unmarshal result from hook jsonhook__comprende_SessionStart_0_0 via protojson: {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before co
+== 3-control-no-plugin-ls (agy's cli-20261112_144456.log)
+I1112 14:44:56.057379       1 cli_setting_manager.go:97] CLI settings initialized: permissions=<nil>, toolPermission=request-review
+I1112 14:44:56.058117       1 hooks_manager.go:53] loaded 0 named hooks from 0 hooks.json file(s)
+I1112 14:44:56.060707       1 hooks_manager.go:53] loaded 0 named hooks from 0 hooks.json file(s)
+== 4-plain-ls (agy's cli-20261112_144627.log)
+I1112 14:46:27.828555       1 cli_setting_manager.go:97] CLI settings initialized: permissions=&{Allow:[command(ls)] Deny:[] Ask:[]}, toolPermission=request-review
+I1112 14:46:27.832712       1 hooks_manager.go:53] loaded 1 named hooks from 1 hooks.json file(s)
+I1112 14:46:27.837890       1 hooks_manager.go:53] loaded 1 named hooks from 1 hooks.json file(s)
+E1112 14:46:31.074482     459 provider.go:80] session start hook "jsonhook__comprende_SessionStart_0_0" failed: failed to unmarshal result from hook jsonhook__comprende_SessionStart_0_0 via protojson: {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect."}}: proto: (line 1:2): unknown field "hookSpecificOutput"
+== 5-gated-push (agy's cli-20261112_144638.log)
+I1112 14:46:38.054204       1 cli_setting_manager.go:97] CLI settings initialized: permissions=&{Allow:[command(git push origin feature/sum)] Deny:[] Ask:[]}, toolPermission=request-review
+I1112 14:46:38.054949       1 hooks_manager.go:53] loaded 1 named hooks from 1 hooks.json file(s)
+I1112 14:46:38.056886       1 hooks_manager.go:53] loaded 1 named hooks from 1 hooks.json file(s)
+E1112 14:46:40.181900     612 provider.go:80] session start hook "jsonhook__comprende_SessionStart_0_0" failed: failed to unmarshal result from hook jsonhook__comprende_SessionStart_0_0 via protojson: {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before co
+== 6-exit2-ls (agy's cli-20261112_144705.log)
+I1112 14:47:05.057312       1 cli_setting_manager.go:97] CLI settings initialized: permissions=&{Allow:[command(ls)] Deny:[] Ask:[]}, toolPermission=request-review
+I1112 14:47:05.058528       1 hooks_manager.go:53] loaded 2 named hooks from 2 hooks.json file(s)
+I1112 14:47:05.060593       1 hooks_manager.go:53] loaded 2 named hooks from 2 hooks.json file(s)
+E1112 14:47:06.698340     584 provider.go:80] session start hook "jsonhook__comprende_SessionStart_0_0" failed: failed to unmarshal result from hook jsonhook__comprende_SessionStart_0_0 via protojson: {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before co
+I1112 14:47:10.053979     584 command_hook_executor.go:92] JSON hook command stderr: step0: exit 2 test
+== 7-exit1-ls (agy's cli-20261112_144824.log)
+I1112 14:48:24.618643       1 cli_setting_manager.go:97] CLI settings initialized: permissions=&{Allow:[command(ls)] Deny:[] Ask:[]}, toolPermission=request-review
+I1112 14:48:24.625762       1 hooks_manager.go:53] loaded 2 named hooks from 2 hooks.json file(s)
+I1112 14:48:24.630499       1 hooks_manager.go:53] loaded 2 named hooks from 2 hooks.json file(s)
+E1112 14:48:26.431580     489 provider.go:80] session start hook "jsonhook__comprende_SessionStart_0_0" failed: failed to unmarshal result from hook jsonhook__comprende_SessionStart_0_0 via protojson: {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before co
+I1112 14:48:29.715425     489 command_hook_executor.go:92] JSON hook command stderr: step0: exit 1 test
