@@ -669,8 +669,8 @@ test("a hook payload that starts with a UTF-8 BOM is read like any other", (t) =
   );
 });
 
-/** The usage-error and bad-input cases can't reach an adapter, so they can't
- *  print an adapter's deny. Exit 2 is the deny that any tool reads. */
+/** Exit 2 is the deny that every tool but Antigravity reads. A bad-input case with
+ *  --agent reaches that adapter, so it's also checked against the adapter's own allow. */
 const exitsTwo = (r) => r.status === 2;
 
 test("a usage error or bad input never produces a deny, from any hook entry point", (t) => {
@@ -687,11 +687,14 @@ test("a usage error or bad input never produces a deny, from any hook entry poin
       ["a missing value", [command, "--agent"], "{}"],
       ["an unknown --agent", [command, "--agent", "no-such-tool"], "{}"],
       ...Object.entries(inputs).map(([name, input]) => [`stdin ${name}`, [command], input]),
+      // With --agent, bad stdin still reaches that adapter (hook-input.ts).
+      ...gate.const("AGENT_IDS").map((id) => [`stdin not JSON, --agent ${id}`, [command, "--agent", id], "git push"]),
     ];
     for (const [name, args, input] of runs) {
       const r = runGate(dev, args, { input });
       assert.ok(!exitsTwo(r), `${command}, ${name}: exit ${r.status}`);
-      // Session start prints context, never a decision. The shell hooks print nothing here.
+      // Session start prints context, never a decision. The shell hooks print nothing here,
+      // which is every adapter's allow.
       if (command !== "session-start") assert.equal(r.stdout, "", `${command}, ${name}`);
     }
   }
@@ -953,8 +956,11 @@ test("from Antigravity's own hook file, session start says the hooks run, and gi
   assert.ok(!own.includes(gate.const("ALWAYS_ON_RULE")), own);
   // A copy converted from the Claude Code plugin (no --agent) may come without the rule: the full line.
   assert.ok(contextOf(start(payload, [])).startsWith(gate.const("ALWAYS_ON")));
-  // Quiet mode sends its own line, as in every tool.
-  assert.ok(contextOf(start(payload, undefined, { COMPRENDE_QUIET: "1" })).startsWith(gate.const("QUIET_MODE")));
+  // Quiet mode sends its own line, as in every tool. It says it replaces the always-on
+  // instruction, which the plugin's rule still gives here.
+  const quiet = contextOf(start(payload, undefined, { COMPRENDE_QUIET: "1" }));
+  assert.ok(quiet.startsWith(gate.const("QUIET_MODE")));
+  assert.match(gate.const("QUIET_MODE"), /replaces any always-on Comprende instruction/);
   // Outside a gated repo, only the line that says the hooks run.
   assert.equal(contextOf(start(antigravityPayload("session-start.json", tmpDir(t)))), gate.const("HOOKS_RUN_LINE"));
 });
@@ -963,11 +969,20 @@ test("in Antigravity, with the plugin and a converted copy, the session's lines 
   const { dev } = unverifiedRepo(t);
   const env = { ...ENV, OWNERSHIP_GATE_NO_AUTO_HOOK: "1", TMPDIR: tmpDir(t) };
   const payload = antigravityPayload("session-start.json", dev);
+  const start = (args, tmp) =>
+    runGate(dev, ["session-start", "--from-plugin", ...args], { input: payload, env: { ...env, TMPDIR: tmp } });
+  const contextOf = (r) => JSON.parse(r.stdout).injectSteps[0].systemMessage.systemMessage;
   // Both claim the session's conversationId: the first one speaks, the other replies {}.
-  const own = runGate(dev, ["session-start", "--from-plugin", "--agent", "antigravity"], { input: payload, env });
-  const converted = runGate(dev, ["session-start", "--from-plugin"], { input: payload, env });
-  assert.match(own.stdout, /ownership gate/);
-  assert.equal(converted.stdout.trim(), "{}");
+  const first = tmpDir(t);
+  const own = start(["--agent", "antigravity"], first);
+  assert.ok(contextOf(own).startsWith(gate.const("HOOKS_RUN_LINE")));
+  assert.match(contextOf(own), /ownership gate/);
+  assert.equal(start([], first).stdout.trim(), "{}");
+  // A known limit: when the converted copy speaks first, it sends the full line, so with the
+  // plugin's rule loaded the instruction comes twice (docs/agents.md, "Antigravity: the design").
+  const other = tmpDir(t);
+  assert.ok(contextOf(start([], other)).startsWith(gate.const("ALWAYS_ON")));
+  assert.equal(start(["--agent", "antigravity"], other).stdout.trim(), "{}");
 });
 
 test("with --agent antigravity, input that isn't JSON still gets Antigravity's replies, never a block", (t) => {

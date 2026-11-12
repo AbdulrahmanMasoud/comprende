@@ -45,7 +45,8 @@ export const HOOKS_RUN_LINE = `${PLUGIN_LINE_START}, and its hooks run in this s
 // COMPRENDE_QUIET=1 still sends a line, not nothing: the skill now loads for any
 // code change, so it needs telling to stay quiet, and a session with no note at
 // all reads to the skill as hooks that didn't run.
-export const QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
+// "Replaces": in Antigravity, the plugin's rule still gives the always-on instruction.
+export const QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode, which replaces any always-on Comprende instruction: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
 
 /** What the repo's hook file says at session start, in a tool that can skip the
  *  plugin's hooks without a word: how the agent tells, and what it tells the user.

@@ -271,10 +271,11 @@ function main() {
     "Without running any tools: quote, word for word, every instruction or message in your context about Comprende or an ownership gate, each on its own line, and say where each came from (a rule, a hook's session start, or the user). If there was none, say NONE.",
   );
   // Once: from the session start, not also from Antigravity's rules/AGENTS.md, which Cursor
-  // discovers too. The instruction appears once, and only the session start says it's installed.
+  // discovers too. Only the instruction is counted: the agent may repeat "Comprende is
+  // installed" while it says where each line came from.
   report(
     "session start: the always-on line, once",
-    (start.reply.match(/Comprende is installed/g) ?? []).length === 1 &&
+    /Comprende is installed/.test(start.reply) &&
       (start.reply.match(/Whenever you write or change code in this session/g) ?? []).length === 1,
   );
   report(

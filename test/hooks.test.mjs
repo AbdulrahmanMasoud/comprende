@@ -445,7 +445,7 @@ test("session start: COMPRENDE_QUIET=1 swaps the always-on line for the quiet on
   const dir = tmpDir(t);
   const quiet = JSON.parse(plugin(dir, ["session-start"], { input: JSON.stringify({ cwd: dir }), env: QUIET }).stdout);
   assert.equal(quiet.hookSpecificOutput.additionalContext, QUIET_MODE);
-  assert.match(QUIET_MODE, /^Comprende is installed, in quiet mode: .*only when the user asks/);
+  assert.match(QUIET_MODE, /^Comprende is installed, in quiet mode, .*: .*only when the user asks/);
   const ctx = JSON.parse(plugin(tmp, ["session-start"], { input: JSON.stringify({ cwd: dev }), env: QUIET }).stdout)
     .hookSpecificOutput.additionalContext;
   assert.ok(ctx.startsWith(QUIET_MODE) && ctx.includes("ownership gate (mode: required)"), ctx);

@@ -2198,7 +2198,7 @@ var PLUGIN_LINE_START = "Comprende is installed";
 var ALWAYS_ON_RULE = "Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
 var ALWAYS_ON = `${PLUGIN_LINE_START}. ${ALWAYS_ON_RULE}`;
 var HOOKS_RUN_LINE = `${PLUGIN_LINE_START}, and its hooks run in this session.`;
-var QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
+var QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode, which replaces any always-on Comprende instruction: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
 var pluginNotRunningNote = (agent, hint) => `If this session didn't also get a note starting with "${PLUGIN_LINE_START}", Comprende's plugin isn't running in ${agent.names.app}: either it isn't installed, or its hooks were skipped. Tell the user once, in one line, in their language, with both options: ${hint}`;
 var untrustedGateNote = (agent) => ({
   content: `This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`,
