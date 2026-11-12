@@ -78,7 +78,7 @@ The same way as Step 0, with these changes:
 - **The gated demo** also has its own `dist/gate.mjs` and `dist/server.mjs`, committed. Each writes a marker file in `/work/markers` if it ever runs. After every step, that folder was empty.
 - **The gate's runs** log the script's own path, and the MCP server's start.
 - **Steps 3 and 4** changed the installed plugin's `dist/gate.mjs`, and put it back after the step (the same SHA-256).
-- **Steps 1 to 5, and 6,** ran with the final command. Step 6a ran with an earlier draft (`out=$(…) && printf … || exit 0`), only to learn the MCP permission's name.
+- **Steps 1 to 6** ran with the final command. Step 6a ran with an earlier draft (`out=$(…) && printf … || exit 0`), only to learn the MCP permission's name.
 - **Steps 7 to 9** test Antigravity, not Comprende: a user hook in `~/.gemini/config/hooks.json`, removed after the step.
 - **The files:** `0.4.3/runs.json`, with the same replacements as Step 0 (paths, home folder, IDs).
 
@@ -92,7 +92,7 @@ The same way as Step 0, with these changes:
 | `4-partial-crash-ls` | a stand-in `gate.mjs` that writes partial JSON, then throws | `ls` ran | the stand-in exited 1 for both hooks. The log shows no stdout, because the stand-in writes with `writeSync`, which the preload doesn't see; the tests check that it prints the partial JSON |
 | `5-push` | the push allowed | git's `pre-push` hook blocked it; `origin` still had only `main` | the shell hook ran, and allowed: it can't read this payload yet (0.5.0) |
 | `6a-mcp-probe` | no allow rule | the MCP call denied: `mcp(comprende_comprende/gate_status)` needs an allow rule in headless mode | |
-| `6-mcp-gate-status` | `mcp(comprende_comprende/gate_status)` allowed | the agent called `gate_status` and summed up its answer. A first try got a 503 from Google (no model capacity), and was run again | the server ran from the plugin's folder |
+| `6-mcp-gate-status` | `mcp(comprende_comprende/gate_status)` allowed | the agent called `gate_status` and summed up its answer | the server ran from the plugin's folder |
 | `7-user-hook-non-json-ls` | a user hook that prints `not-json` on exit 0 | `ls` blocked: `failed to unmarshal result … invalid value not-json` | |
 | `8-user-hook-timeout-ls` | a user hook that outlives its timeout | `ls` blocked: `command failed: signal: killed` | |
 | `9-shell-probe` | `SHELL=/bin/zsh`, and a user hook that prints its own shell | `ls` ran. The hook's shell was `sh` | |

@@ -631,20 +631,23 @@ test("Antigravity's hook commands exit 0 in PowerShell 7 too, with or without no
 test("on Windows, Antigravity's hook commands exit 0 silently in cmd.exe and both PowerShells, with or without node", {
   skip: process.platform !== "win32" && "Windows only",
 }, (t) => {
+  // Full paths: without node, the child's PATH is an empty folder, where Windows wouldn't find the shell either.
+  const onPath = (name) =>
+    spawnSync("where.exe", [name], { encoding: "utf8" }).stdout?.split(/\r?\n/)[0]?.trim() || name;
   const shells = [
     {
       name: "cmd.exe",
-      program: process.env.ComSpec ?? "cmd.exe",
+      program: process.env.ComSpec ?? onPath("cmd.exe"),
       args: (c) => ["/d", "/s", "/c", `"${c}"`],
     },
     {
       name: "PowerShell 7",
-      program: "pwsh.exe",
+      program: onPath("pwsh.exe"),
       args: (c) => ["-NoProfile", "-NonInteractive", "-Command", c],
     },
     {
       name: "Windows PowerShell 5.1",
-      program: "powershell.exe",
+      program: onPath("powershell.exe"),
       args: (c) => ["-NoProfile", "-NonInteractive", "-Command", c],
     },
   ];

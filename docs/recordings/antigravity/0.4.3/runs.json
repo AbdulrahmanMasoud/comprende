@@ -69,7 +69,7 @@
             "args": {
               "CommandLine": "ls",
               "WaitMsBeforeAsync": 5000,
-              "toolSummary": "Directory listing"
+              "toolSummary": "Run directory listing"
             },
             "id": "call_00000000-0000-4000-8000-000000000002",
             "name": "run_command"
@@ -301,8 +301,9 @@
           "toolCall": {
             "args": {
               "CommandLine": "git push origin feature/sum",
+              "IsDaemon": false,
               "WaitMsBeforeAsync": 10000,
-              "toolSummary": "Git push feature/sum"
+              "toolSummary": "Git push feature sum"
             },
             "id": "call_00000000-0000-4000-8000-000000000004",
             "name": "run_command"
@@ -323,7 +324,7 @@
   {
     "step": "6a-mcp-probe",
     "folder": "/work/app",
-    "setup": "Comprende 0.4.3 on (the first command), no allow rule: to learn the MCP permission's name",
+    "setup": "Comprende on, with an earlier draft of the hook command, no allow rule: to learn the MCP permission's name",
     "prompt": "Call the comprende MCP server's gate_status tool for the repository in the current folder, then tell me in one line what it returned. Don't run any shell commands.",
     "agy_flags": ["-p", "<prompt>", "--output-format", "stream-json", "--print-timeout", "300s"],
     "tool_calls": [
@@ -387,7 +388,7 @@
   {
     "step": "6-mcp-gate-status",
     "folder": "/work/app",
-    "setup": "Comprende 0.4.3 on, the gate_status tool allowed. The first try got a 503 from Google (no model capacity) and was run again",
+    "setup": "Comprende 0.4.3 on, the gate_status tool allowed",
     "prompt": "Call the comprende MCP server's gate_status tool for the repository in the current folder, then tell me in one line what it returned. Don't run any shell commands.",
     "agy_flags": [
       "-p",
@@ -422,7 +423,7 @@
     ],
     "result": {
       "status": "SUCCESS",
-      "reply": "It returned that the ownership check for branch `feature/sum` vs `origin/main` (mode: required) has not yet been saved, with `math.js` [new] identified as a small change (1 changed line) requiring one question and a 30-character minimum summary.\n",
+      "reply": "`gate_status` reported that branch `feature/sum` vs `origin/main` (mode: required) has an unsaved report with 1 changed file (`math.js [new]`, 1 changed line) qualifying as a small change requiring one question.\n",
       "denied_actions": []
     },
     "agy_stderr": "",
@@ -455,7 +456,7 @@
   {
     "step": "7-user-hook-non-json-ls",
     "folder": "/work/app",
-    "setup": "plus a user hook in ~/.gemini/config/hooks.json that prints not-json and exits 0; `ls` allowed",
+    "setup": "plus a user hook in ~/.gemini/config/hooks.json that prints not-json and exits 0; `ls` allowed (Comprende installed with an earlier draft of its hook command; the user hook ran first)",
     "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
     "agy_flags": [
       "-p",
@@ -540,7 +541,7 @@
   {
     "step": "8-user-hook-timeout-ls",
     "folder": "/work/app",
-    "setup": "plus a user hook that sleeps 8 seconds with a 2-second timeout; `ls` allowed",
+    "setup": "plus a user hook that sleeps 8 seconds with a 2-second timeout; `ls` allowed (Comprende installed with an earlier draft of its hook command; the user hook ran first)",
     "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
     "agy_flags": [
       "-p",
@@ -610,7 +611,7 @@
   {
     "step": "9-shell-probe",
     "folder": "/work/app",
-    "setup": "SHELL=/bin/zsh in agy's environment, plus a user hook that prints its own shell to stderr; `ls` allowed",
+    "setup": "SHELL=/bin/zsh in agy's environment, plus a user hook that prints its own shell to stderr; `ls` allowed (Comprende installed with an earlier draft of its hook command; the user hook ran first)",
     "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
     "agy_flags": [
       "-p",
