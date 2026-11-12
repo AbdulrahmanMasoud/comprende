@@ -57,11 +57,13 @@ Then open Codex in a repo, type `/hooks`, and trust Comprende's two hooks. Trust
 
 ### Antigravity
 
+You need the Antigravity CLI, `agy`, 1.5.3 or later ([getting started](https://antigravity.google/docs/getting-started/)).
+
 ```bash
 agy plugin install https://github.com/AbdulrahmanMasoud/comprende
 ```
 
-Then start a new `agy` session. You need the Antigravity CLI 1.5.3 or later. To update, run the same command again. Brought your Claude Code plugins over with `agy plugin import claude`? Run it anyway: it replaces the converted copy, which would send the always-on instruction a second time.
+Then start a new `agy` session. To update, run the same command again. Brought your Claude Code plugins over with `agy plugin import claude`? Run `agy plugin install` anyway, then check that `agy plugin list` shows one **comprende**, with `Source: antigravity`: a converted copy can send the always-on instruction twice.
 
 It's tested in the CLI, on macOS. The Antigravity IDE and App aren't tested yet: [a checklist to try them by hand](docs/agents.md#checking-it-in-antigravity).
 
@@ -97,7 +99,7 @@ Claude remembers what you already know in `~/.comprende/`, on your machine only.
 ### Turn it on (team lead, once per repo)
 
 1. Open Claude in the repo and say: **"Enable the ownership gate in this repo."**
-2. Claude opens a PR that adds the gate (`.learning/`), a CI check, and hooks for Claude Code, Cursor and Codex (Antigravity needs only the plugin). Review `.learning/config.json`, mainly `sensitive`: paths like auth or payments, which always get questions. Then merge it.
+2. Claude opens a PR that adds the gate (`.learning/`), a CI check, and hooks for Claude Code, Cursor and Codex (none for Antigravity: the plugin's hook covers it). Review `.learning/config.json`, mainly `sensitive`: paths like auth or payments, which always get questions. Then merge it.
 3. Make the check required: run `node .learning/gate.mjs protect --apply`, or ask Claude to. It needs admin rights on GitHub.
 4. Ask your team to install the plugin, in Claude Code, Cursor, Codex or Antigravity. That's all they need: their first session in the repo sets up the rest. In Codex they also trust the project and the hooks, in `/hooks`.
 

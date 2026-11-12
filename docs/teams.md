@@ -47,10 +47,10 @@ CI runs the base branch's gate. So when an upgrade brings something the older ga
 
 ## Mixed teams: Claude Code, Cursor, Codex and Antigravity
 
-One repo works for everyone. `install` writes the hooks for each tool that reads a repo hook file, and the report is the same file whichever tool saved it, so CI checks it the same way.
+One repo works for everyone. `install` writes the repo's hooks for each tool, except Antigravity, and the report is the same file whichever tool saved it, so CI checks it the same way.
 
 - **Each developer installs the plugin in the tool they use** ([Install](../README.md#install)). Someone with Comprende in Claude Code who also opens Cursor already has it there: Cursor runs Claude Code's plugins while its Third-Party Imports setting is on. Codex and Antigravity don't, so each needs its own install.
-- **Without the plugin,** the repo's own hook files still stop the agent's push: `.claude/settings.json` in Claude Code, `.cursor/hooks.json` in Cursor, `.codex/hooks.json` in Codex (once trusted). Antigravity has no repo hook file, so there only the plugin stops it. Developers without the plugin run `node .learning/gate.mjs install-hooks` once per clone to get the git hook.
+- **Without the plugin,** the repo's own hook files still stop the agent's push: `.claude/settings.json` in Claude Code, `.cursor/hooks.json` in Cursor, `.codex/hooks.json` in Codex (once trusted). `install` writes none for Antigravity, where it would run alongside the plugin's hook and check each command twice, so there only the plugin stops it. Developers without the plugin run `node .learning/gate.mjs install-hooks` once per clone to get the git hook.
 - **Each push is checked once,** whichever hook files and plugins are present ([how](agents.md#step-aside-rules)).
 - **Codex users trust the hooks.** Once per repo: the project and the two hooks in its `.codex/hooks.json`. And the plugin's two hooks in `/hooks`, after installing and after every update. Codex skips untrusted hooks without a word, but the repo's session start keeps its trust, so after an update the agent tells you.
 - **Repos set up before 0.3.0 or 0.4.0** get `.cursor/hooks.json` and `.codex/hooks.json` with `install --upgrade` ([Upgrading the gate](#upgrading-the-gate)).

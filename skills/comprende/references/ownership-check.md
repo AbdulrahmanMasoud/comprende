@@ -111,7 +111,7 @@ When the user asks to set it up ("enable the ownership gate here", in any langua
 2. **Install on a branch.** Create `chore/ownership-gate`, then run `node <skill-dir>/scripts/gate.mjs install --repo . --owner <handle>`. It adds:
    - `.learning/gate.mjs` and `.learning/config.json`
    - the CI workflow
-   - the agents' hooks: `.claude/settings.json` for Claude Code, `.cursor/hooks.json` for Cursor, and `.codex/hooks.json` for Codex
+   - the agents' hooks: `.claude/settings.json` for Claude Code, `.cursor/hooks.json` for Cursor, and `.codex/hooks.json` for Codex (none for Antigravity, where the plugin's hook covers it)
    - a local pre-push hook
    - CODEOWNERS entries
 
@@ -120,7 +120,7 @@ When the user asks to set it up ("enable the ownership gate here", in any langua
 4. **After it's merged**, run `node .learning/gate.mjs protect`. It is a dry run that shows the GitHub ruleset it would create: a required PR, the required "Ownership check" status, and code-owner review. If they agree, run it again with `--apply`, which needs admin access. Rulesets add to existing branch protection and don't replace it. Add `--no-code-owners` for one-person repos. On a private repo on the free plan, rulesets aren't available, so walk them through Settings → Branches instead.
 5. **Tell them about open PRs.** Branches created before the gate won't report the check until they merge the base branch in.
 
-Teammates who install the plugin need nothing else, except in Codex, where they trust the project and the hooks in `/hooks`. When they open the repo in Claude Code, Cursor, Codex or Antigravity, the plugin installs their local pre-push hook and reminds the agent that the repo is gated. Teammates without the plugin can run `node .learning/gate.mjs install-hooks` once per clone.
+Teammates who install the plugin need nothing else, except in Codex, where they trust the project and the hooks in `/hooks`. When they open the repo in Claude Code, Cursor, Codex or Antigravity, the plugin installs their local pre-push hook and reminds the agent that the repo is gated. In Antigravity that needs `agy` 1.5.3 or later, and doesn't happen on Windows, where the plugin's hooks don't run the gate. Teammates without the plugin can run `node .learning/gate.mjs install-hooks` once per clone.
 
 Without a `.learning/config.json`, the gate counts as `suggested` locally. CI and the hooks always take their rules from the **base** branch, so a PR can't switch off its own check.
 

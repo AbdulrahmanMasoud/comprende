@@ -41,7 +41,7 @@ The first two catch forgetting. The last two are the lock.
 
 **In Codex**, the first layer is the Codex plugin's hook, or the repo's `.codex/hooks.json`, each once trusted in `/hooks`. Codex skips a plugin's hooks after every update until they're trusted again; the repo's keep their trust, and its session start then tells the agent the plugin isn't running: not installed, or its hooks skipped.
 
-**In Antigravity**, the first layer is the plugin's hook only: a repo hook file would run alongside it and check each command twice. It denies the push with a JSON reply, and Antigravity shows the agent why. Any other failure of the hook, a crash or a missing `node`, lets the command run, since Antigravity blocks on any non-zero exit. What works where, and what's weaker in Cursor, Codex and Antigravity: [docs/agents.md](agents.md#what-works-where).
+**In Antigravity**, the first layer is the plugin's hook only: a repo hook file would run alongside it and check each command twice. It denies the push with a JSON reply, and Antigravity shows the agent why. Any other failure of the hook, a crash or a missing `node`, lets the command run, since Antigravity blocks on any non-zero exit. A hook that outlives its timeout is the exception: Antigravity kills it, and that blocks the command. What works where, and what's weaker in Cursor, Codex and Antigravity: [docs/agents.md](agents.md#what-works-where).
 
 ### One file
 

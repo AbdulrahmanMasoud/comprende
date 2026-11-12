@@ -61,11 +61,13 @@ codex plugin add comprende@comprende
 
 ### Antigravity
 
+محتاج الـ Antigravity CLI، اللي هو `agy`، نسخة 1.5.3 أو أحدث ([getting started](https://antigravity.google/docs/getting-started/)، بالإنجليزي).
+
 ```bash
 agy plugin install https://github.com/AbdulrahmanMasoud/comprende
 ```
 
-وبعدين ابدأ session جديدة في `agy`. محتاج Antigravity CLI نسخة 1.5.3 أو أحدث. وعشان تعمل update، شغّل نفس الأمر تاني. ولو كنت جبت الـ plugins بتاعة Claude Code بـ `agy plugin import claude`، شغّل الأمر ده برضه: هيحل محل النسخة المحوّلة، اللي كانت هتبعت الـ always-on instruction مرة تانية.
+وبعدين ابدأ session جديدة في `agy`. وعشان تعمل update، شغّل نفس الأمر تاني. ولو كنت جبت الـ plugins بتاعة Claude Code بـ `agy plugin import claude`، شغّل `agy plugin install` برضه، وبعدين اتأكد إن `agy plugin list` بيبيّن **comprende** واحد بس، ومعاه `Source: antigravity`: النسخة المحوّلة ممكن تبعت الـ always-on instruction مرتين.
 
 اتجرّب في الـ CLI على macOS. الـ Antigravity IDE والـ App لسه متجرّبوش: [checklist تجرّبهم بيها بإيدك](docs/agents.md#checking-it-in-antigravity) (بالإنجليزي).
 
@@ -101,7 +103,7 @@ Claude بيفتكر إنت عارف إيه في `~/.comprende/`، على جها�
 ### تشغيله (الـ team lead، مرة واحدة لكل repo)
 
 1. افتح Claude في الـ repo وقوله: **"فعّل بوابة الفهم في المشروع ده"**.
-2. Claude هيفتح PR بيضيف البوابة (`.learning/`)، و CI check، و hooks لـ Claude Code و Cursor و Codex (Antigravity محتاج الـ plugin بس). راجع `.learning/config.json`، خصوصاً `sensitive`: دي المسارات زي auth و payments اللي لازم يتسأل عليها دايماً. وبعدين اعمل merge.
+2. Claude هيفتح PR بيضيف البوابة (`.learning/`)، و CI check، و hooks لـ Claude Code و Cursor و Codex (ومفيش لـ Antigravity: الـ hook بتاع الـ plugin بيغطيه). راجع `.learning/config.json`، خصوصاً `sensitive`: دي المسارات زي auth و payments اللي لازم يتسأل عليها دايماً. وبعدين اعمل merge.
 3. خلّي الـ check إجباري: شغّل `node .learning/gate.mjs protect --apply`، أو اطلبها من Claude. محتاجة صلاحيات admin على GitHub.
 4. خلّي التيم يسطّبوا الـ plugin، في Claude Code أو Cursor أو Codex أو Antigravity، وبس كده. أول session ليهم في الـ repo بتظبط الباقي. وفي Codex كمان بيوافقوا على الـ project والـ hooks في `/hooks`.
 
