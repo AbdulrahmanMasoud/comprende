@@ -440,8 +440,9 @@ for (const plugin of NODE_LINE_PLUGINS) {
 }
 
 // On Windows, Cursor and Codex run hook commands in PowerShell, piping the payload in.
-// GitHub's runners have pwsh, so this runs in CI. Locally it's skipped without it.
-const PWSH = spawnSync("/bin/sh", ["-c", "command -v pwsh"], { encoding: "utf8" }).stdout.trim();
+// GitHub's runners have pwsh, so this runs in CI. Locally it's skipped without it, and on
+// Windows, which has no /bin/sh to look it up with (stdout is then null, not "").
+const PWSH = spawnSync("/bin/sh", ["-c", "command -v pwsh"], { encoding: "utf8" }).stdout?.trim() ?? "";
 
 for (const plugin of NODE_LINE_PLUGINS) {
   test(`the ${plugin.tool} plugin's hook commands run in PowerShell, and fail open there without node`, {
@@ -615,39 +616,55 @@ test("Antigravity's hook commands exit 0 in PowerShell 7 too, with or without no
   }
 });
 
-// On Windows, which shell Antigravity runs hooks in isn't documented. These record what
-// the shells there do with the commands. Only the Windows workflow runs them.
-test("Antigravity's hook commands exit 0 in cmd.exe, with or without node", {
+// On Windows, which shell Antigravity runs hooks in isn't documented: its build names both
+// cmd.exe and PowerShell. This records what each Windows shell does with the commands, and
+// asserts the ones that exit 0. Only the Windows workflow runs it.
+test("on Windows, Antigravity's hook commands exit 0 in cmd.exe and PowerShell 7, with or without node", {
   skip: process.platform !== "win32" && "Windows only",
 }, (t) => {
-  for (const h of antigravityHookCommands()) {
-    for (const path of [`${dirname(NODE)}${delimiter}${process.env.PATH}`, tmp(t)]) {
-      const r = spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `"${h.command}"`], {
-        cwd: REPO,
-        stdio: ["ignore", "pipe", "pipe"],
-        encoding: "utf8",
-        windowsVerbatimArguments: true,
-        env: { ...ENV, PATH: path },
-      });
-      assert.equal(r.status, 0, `${h.event}: ${r.stderr}`);
-      assert.equal(r.stdout, "", h.event);
+  const shells = [
+    {
+      name: "cmd.exe",
+      program: process.env.ComSpec ?? "cmd.exe",
+      args: (c) => ["/d", "/s", "/c", `"${c}"`],
+      asserted: true,
+    },
+    {
+      name: "PowerShell 7",
+      program: "pwsh.exe",
+      args: (c) => ["-NoProfile", "-NonInteractive", "-Command", c],
+      asserted: true,
+    },
+    // Can't parse && or ||: recorded only, in docs/agents.md.
+    {
+      name: "Windows PowerShell 5.1",
+      program: "powershell.exe",
+      args: (c) => ["-NoProfile", "-NonInteractive", "-Command", c],
+      asserted: false,
+    },
+  ];
+  for (const shell of shells) {
+    for (const h of antigravityHookCommands()) {
+      for (const [label, path] of [
+        ["with node", `${dirname(NODE)}${delimiter}${process.env.PATH}`],
+        ["without node", tmp(t)],
+      ]) {
+        const r = spawnSync(shell.program, shell.args(h.command), {
+          cwd: REPO,
+          stdio: ["ignore", "pipe", "pipe"],
+          encoding: "utf8",
+          windowsVerbatimArguments: shell.name === "cmd.exe",
+          env: { ...ENV, PATH: path, SystemRoot: process.env.SystemRoot },
+        });
+        t.diagnostic(
+          `${shell.name}, ${h.event}, ${label}: exit ${r.status}, stdout ${JSON.stringify(r.stdout)}, stderr ${JSON.stringify((r.stderr ?? "").slice(0, 200))}`,
+        );
+        if (shell.asserted) {
+          assert.equal(r.status, 0, `${shell.name}, ${h.event}, ${label}: ${r.stderr}`);
+          assert.equal(r.stdout, "", `${shell.name}, ${h.event}, ${label}`);
+        }
+      }
     }
-  }
-});
-
-test("what Windows PowerShell 5.1 does with Antigravity's hook commands (recorded, not asserted)", {
-  skip: process.platform !== "win32" && "Windows only",
-}, (t) => {
-  for (const h of antigravityHookCommands()) {
-    const r = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", h.command], {
-      cwd: REPO,
-      stdio: ["ignore", "pipe", "pipe"],
-      encoding: "utf8",
-      env: { ...ENV, PATH: process.env.PATH },
-    });
-    t.diagnostic(
-      `${h.event}: exit ${r.status}, stdout ${JSON.stringify(r.stdout)}, stderr ${JSON.stringify(r.stderr?.slice(0, 300))}`,
-    );
   }
 });
 
