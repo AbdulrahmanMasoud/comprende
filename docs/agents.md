@@ -757,7 +757,7 @@ The adapter, `src/gate/agents/antigravity.ts`:
 - A throwaway `HOME`, signed in first, with its own keychain on macOS: the token goes to the login keychain, and a pasted code works only on a terminal (Step 0).
 - `agy plugin install` of a copy of this repo's plugin files, and a check that `agy plugin list` finds Antigravity's own manifest: 1 skill, 1 rule, 1 MCP server, 1 hook.
 - Each turn is `agy -p "<prompt>" --output-format stream-json` in the demo, with only the allow rules its step needs in `--settings`. Not `--dangerously-skip-permissions`: what the agent may run stays part of the test.
-- The same steps as for Codex, plus: the session start's reply is a system message, and every hook ran the installed plugin's `gate.mjs`, never the repo's.
+- The steps: session start (the hook's one system message, read from the log, and the rule's instruction once, from the agent's quotes), an ordinary command, an unverified push denied by the hook, "check me" through to a push that goes through, the memory server, every hook running the installed plugin's `gate.mjs` and never the repo's, and explain-as-you-build with the skill loaded. Not Codex's after-update, repo-hook or commit-trailer steps: Antigravity has no hook trust to lose on an update, and no repo hook file, and its agent's commit in the first run had no trailer.
 - The App and the IDE stay manual, with a checklist like Cursor's.
 
 ### The order of PRs

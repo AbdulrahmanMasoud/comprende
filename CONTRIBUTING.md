@@ -320,7 +320,7 @@ CODEX_API_KEY=… node tools/e2e-codex.mjs --out /tmp/e2e-codex-2 --only explain
 `tools/e2e-antigravity.mjs` does the same with the real Antigravity CLI, headless (`agy -p --output-format stream-json`). It isn't in CI either: it needs a signed-in `agy`, and uses the account's requests.
 
 ```bash
-H=/tmp/agy-home
+H="$HOME/agy-e2e-home"     # a throwaway HOME, away from the runs' temp folders
 # macOS only: the throwaway HOME's own login keychain, where agy keeps its token
 K="$H/Library/Keychains/login.keychain-db"; mkdir -p "$H/Library/Keychains" "$H/Library/Preferences"
 sec() { env -i HOME="$H" /usr/bin/security "$@"; }
@@ -328,19 +328,21 @@ sec create-keychain -p throwaway "$K" && sec default-keychain -s "$K" && sec lis
 sec unlock-keychain -p throwaway "$K" && sec set-keychain-settings "$K"    # no auto-lock
 # once: sign in (paste the code from Google's page within 60 seconds)
 HOME="$H" agy -p "Reply with: signed in"
-node tools/e2e-antigravity.mjs --home "$H" --out /tmp/e2e-agy
-node tools/e2e-antigravity.mjs --home "$H" --out /tmp/e2e-agy-2 --only explain   # some scenarios only
+node tools/e2e-antigravity.mjs --home "$H"                  # the run goes to a new temp folder; it prints where
+node tools/e2e-antigravity.mjs --home "$H" --only explain   # some scenarios only
 # afterwards
 sec delete-keychain "$K"; rm -rf "$H"
 ```
 
 - **The sign-in** stays in that `HOME`: `agy` takes the code only on a terminal, within 60 seconds of asking. On macOS the token goes to the login keychain of whatever `HOME` it runs with, so the throwaway `HOME` gets its own, and your own keychain isn't touched.
 - **Scenarios**, each in its own demo repo:
-  - `main`: the install (Antigravity's own manifest: 1 skill, 1 rule, 1 MCP server, 1 hook), session start (the rule's instruction once, the line that says the hooks run, and the gate's note, as a system message), an ordinary command, an unverified push denied by the hook, "check me" through to a push that goes through, the memory server, and a check that every hook ran the installed plugin's `gate.mjs`
+  - both start with the install: a copy of every file git tracks here, and `agy plugin list` must show Antigravity's own manifest, "1 skill, 1 rule, 1 MCP server, 1 hook"
+  - `main`: session start (the hook sends one system message, that the hooks run and the gate's note, without the instruction, which the agent has once, from the rule), an ordinary command, an unverified push denied by the hook, "check me" through to a push that goes through, the memory server, and a check that every hook ran the installed plugin's `gate.mjs`
   - `explain`: explain-as-you-build on a small retry function, with the skill loaded
 - **Permissions:** headless `agy` denies a tool that needs approval and has no allow rule, and the turn then ends with no reply. So each turn passes only the rules it needs, with `--settings`: `command(ls)`; the exact push; for "check me", `git`, `node`, `ls` and `cat`; and, where the skill runs, reading the throwaway `HOME`'s `.gemini/` (the plugin's files, and the memory server's tool list) and the memory server. A step that fails because the agent wanted something else says what `agy` denied. It doesn't use `--dangerously-skip-permissions`.
-- **Isolation:** the run installs this repo's plugin into `--home`, in place of any copy there, and keeps `COMPRENDE_HOME` inside `--out`. Each demo's remote is a local folder, so nothing is pushed anywhere. Give it a fresh `--out` (the default is a new temp folder) with nothing else beside it: the agent's commands can read the temp folders outside the demo, and looking for existing code, it once searched the folders around the run and tried to read a file there.
-- **Output:** PASS, FAIL or BLOCKED per step (BLOCKED: `agy` gave no reply, for example a usage limit, a timeout or a lost sign-in; a turn that failed before any tool ran is tried once more), and transcripts, replies, stderr and a log of every `gate.mjs` run in `--out`. To quote a reply, copy it into [`docs/recordings/antigravity/`](docs/recordings/antigravity/), with personal paths replaced, and add its run to that folder's README.
+- **Isolation:** the run installs this repo's plugin into `--home`, in place of any copy there, and keeps `COMPRENDE_HOME` inside `--out`. Each demo's remote is a local folder, so nothing is pushed anywhere. Keep the run away from other work: the agent's commands can read the temp folders around the demo, and looking for existing code, it once searched the folders around the run and tried to read a file there. The default `--out`, a new temp folder, is the safe choice.
+- **Output:** PASS, FAIL or BLOCKED per step, and transcripts, replies, stderr and a log of every `gate.mjs` run in `--out`. To quote a reply, copy it into [`docs/recordings/antigravity/`](docs/recordings/antigravity/), with personal paths replaced, and add its run to that folder's README.
+- **BLOCKED** means `agy` reported an error of its own (an `AGY_ERROR` line: no capacity, a timeout, the sign-in), and the scenario stops there. When `agy` says it's worth another try and no tool ran yet, the turn is tried once more, and the first try is kept as `<step>.try-1`. A turn that fails without an `AGY_ERROR` stops the run: it may be the plugin's doing.
 - **The IDE and the App** aren't covered.
 
 ## The demo

@@ -136,7 +136,7 @@ The same way as 0.4.3, in the same signed-in throwaway `HOME`. Steps `e1` to `e5
 
 ## 0.5.0: the end-to-end script's first run
 
-[`tools/e2e-antigravity.mjs`](../../../tools/e2e-antigravity.mjs), on the `chore/e2e-antigravity` branch, with `main` at ba1b1b7 (the adapter, #63). The files: `0.5.0-e2e/`, the replies the script saved and its `results.json`, with the run folders replaced by `/work` and the throwaway `HOME` by `~`. Nothing else was changed.
+[`tools/e2e-antigravity.mjs`](../../../tools/e2e-antigravity.mjs), on the `chore/e2e-antigravity` branch, with `main` at ba1b1b7 (the adapter, #63). The files: `0.5.0-e2e/`, the replies the script saved and a `results.json`, with the run folders replaced by `/work` and the throwaway `HOME` by `~`. The replies weren't changed otherwise. `results.json` was put together from two runs, below: run 1's install and `main`, and run 3's `explain`. Run 3's own install line, which also passed, was left out.
 
 ### How it was recorded
 
@@ -145,7 +145,8 @@ The same way as 0.4.3, in the same signed-in throwaway `HOME`. Steps `e1` to `e5
 - **Three runs, all 15 steps passed once:**
   - **Run 1:** everything in `main` passed. `explain` failed: the skill read its files, then called the memory server's `learning_context`, which that turn had no allow rule for, so the turn ended with no reply. The script now allows the memory server there.
   - **Run 2, `explain` only:** the run folder sat inside a scratch folder that also held a draft of the script. Looking for existing code, the agent searched the folders around the run, listed their files, and tried to read the draft; that read was denied, and the turn ended with no reply. Only file names were sent. Since then, CONTRIBUTING.md says to give each run a fresh `--out` with nothing beside it.
-  - **Run 3, `explain` only, in a new temp folder:** passed. `results.json` here is run 1's `main` and run 3's `explain`.
+  - **Run 3, `explain` only, in a new temp folder:** passed.
+- **After the runs,** the script's checks were made stricter, after a review: the session start's checks now read what the hook sent from the log, besides the agent's quotes; a failure without an `AGY_ERROR` stops the run instead of reading as BLOCKED; and the plugin's copy is every file git tracks. `RERUN`
 
 ### What they show
 

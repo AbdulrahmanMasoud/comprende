@@ -26,9 +26,11 @@ import { cpSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+  askedQuestion,
   Blocked,
   checkMeTurns,
   commandLine,
+  copyPlugin,
   explainScenario,
   gateLog,
   howSaved,
@@ -37,6 +39,7 @@ import {
   LS,
   makeDemo,
   PUSH,
+  PUSH_AND_QUOTE,
   REPO,
   remoteHas,
   runScenarios,
@@ -56,13 +59,10 @@ const gate = gateLog(RUN);
 
 // ---------------------------------------------------------------- the throwaway HOME and plugins
 
-/** A copy of this repo's plugin files, as an install would have them. Without
- *  the memory server, for the run that must fall back to save --input. */
+/** A copy of this repo's plugin (with Antigravity's rules/ too, which Cursor must not
+ *  load). Without the memory server, for the run that must fall back to save --input. */
 function pluginCopy(/** @type {string} */ name, { memoryServer = true } = {}) {
-  const copy = join(RUN, name);
-  // rules/ too: Antigravity's always-on rule sits in the same repo, and Cursor must not load it.
-  for (const p of [".claude-plugin", ".cursor-plugin", "dist", "hooks", "skills", "rules", ".mcp.json"])
-    cpSync(join(REPO, p), join(copy, p), { recursive: true });
+  const copy = copyPlugin(RUN, name);
   if (!memoryServer) {
     const manifest = join(copy, ".cursor-plugin", "plugin.json");
     const { mcpServers: _, ...rest } = JSON.parse(readFileSync(manifest, "utf8"));
@@ -166,7 +166,7 @@ function checkMeFlow(label, { app, remote }, home, { resume, plugin }) {
     mcpTools: succeeded.filter((c) => c.kind === "mcpToolCall").map((c) => c.args.name ?? ""),
     commands: succeeded.filter((c) => c.kind === "shellToolCall").map((c) => c.args.command ?? ""),
   });
-  return { asked: /\?/.test(turns[0]?.reply ?? ""), savedWith, pushed: remoteHas(remote, "feature/sum") };
+  return { asked: askedQuestion(turns[0]?.reply ?? ""), savedWith, pushed: remoteHas(remote, "feature/sum") };
 }
 
 // ---------------------------------------------------------------- the scenarios
@@ -196,10 +196,7 @@ function main() {
 
   const before = gate.runs().length;
   const ls = agent("2-ls", demo.app, home, LS, { resume: chat });
-  const lsRuns = gate
-    .runs()
-    .slice(before)
-    .filter((r) => r.argv.includes("agent-hook"));
+  const lsRuns = gate.runsSince(before, ["agent-hook"]);
   report(
     "an ordinary command runs, and the hook is silent",
     shellCalls(ls, /^ls$/).some((t) => "success" in t.result) &&
@@ -209,13 +206,8 @@ function main() {
   );
 
   const pushBefore = gate.runs().length;
-  const push = agent("3-unverified-push", demo.app, home, `${PUSH} Quote any block message word for word.`, {
-    resume: chat,
-  });
-  const checks = gate
-    .runs()
-    .slice(pushBefore)
-    .filter((r) => r.exit === 2);
+  const push = agent("3-unverified-push", demo.app, home, PUSH_AND_QUOTE, { resume: chat });
+  const checks = gate.runsSince(pushBefore).filter((r) => r.exit === 2);
   report(
     "an unverified push is blocked, and the agent sees why",
     !remoteHas(demo.remote, "feature/sum") && /Blocked by the ownership gate/.test(push.reply) && checks.length === 1,
@@ -268,7 +260,7 @@ function bothPlugins() {
     if (!(e instanceof Blocked)) throw e;
     blocked = e; // session start runs before the agent does, so it can still be checked
   }
-  const runs = gate.runs().slice(before);
+  const runs = gate.runsSince(before);
   const contexts = runs
     .filter((r) => r.argv.includes("session-start"))
     .map((r) => {

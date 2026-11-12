@@ -5,7 +5,7 @@
 // CONTRIBUTING.md, "Testing in Cursor", "Testing in Codex" and "Testing in Antigravity".
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -82,6 +82,34 @@ export function runScenarios(scenarios, only, steps) {
   }
 }
 
+/**
+ * Wraps the scenarios that need a setup, such as installing the plugin: the first one
+ * that runs does it, and it stays done. So `--only` can pick any of them.
+ * @param {() => void} setup
+ */
+export function beforeFirst(setup) {
+  let done = false;
+  return (/** @type {() => void} */ run) => () => {
+    if (!done) setup();
+    done = true;
+    run();
+  };
+}
+
+/**
+ * A copy of this repo's plugin, as an install from GitHub has it: every file git
+ * tracks, as it is in the working tree, so uncommitted edits are tested too. A copy an
+ * earlier run left is replaced.
+ * @param {string} run @param {string} name
+ */
+export function copyPlugin(run, name) {
+  const copy = join(run, name);
+  rmSync(copy, { recursive: true, force: true });
+  for (const file of git(REPO, "ls-files", "-z").split("\0").filter(Boolean))
+    if (existsSync(join(REPO, file))) cpSync(join(REPO, file), join(copy, file));
+  return copy;
+}
+
 // ---------------------------------------------------------------- the gate's runs, and the AI tool's environment
 
 /** @typedef {{ script: string, argv: string[], cwd: string, exit: number, stdout: string, stderr: string }} GateRun */
@@ -108,18 +136,25 @@ if ((process.argv[1] ?? "").endsWith("gate.mjs")) {
 }
 `,
   );
+  /** Every run so far. A line that isn't JSON throws: steps count these runs, so a lost
+   *  line could pass a double check for a single one. @returns {GateRun[]} */
+  const runs = () =>
+    existsSync(log)
+      ? readFileSync(log, "utf8")
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
+      : [];
   return {
     /** The NODE_OPTIONS value that loads the preload. */
     nodeOptions: `--import=${pathToFileURL(preload).href}`,
-    /** Every run so far. A line that isn't JSON throws: steps count these runs, so a
-     *  lost line could pass a double check for a single one. @returns {GateRun[]} */
-    runs: () =>
-      existsSync(log)
-        ? readFileSync(log, "utf8")
-            .split("\n")
-            .filter(Boolean)
-            .map((line) => JSON.parse(line))
-        : [],
+    runs,
+    /** The runs since the first `from`, only those of `subcommands` when given.
+     *  @param {number} from @param {string[]} [subcommands] @returns {GateRun[]} */
+    runsSince: (from, subcommands) =>
+      runs()
+        .slice(from)
+        .filter((r) => !subcommands || subcommands.some((s) => r.argv.includes(s))),
   };
 }
 
@@ -208,6 +243,9 @@ export const LS = "Run exactly this shell command once: `ls`. Then say what it p
 export const PUSH =
   "Run exactly this shell command once, and don't retry or work around it if it's blocked: `git push -u origin feature/sum`.";
 
+/** The push, for a step that checks what the agent saw. */
+export const PUSH_AND_QUOTE = `${PUSH} Quote any block message word for word.`;
+
 export const LEARNING_CONTEXT =
   "Call the comprende memory server's learning_context tool for this project, and tell me in one line what it returned.";
 
@@ -234,6 +272,10 @@ export function checkMeTurns(label, turn, pushed) {
   for (let i = 0; i < 2 && !pushed(); i++) turns.push(turn(`${label}-follow-up-${i + 1}`, FINISH));
   return turns;
 }
+
+/** Whether the agent asked a question in any of these replies (in English or Arabic).
+ *  @param {...string} said */
+export const askedQuestion = (...said) => said.some((s) => /[?؟]/.test(s));
 
 /**
  * How "check me" saved the report: the memory server's save_check_report, else the
