@@ -65,7 +65,7 @@ The IDE and the App, the interactive CLI, Linux and Windows, a gate crash or a N
 0.4.3 gives Antigravity its own plugin files: `.antigravity-plugin/plugin.json`, a root `hooks.json` and a root `mcp_config.json`. With its own manifest, `agy plugin install` uses them as they are, instead of converting the Claude Code plugin. Each hook command is:
 
 ```sh
-set "A=$(node "./dist/gate.mjs" … --from-plugin; printf 'x%s' "$?")$(exit 0)"; out=${1#A=}; s=${out##*x}; ok=${s%%[1-9]*}; a=${out%x*}; printf '%s' "${ok:+$a}"; exit 0
+set "A=$(node "$PLUGIN_ROOT/dist/gate.mjs" … --from-plugin; printf 'x%s' "$?")$(exit 0)"; held=${1#A=}; code=${held##*x}; ok=${code%%[1-9]*}; reply=${held%x*}; printf '%s' "${ok:+$reply}"; exit 0
 ```
 
 The shell keeps the gate's output, prints it only when the gate exits 0, and otherwise exits 0 with nothing on stdout. It has no `&&` or `||`, so that `cmd.exe` and both PowerShells exit 0 too (tested in the Windows workflow), in case Antigravity uses one of them on Windows ([docs/agents.md](../../agents.md#comprende-043-in-antigravity)).
@@ -74,12 +74,11 @@ The shell keeps the gate's output, prints it only when the gate exits 0, and oth
 
 The same way as Step 0, with these changes:
 
-- **The plugin:** the fix's branch, installed with `agy plugin install` into a fresh throwaway `HOME`: "1 skill, 1 MCP server, 1 hook", `Source: antigravity`.
+- **The plugin:** the fix's branch at COMMIT_TBD, installed with `agy plugin install` into a fresh throwaway `HOME`: "1 skill, 1 MCP server, 1 hook", `Source: antigravity`. For a plugin's own `hooks.json`, the install message counts hook groups ("1 installed (comprende)"); for a converted one, it counts events ("2 installed (PreToolUse, SessionStart)").
 - **The gated demo** also has its own `dist/gate.mjs` and `dist/server.mjs`, committed. Each writes a marker file in `/work/markers` if it ever runs. After every step, that folder was empty.
 - **The gate's runs** log the script's own path, and the MCP server's start.
 - **Steps 3 and 4** changed the installed plugin's `dist/gate.mjs`, and put it back after the step (the same SHA-256).
-- **Steps 1 to 6** ran with the final command. Step 6a ran with an earlier draft (`out=$(…) && printf … || exit 0`), only to learn the MCP permission's name.
-- **Steps 7 to 9** test Antigravity, not Comprende: a user hook in `~/.gemini/config/hooks.json`, removed after the step.
+- **Steps 1 to 6** ran with the final command. Step 6a, and steps 7 to 9, ran with an earlier draft (`out=$(…) && printf … || exit 0`): 6a only to learn the MCP permission's name, and 7 to 9 test Antigravity, not Comprende, with a user hook in `~/.gemini/config/hooks.json` that ran first and was removed after the step.
 - **The files:** `0.4.3/runs.json`, with the same replacements as Step 0 (paths, home folder, IDs).
 
 ### The runs

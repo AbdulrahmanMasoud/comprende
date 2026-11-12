@@ -469,8 +469,8 @@ for (const plugin of NODE_LINE_PLUGINS) {
   });
 }
 
-/** The hook commands in Antigravity's hooks.json, by event: named groups of events, where
- *  a tool event holds matcher groups, as in Claude Code's format, and SessionStart a flat list. */
+/** The hook entries in Antigravity's hooks.json, by event: named groups of events, where a tool
+ *  event holds matcher groups, as in Claude Code's format, and a session start a flat list. */
 const antigravityFormatCommands = (file) =>
   Object.values(file).flatMap((group) =>
     Object.entries(group).flatMap(([event, list]) =>
@@ -481,28 +481,31 @@ const antigravityFormatCommands = (file) =>
   );
 const antigravityHookCommands = () => antigravityFormatCommands(json("hooks.json"));
 
-/** The one command each Antigravity hook runs. Antigravity blocks the tool call on any non-zero
- *  exit, non-JSON stdout or a timeout (docs/agents.md, "Comprende 0.4.3 in Antigravity"), so the
- *  shell, not node, turns every failure into exit 0 with nothing on stdout. And no && or ||,
- *  which Windows PowerShell 5.1 can't parse:
- *  - sh: `set "A=$(… ; printf 'x%s' "$?")"` keeps the gate's output with `x<its exit code>` at
- *    the end, in $1. `ok` is "0" when that code is 0, and empty otherwise, so the gate's output,
- *    `a`, goes out only then. Hooks run in the plugin's folder, so ./dist/gate.mjs is the plugin's.
- *  - cmd.exe: the whole line is one `set "A=…"`, which succeeds: exit 0, the gate never runs.
- *  - PowerShell: `$(exit 0)`, evaluated in the string, ends the script with 0 after the gate.
- *    It parses the whole line first, so no `${…}` holds another: PowerShell can't parse that. */
-const antigravityCommand = (entry) =>
-  `set "A=$(node "./dist/gate.mjs" ${entry} --from-plugin; printf 'x%s' "$?")$(exit 0)"; ` +
-  `out=\${1#A=}; s=\${out##*x}; ok=\${s%%[1-9]*}; a=\${out%x*}; printf '%s' "\${ok:+$a}"; exit 0`;
-const antigravityPayload = (name) => read(`test/fixtures/antigravity/${name}`).toString("utf8");
+/** The one command each Antigravity hook runs, for a gate subcommand. Antigravity blocks the tool
+ *  call on any non-zero exit, non-JSON stdout or a timeout (docs/agents.md, "Comprende 0.4.3 in
+ *  Antigravity"), so the shell, not node, turns every failure into exit 0 with nothing on stdout.
+ *  Which shell runs hooks on Windows isn't documented, so it's written for four:
+ *  - sh: `set "A=$(…; printf 'x%s' "$?")"` holds the gate's output with `x<its exit code>` at the
+ *    end, in $1 (`$(exit 0)` expands to nothing in sh). The `A=` keeps an output that starts with
+ *    `-` from being read as an option of `set`. `ok` is "0" when the code is 0 and empty otherwise,
+ *    so `reply`, the gate's output, goes out only then.
+ *  - cmd.exe: the whole line is one `set "A=…"`, which succeeds: exit 0, and the gate never runs.
+ *  - PowerShell 5.1 and 7: `$(exit 0)`, evaluated inside the string, ends the script with 0 after
+ *    the gate, and nothing is printed.
+ *  - The gate is "$PLUGIN_ROOT/dist/gate.mjs", which Antigravity sets for plugin hooks: never a
+ *    path a repo can provide, whatever folder the hook runs in. Unset, no gate runs.
+ *  The test below checks the rules that keep it so. */
+const antigravityCommand = (subcommand) =>
+  `set "A=$(node "$PLUGIN_ROOT/dist/gate.mjs" ${subcommand} --from-plugin; printf 'x%s' "$?")$(exit 0)"; ` +
+  `held=\${1#A=}; code=\${held##*x}; ok=\${code%%[1-9]*}; reply=\${held%x*}; printf '%s' "\${ok:+$reply}"; exit 0`;
+const antigravityPayload = (name, repo) =>
+  read(`test/fixtures/antigravity/${name}`).toString("utf8").replaceAll("/work/probe-app", repo);
 
-test("the Antigravity plugin has its own manifest, with the plugin's name and version", () => {
+test("the Antigravity plugin has its own manifest, with only the fields Antigravity documents", () => {
   const antigravity = json(".antigravity-plugin/plugin.json");
-  const claude = json(".claude-plugin/plugin.json");
-  assert.equal(antigravity.name, claude.name);
-  // Antigravity detects an update by the version, so it must move with the others.
-  assert.equal(antigravity.version, claude.version);
-  // Only the fields Antigravity documents (antigravity.google/docs/build-plugins): it rejects unknown ones.
+  assert.equal(antigravity.name, json(".claude-plugin/plugin.json").name);
+  // Its version is in tools/release.mjs's VERSION_FIELDS: Antigravity notices an update by it.
+  // Only the fields of Antigravity's schema (antigravity.google/docs/build-plugins): it rejects unknown ones.
   const documented = [
     "$schema",
     "name",
@@ -532,82 +535,136 @@ test("the Antigravity plugin's MCP config starts the plugin's own server", () =>
   assert.ok(existsSync(join(REPO, "dist/server.mjs")));
 });
 
-test("the Antigravity plugin's hook commands run the plugin's gate, and the shell turns a failure into exit 0", () => {
-  const entries = antigravityHookCommands();
-  assert.deepEqual(entries.map((h) => h.event).sort(), ["PreToolUse", "SessionStart"]);
-  for (const h of entries) {
-    const entry = h.event === "SessionStart" ? "session-start" : "claude-hook";
-    assert.equal(h.command, antigravityCommand(entry), h.event);
+test("the Antigravity plugin's hooks file has Antigravity's shape, and runs the plugin's own gate", () => {
+  const file = json("hooks.json");
+  assert.deepEqual(Object.keys(file), ["comprende"]);
+  const { SessionStart, PreToolUse, ...others } = file.comprende;
+  assert.deepEqual(others, {});
+  // A session start takes a flat list of hooks, and a tool event matcher groups.
+  assert.ok(SessionStart.length > 0 && SessionStart.every((h) => h.type === "command" && !("hooks" in h)));
+  assert.ok(PreToolUse.length > 0 && PreToolUse.every((g) => g.matcher === "run_command"));
+  assert.ok(PreToolUse.every((g) => g.hooks.every((h) => h.type === "command")));
+  for (const h of antigravityHookCommands()) {
+    assert.equal(h.command, antigravityCommand(h.event === "SessionStart" ? "session-start" : "claude-hook"), h.event);
     assert.ok(h.timeout > 0);
   }
-  assert.equal(entries.find((h) => h.event === "PreToolUse").matcher, "run_command");
   assert.ok(existsSync(join(REPO, "dist/gate.mjs")));
 });
+
+test("Antigravity's hook commands keep the rules that make cmd.exe and PowerShell exit 0 too", () => {
+  for (const { event, command } of antigravityHookCommands()) {
+    // Windows PowerShell 5.1 can't parse && or ||, and PowerShell 7 stops a chain at an unknown command.
+    assert.doesNotMatch(command, /&&|\|\|/, event);
+    // cmd.exe runs the line as one `set "A=…"`: it comes first, and & | < > ^ stay inside its quote pairs.
+    assert.ok(command.startsWith('set "A='), event);
+    const outsideCmdQuotes = command
+      .split('"')
+      .filter((_, i) => i % 2 === 0)
+      .join("");
+    assert.doesNotMatch(outsideCmdQuotes, /[&|<>^]/, event);
+    // PowerShell ends the script at $(exit 0), so it closes that first statement's string.
+    assert.ok(command.split('"; ')[0].endsWith("$(exit 0)"), event);
+    // PowerShell can't parse a ${…} inside another.
+    assert.doesNotMatch(command, /\$\{[^}]*\$\{/, event);
+  }
+});
+
+// Antigravity runs hooks with /bin/sh, which is dash on Debian and Ubuntu.
+const ANTIGRAVITY_SHELLS = [...POSIX_SHELLS, "/bin/dash"].filter((s) => existsSync(s));
 
 test("Antigravity's hooks let the command run when the gate fails: no node, no gate.mjs, a crash after partial output, exit 2", {
   skip: process.platform === "win32" && "sh only: which shell Antigravity runs hooks in on Windows is unknown",
 }, (t) => {
-  // A plugin folder like the installed one, whose dist/gate.mjs each case swaps out.
+  // A gated repo with an unverified change, where the payloads point.
+  const { dev } = setup(t);
+  write(dev, "src/app.js", "export const app = 2;\n");
+  commitAll(dev, "unchecked");
+  // The hooks run from a folder with its own dist/gate.mjs, which must never run: the path is
+  // $PLUGIN_ROOT's, the plugin's folder, whose dist/gate.mjs each case swaps out.
   const plugin = tmp(t);
+  const elsewhere = tmp(t);
+  const marker = join(elsewhere, "the-repo-s-own-gate-ran");
+  write(
+    elsewhere,
+    "dist/gate.mjs",
+    `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, "");\n`,
+  );
   const useGate = (source) => {
     rmSync(join(plugin, "dist"), { recursive: true, force: true });
     if (source !== null) write(plugin, "dist/gate.mjs", source);
   };
-  const run = (command, input, path = process.env.PATH) =>
-    spawnSync("/bin/sh", ["-c", command], {
-      cwd: plugin,
+  const env = (path, root) => {
+    const e = { ...ENV, PATH: path, OWNERSHIP_GATE_NO_AUTO_HOOK: "1", PLUGIN_ROOT: root };
+    if (root === null) delete e.PLUGIN_ROOT;
+    return e;
+  };
+  const run = (shell, command, input, { path = process.env.PATH, root = plugin } = {}) =>
+    spawnSync(shell, ["-c", command], {
+      cwd: elsewhere,
       // Without node or gate.mjs nothing may read the input, and writing it would race (EPIPE).
       ...(input === undefined ? { stdio: ["ignore", "pipe", "pipe"] } : { input }),
       encoding: "utf8",
-      env: { ...ENV, PATH: path },
+      env: env(path, root),
     });
   const [sessionStart] = antigravityHookCommands().filter((h) => h.event === "SessionStart");
   const [preToolUse] = antigravityHookCommands().filter((h) => h.event === "PreToolUse");
-  const payloads = [
-    [sessionStart, "session-start.json"],
-    [preToolUse, "pre-tool-use.run-command.ls.json"],
-    [preToolUse, "pre-tool-use.run-command.git-push.json"],
-  ];
-
-  // The real gate: the session start replies, and a command gets an empty allow.
-  useGate(readFileSync(GATE));
-  for (const [h, name] of payloads) {
-    const r = run(h.command, antigravityPayload(name));
-    assert.equal(r.status, 0, `${name}: ${r.stderr}`);
-    if (h === sessionStart) assert.match(r.stdout, /Comprende is installed/, name);
-    else assert.equal(r.stdout, "", name);
-  }
-
-  const allowsSilently = (label, input, path) => {
-    for (const h of [sessionStart, preToolUse]) {
-      const r = run(h.command, input, path);
-      assert.equal(r.status, 0, `${label}, ${h.event}: ${r.stderr}`);
-      assert.equal(r.stdout, "", `${label}, ${h.event}`);
-    }
-  };
-  allowsSilently("node missing from PATH", undefined, tmp(t));
-  useGate(null);
-  allowsSilently("gate.mjs missing");
-
-  // Partial JSON on stdout, written for sure (writeSync), then a crash.
+  const start = antigravityPayload("session-start.json", dev);
+  const ls = antigravityPayload("pre-tool-use.run-command.ls.json", dev);
+  const push = antigravityPayload("pre-tool-use.run-command.git-push.json", dev);
   const partial = '{"decision": "de';
-  useGate(
-    `import { writeSync } from "node:fs";\nwriteSync(1, ${JSON.stringify(partial)});\nthrow new Error("a crash");\n`,
-  );
-  const crash = sh(plugin, NODE, ["dist/gate.mjs"], { check: false });
-  assert.equal(crash.stdout, partial, "the stand-in gate prints partial output");
-  assert.notEqual(crash.status, 0, "and then crashes");
-  allowsSilently("a crash after partial output", antigravityPayload("pre-tool-use.run-command.ls.json"));
-
-  useGate('process.stderr.write("Blocked by the ownership gate\\n");\nprocess.exitCode = 2;\n');
-  allowsSilently("exit 2", antigravityPayload("pre-tool-use.run-command.git-push.json"));
-
-  // A deliberate deny, which Antigravity reads as JSON on exit 0, still gets through.
   const deny = '{"decision":"deny","reason":"No ownership report"}';
-  useGate(`process.stdout.write(${JSON.stringify(deny)});\n`);
-  const denied = run(preToolUse.command, antigravityPayload("pre-tool-use.run-command.git-push.json"));
-  assert.equal(denied.status, 0, denied.stderr);
-  assert.equal(denied.stdout, deny);
+  assert.ok(ANTIGRAVITY_SHELLS.length > 0);
+
+  for (const shell of ANTIGRAVITY_SHELLS) {
+    const allowsSilently = (label, input, options) => {
+      for (const h of [sessionStart, preToolUse]) {
+        const r = run(shell, h.command, input, options);
+        assert.equal(r.status, 0, `${shell}, ${label}, ${h.event}: ${r.stderr}`);
+        assert.equal(r.stdout, "", `${shell}, ${label}, ${h.event}`);
+      }
+    };
+
+    // The real gate. The session start's reply goes out byte for byte, with the gate's note.
+    useGate(readFileSync(GATE));
+    const direct = spawnSync(NODE, [join(plugin, "dist/gate.mjs"), "session-start", "--from-plugin"], {
+      cwd: plugin,
+      input: start,
+      encoding: "utf8",
+      env: env(process.env.PATH, plugin),
+    });
+    const r = run(shell, sessionStart.command, start);
+    assert.equal(r.status, 0, `${shell}: ${r.stderr}`);
+    assert.equal(r.stdout, direct.stdout, shell);
+    assert.match(r.stdout, /ownership gate \(mode: required\)/, shell);
+    // A command gets an empty allow. So does the unverified push: 0.4.3's commands can't read
+    // Antigravity's payload, and git's pre-push hook and CI check the push instead.
+    for (const input of [ls, push]) {
+      const allowed = run(shell, preToolUse.command, input);
+      assert.deepEqual([allowed.status, allowed.stdout], [0, ""], `${shell}: ${allowed.stderr}`);
+    }
+
+    allowsSilently("node missing from PATH", undefined, { path: tmp(t) });
+    allowsSilently("PLUGIN_ROOT unset", ls, { root: null });
+    useGate(null);
+    allowsSilently("gate.mjs missing", ls);
+
+    // Partial JSON on stdout, written for sure (writeSync), then a crash.
+    useGate(
+      `import { writeSync } from "node:fs";\nwriteSync(1, ${JSON.stringify(partial)});\nthrow new Error("a crash");\n`,
+    );
+    const crash = sh(plugin, NODE, ["dist/gate.mjs"], { check: false });
+    assert.deepEqual([crash.stdout, crash.status !== 0], [partial, true], "the stand-in prints, then crashes");
+    allowsSilently("a crash after partial output", ls);
+
+    useGate('process.stderr.write("Blocked by the ownership gate\\n");\nprocess.exitCode = 2;\n');
+    allowsSilently("exit 2", push);
+
+    // A deliberate deny, which Antigravity reads as JSON on exit 0, goes out unchanged.
+    useGate(`process.stdout.write(${JSON.stringify(deny)});\n`);
+    const denied = run(shell, preToolUse.command, push);
+    assert.deepEqual([denied.status, denied.stdout], [0, deny], `${shell}: ${denied.stderr}`);
+  }
+  assert.ok(!existsSync(marker), "the folder's own dist/gate.mjs ran");
 });
 
 test("Antigravity's hook commands exit 0 in PowerShell 7 too, with or without node", { skip: !PWSH }, (t) => {
@@ -617,7 +674,7 @@ test("Antigravity's hook commands exit 0 in PowerShell 7 too, with or without no
         cwd: REPO,
         stdio: ["ignore", "pipe", "pipe"],
         encoding: "utf8",
-        env: { ...ENV, PATH: path },
+        env: { ...ENV, PATH: path, PLUGIN_ROOT: REPO },
       });
       assert.equal(r.status, 0, `${h.event}: ${r.stderr}`);
       assert.equal(r.stdout, "", h.event);
@@ -634,12 +691,11 @@ test("on Windows, Antigravity's hook commands exit 0 silently in cmd.exe and bot
   // Full paths: without node, the child's PATH is an empty folder, where Windows wouldn't find the shell either.
   const onPath = (name) =>
     spawnSync("where.exe", [name], { encoding: "utf8" }).stdout?.split(/\r?\n/)[0]?.trim() || name;
+  const cmd = process.env.ComSpec ?? onPath("cmd.exe");
   const shells = [
-    {
-      name: "cmd.exe",
-      program: process.env.ComSpec ?? onPath("cmd.exe"),
-      args: (c) => ["/d", "/s", "/c", `"${c}"`],
-    },
+    { name: "cmd.exe", program: cmd, args: (c) => ["/d", "/s", "/c", `"${c}"`], verbatim: true },
+    // Quoted the way Go's os/exec quotes an argument (Antigravity's CLI is a Go program).
+    { name: "cmd.exe, Go-style quoting", program: cmd, args: (c) => ["/c", c], verbatim: false },
     {
       name: "PowerShell 7",
       program: onPath("pwsh.exe"),
@@ -661,8 +717,8 @@ test("on Windows, Antigravity's hook commands exit 0 silently in cmd.exe and bot
           cwd: REPO,
           stdio: ["ignore", "pipe", "pipe"],
           encoding: "utf8",
-          windowsVerbatimArguments: shell.name === "cmd.exe",
-          env: { ...ENV, PATH: path, SystemRoot: process.env.SystemRoot },
+          windowsVerbatimArguments: shell.verbatim === true,
+          env: { ...ENV, PATH: path, PLUGIN_ROOT: REPO, SystemRoot: process.env.SystemRoot },
         });
         t.diagnostic(
           `${shell.name}, ${h.event}, ${label}: exit ${r.status}, stdout ${JSON.stringify(r.stdout)}, stderr ${JSON.stringify((r.stderr ?? "").slice(0, 200))}`,
