@@ -106,7 +106,7 @@ The same way as Step 0, with these changes:
 
 ## 0.5.0: the adapter
 
-First, what Antigravity does with each reply the adapter could send, with test hooks; then the adapter itself, from the `feat/antigravity-adapter` branch at e12b7fa.
+First, what Antigravity does with each reply the adapter could send, with test hooks; then the adapter itself, from the `feat/antigravity-adapter` branch at 63f5e15.
 
 ### How it was recorded
 
@@ -122,8 +122,8 @@ The same way as 0.4.3, in the same signed-in throwaway `HOME`. Steps `e1` to `e5
 | `e3-agents-hooks-ls` | a repo with its own `.agents/hooks.json`, and the plugin | both ran on each event. The repo's hooks ran in `<repo>/.agents`, with no trust step |
 | `e4-skill-code-change` | "Add a function mul(a, b) … to math.js" | the agent's first step read the plugin's `skills/comprende/SKILL.md` |
 | `e5-plugin-rule` | a probe plugin with `rules/AGENTS.md` | the agent quoted the rule's code word |
-| `a1-gated-session-context` | the adapter, in the gated repo | the agent quoted the always-on line once, "a rule", and the gate's note, "a system message". It also said the repo's `gate.mjs` differs from the plugin's: the demo was set up with 0.4.3's gate |
-| `a2-plain-session-context` | the adapter, in a repo without the gate | the always-on line once, from the rule. The session start replied `{}`, and Antigravity's log has no hook error |
+| `a1-gated-session-context` | the adapter, in the gated repo | the agent quoted the instruction once, "a rule", and one system message: "Comprende is installed, and its hooks run in this session.", then the gate's note. The note also said the repo's `gate.mjs` differs from the plugin's: the demo was set up with 0.4.3's gate. A first try hit `agy`'s 5-minute print timeout, with no reply, and was run again |
+| `a2-plain-session-context` | the adapter, in a repo without the gate | the instruction once, from the rule, and "Comprende is installed, and its hooks run in this session." as a system message. Antigravity's log has no hook error |
 | `b1-gated-push` | the adapter, an unverified push allowed | blocked by Comprende's own hook: `tool call denied by pre-tool hook: Blocked by the ownership gate: - No ownership report for branch 'feature/sum' … Ask Antigravity to run the ownership check ("check me")`. The push never started: `origin` still had only `main` |
 | `b2-gated-ls` | the adapter, `ls` allowed | `ls` ran. The hook replied with nothing |
 
@@ -131,5 +131,5 @@ The same way as 0.4.3, in the same signed-in throwaway `HOME`. Steps `e1` to `e5
 
 - **The adapter's two replies work as designed.** A JSON deny on exit 0 blocks, with the reason shown, and nothing allows. `{"decision": "allow"}` would mean the same, so the gate never sends it.
 - **The system message is the shape for the gate's note:** the agent reads it as instructions, not as the user's request.
-- **The always-on line comes once,** from the plugin's rule, and the session start leaves it out.
+- **The always-on instruction comes once,** from the plugin's rule, and the session start only says the hooks ran. The rule leaves out the words "Comprende is installed", which the skill reads as "the hooks ran", since a rule also loads where hooks don't run.
 - **A repo's `.agents/hooks.json` would run the gate a second time,** so `install` doesn't write one.
