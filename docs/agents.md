@@ -289,7 +289,7 @@ Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is
 - **Upgrading:** `agy plugin install https://github.com/AbdulrahmanMasoud/comprende` again. It replaces a converted install ("replaced existing installation", tested).
 - **What it can't fix:** a hook that outlives its timeout is killed, and that blocks the command (tested, with a test hook). No wrapper helps, since the shell itself is killed. In 0.4.3 the gate allows Antigravity's payload before doing any work.
 - **No logo yet.** The icon is in `.claude-plugin/`, and Antigravity's Marketplace bundle leaves out dot-folders. Without it, `agy plugin validate` warns only that `.mcp.json` and `hooks/hooks.json` are never loaded, which is right: they're Claude Code's.
-- **Windows:** WINDOWS_TBD
+- **Windows:** which shell Antigravity runs hooks in there isn't documented, and its Windows build names both `cmd.exe` and PowerShell. So the command has no `&&` or `||`, and it exits 0 with nothing on stdout in `cmd.exe`, PowerShell 7 and Windows PowerShell 5.1, with or without `node` (tested in the Windows workflow, not in Antigravity). In `cmd.exe` it's one `set "A=…"` and the gate doesn't run. In PowerShell, `$(exit 0)` ends it after the gate, whose reply is dropped. So on Windows, 0.4.3's hooks never block, and never check either: git's `pre-push` hook and CI do. The converted command before 0.4.3 used `||`, which Windows PowerShell 5.1 can't parse, so if Antigravity runs hooks there, that one failed on every command.
 
 ### Hooks
 
@@ -339,7 +339,7 @@ Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is
 
 | Question | Answer | Source |
 |---|---|---|
-| The shell for hooks | Not documented. The CLI's status-line command runs through `sh -c`, or `cmd /c` on Windows. On macOS, the converted commands' `sh` syntax ran (`command -v node … || exit 0; exec node …`). The Windows build's binary (`1.5.6`) contains both `cmd.exe`, through `COMSPEC`, and `powershell -NoProfile -Command`, so which one runs hooks there is still Unknown | Tested on macOS: a POSIX shell. Windows: Unknown. Docs: [settings](https://antigravity.google/docs/settings/) (the status line only). The Windows build's strings |
+| The shell for hooks | Not documented. The CLI's status-line command runs through `sh -c`, or `cmd /c` on Windows. On macOS, the converted commands' `sh` syntax ran (`command -v node … || exit 0; exec node …`). The Windows build's binary (`1.5.6`) contains both `cmd.exe`, through `COMSPEC`, and `powershell -NoProfile -Command`, so which one runs hooks there is still Unknown. 0.4.3's commands exit 0 in `cmd.exe` and both PowerShells | Tested on macOS: `sh`, even when `$SHELL` is zsh (0.4.3). Windows: Unknown; 0.4.3's commands tested in the Windows workflow, not in Antigravity. Docs: [settings](https://antigravity.google/docs/settings/) (the status line only). The Windows build's strings |
 | A trailer on the agent's commits | Not documented. One forum user saw commits authored by "antigravity", through a Zed extension | Unknown. Third party: [forum](https://discuss.ai.google.dev/t/gemini-antigravity-git-commits-with-random-author-via-zed-extension/185955) |
 
 ### The outside PR's claims (#16)
@@ -736,7 +736,7 @@ The adapter, `src/gate/agents/antigravity.ts`:
 - **The tool-call id isn't documented,** though the payload has one (`toolCall.id`, Step 0).
 - **There's no config-folder override,** so tests need a throwaway `HOME`.
 - **A hook that times out blocks the command,** and no wrapper can stop it. The gate's work must stay well inside the timeout.
-- **The shell on Windows isn't documented.**
+- **The shell on Windows isn't documented.** The hook commands are written to exit 0 in `cmd.exe` and both PowerShells, but they check nothing there.
 - **An update replaces the installed folder,** and how it's triggered isn't documented.
 
 **The end-to-end script, `tools/e2e-antigravity.mjs`:**

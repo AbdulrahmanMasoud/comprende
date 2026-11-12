@@ -68,7 +68,7 @@ The IDE and the App, the interactive CLI, Linux and Windows, a gate crash or a N
 set "A=$(node "./dist/gate.mjs" … --from-plugin; printf 'x%s' "$?")$(exit 0)"; out=${1#A=}; s=${out##*x}; ok=${s%%[1-9]*}; a=${out%x*}; printf '%s' "${ok:+$a}"; exit 0
 ```
 
-The shell keeps the gate's output, prints it only when the gate exits 0, and otherwise exits 0 with nothing on stdout. It has no `&&` or `||`, so that `cmd.exe` and both PowerShells exit 0 too, in case Antigravity uses one of them on Windows ([docs/agents.md](../../agents.md#comprende-043-in-antigravity)).
+The shell keeps the gate's output, prints it only when the gate exits 0, and otherwise exits 0 with nothing on stdout. It has no `&&` or `||`, so that `cmd.exe` and both PowerShells exit 0 too (tested in the Windows workflow), in case Antigravity uses one of them on Windows ([docs/agents.md](../../agents.md#comprende-043-in-antigravity)).
 
 ### How it was recorded
 

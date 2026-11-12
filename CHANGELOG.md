@@ -5,7 +5,8 @@
 - **Antigravity: a hook that fails no longer blocks every command.** Antigravity blocks a command when a hook exits non-zero, prints anything but JSON, or times out, though its docs say a failed hook fails open. Comprende's hooks exit 1 when they can't run, which is "skip this hook" in Claude Code. So in Antigravity, a crash, or a Node.js that can't load `gate.mjs`, would have blocked every command. Found in the first signed-in run ([recording](docs/recordings/antigravity/)).
   - **Comprende now has its own Antigravity plugin files:** `.antigravity-plugin/plugin.json`, a root `hooks.json` and a root `mcp_config.json`. `agy plugin install` uses them instead of converting the Claude Code plugin. Their hook commands exit 0 with nothing on stdout whenever the gate fails, even without `node`. Tested in the real Antigravity CLI: without `node`, without `gate.mjs`, and after a crash with partial output, the command ran. The skill and the memory server work as before.
   - **To get it:** run `agy plugin install https://github.com/AbdulrahmanMasoud/comprende` again. It replaces the converted copy.
-  - **Not yet:** the push check in Antigravity comes in 0.5.0. Git's `pre-push` hook and CI still check. WINDOWS_TBD
+  - **Not yet:** the push check in Antigravity comes in 0.5.0. Git's `pre-push` hook and CI still check.
+  - **On Windows,** which shell Antigravity runs hooks in isn't documented. The new commands exit 0 with nothing on stdout in `cmd.exe` and both PowerShells (tested outside Antigravity), so they don't block there, and don't check anything either. Windows stays experimental ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 
 ## 0.4.2
 
