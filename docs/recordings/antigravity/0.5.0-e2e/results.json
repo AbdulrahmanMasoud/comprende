@@ -5,22 +5,18 @@
     "detail": "1 skill, 1 rule, 1 MCP server, 1 hook"
   },
   {
-    "step": "session start: the rule's instruction, once",
+    "step": "session start: the hook sends one system message, that the hooks run and the gate's note",
+    "status": "PASS",
+    "detail": "1 session-start run(s)"
+  },
+  {
+    "step": "session start: the agent has the rule's instruction, once",
     "status": "PASS",
     "detail": "1 time(s)"
   },
   {
-    "step": "session start: the line that says the hooks run",
+    "step": "session start: the agent has the hooks' line and the gate's note",
     "status": "PASS"
-  },
-  {
-    "step": "session start: the gate's note",
-    "status": "PASS"
-  },
-  {
-    "step": "session start: the reply is Antigravity's system message",
-    "status": "PASS",
-    "detail": "1 run(s)"
   },
   {
     "step": "an ordinary command runs, and the hook ran and replied with nothing",
@@ -64,7 +60,7 @@
   {
     "step": "explain as you build: a short explanation of the non-obvious part",
     "status": "PASS",
-    "detail": "976 characters; read 7-explain-as-you-build.reply.md"
+    "detail": "783 characters; read 7-explain-as-you-build.reply.md"
   },
   {
     "step": "explain as you build: the skill loaded",

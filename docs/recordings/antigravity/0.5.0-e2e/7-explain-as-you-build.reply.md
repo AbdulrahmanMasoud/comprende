@@ -1,13 +1,5 @@
-I've added `retryWithBackoff` in [retry.js](file:///work/demo-explain/app/retry.js#L1-L12).
+Added `retryWithBackoff` in [retry.js](file:///work/demo-explain/app/retry.js).
 
-**Full jitter** — picks a random delay uniformly between 0 and the exponential cap (`Math.random() * maxDelay`). Without jitter, clients retrying at identical exponential intervals synchronize into a "thundering herd" that repeatedly re-crashes a recovering service. Full jitter spreads the retries across the time window to smooth traffic spikes.
+**Full jitter backoff** — On failure, `retryWithBackoff` multiplies the base delay by $2^{\text{attempt}}$ up to a cap, then picks a uniform random interval between 0 and that value (`Math.random() * delay`). We use full jitter over deterministic backoff because when an outage impacts many concurrent requests, deterministic delays cause all clients to retry in lockstep pulses (a thundering herd). Jitter desynchronizes them across the retry window.
 
-```
-Now: retryWithBackoff is exported from retry.js, taking fn, attempts = 3, and an optional baseDelay = 100ms.
-Try: wrap an async call that fails twice to observe the randomized backoff times across attempts.
-```
-
----
-
-### Ownership Check (In-flight)
-> **Quick check (optional)**: If two clients hit a failing service at the same moment, what problem occurs if we use pure exponential backoff *without* jitter, and how does full jitter prevent it?
+Quick check (optional): What would happen to a recovering downstream service if dozens of failed clients retried using fixed exponential backoff without any jitter?

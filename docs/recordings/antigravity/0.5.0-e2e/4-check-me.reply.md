@@ -1,3 +1,3 @@
-Let's do the ownership check on `feature/sum`. It's a small change (adding `sum(xs)` to [math.js](file:///work/demo/app/math.js#L5-L7)), so just one question:
+This is a small change (adding `sum` to [math.js](file:///work/demo/app/math.js)), so one question is enough:
 
-In `sum(xs)`, why is `0` passed as the second argument to `xs.reduce(...)`, and what would happen if someone called `sum([])` without it?
+**In `sum(xs)`, why do we provide `0` as the initial value to `reduce`, and what would happen if an empty array `[]` were passed without it?**
