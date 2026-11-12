@@ -5,6 +5,7 @@ Back to the [README](../README.md). Setting up the gate: [The gate for teams](te
 ## Requirements
 
 - **Node.js 20+.** Nothing else gets installed: the plugin ships as ready-to-run files that use only Node's built-ins.
+- **In Antigravity, the CLI `agy` 1.5.3 or later.** Older versions don't tell the plugin's hooks where the plugin is, so they do nothing.
 - **The [GitHub CLI](https://cli.github.com/)** is optional. `protect` uses it to create the branch rules.
 
 Claude Code itself can run without Node. If `node` is missing or older than 20, Claude tells you so in one line when the session starts, with a link to [nodejs.org](https://nodejs.org). Until then, the hooks step aside and never block a command.
@@ -29,7 +30,7 @@ If the developer later merges or rebases onto a newer `main`, the gate replays `
 
 | Layer | What it stops |
 |---|---|
-| An AI tool's hook (Claude Code, Cursor, Codex) | The agent pushing unverified code |
+| An AI tool's hook (Claude Code, Cursor, Codex, Antigravity) | The agent pushing unverified code |
 | A git `pre-push` hook | You pushing unverified code |
 | CI on every PR | Merging unverified code |
 | A GitHub ruleset | Merging without CI |
@@ -38,7 +39,9 @@ The first two catch forgetting. The last two are the lock.
 
 **In Cursor**, the first layer is the Cursor plugin's hook, or the repo's `.cursor/hooks.json`. Cursor also runs Claude Code's hooks (the repo's `.claude/settings.json`, and your Claude Code plugins) while its Third-Party Imports setting is on. However many copies of the hook run, each push is checked once.
 
-**In Codex**, the first layer is the Codex plugin's hook, or the repo's `.codex/hooks.json`, each once trusted in `/hooks`. Codex skips a plugin's hooks after every update until they're trusted again; the repo's keep their trust, and its session start then tells the agent the plugin isn't running: not installed, or its hooks skipped. What works where, and what's weaker in Cursor and Codex: [docs/agents.md](agents.md#what-works-where).
+**In Codex**, the first layer is the Codex plugin's hook, or the repo's `.codex/hooks.json`, each once trusted in `/hooks`. Codex skips a plugin's hooks after every update until they're trusted again; the repo's keep their trust, and its session start then tells the agent the plugin isn't running: not installed, or its hooks skipped.
+
+**In Antigravity**, the first layer is the plugin's hook only: a repo hook file would run alongside it and check each command twice. It denies the push with a JSON reply, and Antigravity shows the agent why. Any other failure of the hook, a crash or a missing `node`, lets the command run, since Antigravity blocks on any non-zero exit. What works where, and what's weaker in Cursor, Codex and Antigravity: [docs/agents.md](agents.md#what-works-where).
 
 ### One file
 

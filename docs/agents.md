@@ -156,6 +156,17 @@ Each push is checked once, whatever mix of hook files and plugins is present ([S
 - **Windows:** PowerShell turns a block's exit 2 into 1, so the guard fails open there ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 - **The commit trailer** depends on a setting of the account, which Codex has no config key for. None was added in our runs.
 
+## What's weaker in Antigravity than in Claude Code
+
+- **Tested in the CLI only, on macOS.** The IDE and the App aren't tested yet ([the checklist](#checking-it-in-antigravity)), nor Linux.
+- **It needs `agy` 1.5.3 or later.** Older versions don't give hooks `PLUGIN_ROOT`, so the plugin's hooks do nothing there: no push guard, and no git hook installed at session start. CI still checks, and so does the git hook once you run `node .learning/gate.mjs install-hooks` in the clone.
+- **Windows:** which shell runs hooks isn't documented. The hook commands exit 0 in `cmd.exe` and both PowerShells, and do nothing there, the same as above: CI still checks, and so does the git hook once installed by hand.
+- **Without the plugin, nothing stops the agent's push** in Antigravity: there's no repo hook file for it, since a repo's `.agents/hooks.json` would run alongside the plugin's and check each command twice ([Antigravity: the design](#antigravity-the-design)). The git hook and CI still check.
+- **Any hook failure blocks the command** in Antigravity: a non-zero exit, stdout that isn't JSON, or a timeout. The plugin's hook commands exit 0 whenever the gate fails, but a hook that hangs past its timeout (60 seconds for the push guard) still blocks.
+- **Headless runs (`agy -p`) need allow rules.** They deny a command or an MCP tool without one, so a script that uses the memory server allows `mcp(comprende_comprende/*)`.
+- **Two plugin copies** (a native install, and a copy converted by `agy plugin import claude`) check a push once, but if the converted copy's session start runs first, the instruction comes twice. Install with `agy plugin install`, which replaces the converted copy.
+- **With `COMPRENDE_QUIET=1`,** the session start sends the quiet line, but the plugin's rule still loads. Which one the agent follows isn't tested.
+
 ## Checking it in Codex
 
 `tools/e2e-codex.mjs` covers the CLI headless. Check these by hand, in a gated demo repo (the README's "Try it in 5 minutes"), in the CLI and in the IDE extension (OpenAI's extension for VS Code and Cursor, which runs the same `codex` with the same `~/.codex`):
@@ -181,6 +192,19 @@ The CLI run (`tools/e2e-cursor.mjs`) can't see the IDE. Check these by hand, in 
 6. **Check me:** say "check me", answer, and write a summary. The report is saved and committed, then a separate push goes through.
 7. **One check:** with Comprende also in Claude Code (so Cursor imports it), push an unverified change. The chat shows one block message, not two.
 8. **Third-Party Imports off:** turn it off, reload, and push an unverified change. It's still blocked.
+
+## Checking it in Antigravity
+
+`tools/e2e-antigravity.mjs` covers the CLI headless (CONTRIBUTING.md, [Testing in Antigravity](../CONTRIBUTING.md#testing-in-antigravity)). Check these by hand in the Antigravity IDE and in the App, in a gated demo repo (the README's "Try it in 5 minutes"). Say what you find in [#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25):
+
+1. **Install:** `agy plugin install https://github.com/AbdulrahmanMasoud/comprende`. `agy plugin list` shows comprende with "1 skill, 1 rule, 1 MCP server, 1 hook". Then open the IDE or the App: Comprende is among its plugins.
+2. **Memory:** the MCP servers list **comprende**, with its 10 tools.
+3. **Session start:** open the demo, start a new conversation, and ask the agent to quote what its context says about Comprende and the ownership gate, and where each line came from. Expect the instruction once, from a rule, and a system message: "Comprende is installed, and its hooks run in this session.", then the gate's note. No system message means the plugin's hooks don't run there: note it, and go on. The rule still brings the instruction.
+4. **An ordinary command:** ask it to run `ls`. It runs, with no hook message.
+5. **The push guard:** ask it to add `sum(xs)` to `math.js`, commit and push. The push is denied: "tool call denied by pre-tool hook: Blocked by the ownership gate: … Ask Antigravity to run the ownership check".
+6. **Check me:** say "check me", answer, and write a summary. The report is saved and committed, then a separate push goes through.
+7. **Explain as you build:** ask for a small function with a non-obvious part, such as a retry with full jitter. Only that part gets a short explanation.
+8. **On Windows,** if you have it: `ls` still runs, and the agent's unverified push is blocked by the git hook that the demo's `gate.mjs install` set up, not by Antigravity's hook.
 
 ## Codex: what we found
 

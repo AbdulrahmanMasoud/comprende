@@ -10,7 +10,7 @@
 
 **Comprende?** يعني "فاهم؟". وده بالظبط السؤال اللي الأداة دي بتسأله.
 
-Comprende هو plugin لـ Claude Code و Cursor و Codex، وبيعمل حاجتين:
+Comprende هو plugin لـ Claude Code و Cursor و Codex و Antigravity، وبيعمل حاجتين:
 
 1. **الـ agent بيشرح الكود اللي بيكتبه**، باختصار وبلغتك، بس في الحتت اللي تستاهل: APIs جديدة، logic مش واضح، أو مخاطر. ده شغال في أي مشروع.
 2. **الـ ownership check** (اختياري، لكل repo لوحده). قبل ما الكود بتاعك يتعمله push، الـ agent بيسألك كام سؤال عنه، وإنت بتكتب وصف الـ PR بنفسك. ومن غير كده، الـ push والـ merge بيتمنعوا.
@@ -59,7 +59,17 @@ codex plugin add comprende@comprende
 
 وبعدين افتح Codex في الـ repo، واكتب `/hooks`، ووافق على الـ hooks الاتنين بتوع Comprende (trust). ووافق عليهم تاني بعد كل update (`codex plugin marketplace upgrade comprende`): لحد ما توافق، Codex بيتخطّى أي hook من بتوعه من غير ما يقول حاجة، يعني محدش بيعمل check على الـ push بتاع الـ agent، بس الـ git hook والـ CI لسه بيعملوا check.
 
-على Windows، Comprende لسه experimental في التلات أدوات ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
+### Antigravity
+
+```bash
+agy plugin install https://github.com/AbdulrahmanMasoud/comprende
+```
+
+وبعدين ابدأ session جديدة في `agy`. محتاج Antigravity CLI نسخة 1.5.3 أو أحدث. وعشان تعمل update، شغّل نفس الأمر تاني. ولو كنت جبت الـ plugins بتاعة Claude Code بـ `agy plugin import claude`، شغّل الأمر ده برضه: هيحل محل النسخة المحوّلة، اللي كانت هتبعت الـ always-on instruction مرة تانية.
+
+اتجرّب في الـ CLI على macOS. الـ Antigravity IDE والـ App لسه متجرّبوش: [checklist تجرّبهم بيها بإيدك](docs/agents.md#checking-it-in-antigravity) (بالإنجليزي).
+
+على Windows، Comprende لسه experimental في Claude Code و Cursor و Codex. وفي Antigravity على Windows، الـ hooks بتوعه لسه مش بتعمل حاجة: الـ CI لسه بيعمل check، والـ git hook كمان لما تشغّل `node .learning/gate.mjs install-hooks` ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 
 ## 1. الشرح: استخدم Claude عادي
 
@@ -91,9 +101,9 @@ Claude بيفتكر إنت عارف إيه في `~/.comprende/`، على جها�
 ### تشغيله (الـ team lead، مرة واحدة لكل repo)
 
 1. افتح Claude في الـ repo وقوله: **"فعّل بوابة الفهم في المشروع ده"**.
-2. Claude هيفتح PR بيضيف البوابة (`.learning/`)، و CI check، و hooks لـ Claude Code و Cursor و Codex. راجع `.learning/config.json`، خصوصاً `sensitive`: دي المسارات زي auth و payments اللي لازم يتسأل عليها دايماً. وبعدين اعمل merge.
+2. Claude هيفتح PR بيضيف البوابة (`.learning/`)، و CI check، و hooks لـ Claude Code و Cursor و Codex (Antigravity محتاج الـ plugin بس). راجع `.learning/config.json`، خصوصاً `sensitive`: دي المسارات زي auth و payments اللي لازم يتسأل عليها دايماً. وبعدين اعمل merge.
 3. خلّي الـ check إجباري: شغّل `node .learning/gate.mjs protect --apply`، أو اطلبها من Claude. محتاجة صلاحيات admin على GitHub.
-4. خلّي التيم يسطّبوا الـ plugin، في Claude Code أو Cursor أو Codex، وبس كده. أول session ليهم في الـ repo بتظبط الباقي. وفي Codex كمان بيوافقوا على الـ project والـ hooks في `/hooks`.
+4. خلّي التيم يسطّبوا الـ plugin، في Claude Code أو Cursor أو Codex أو Antigravity، وبس كده. أول session ليهم في الـ repo بتظبط الباقي. وفي Codex كمان بيوافقوا على الـ project والـ hooks في `/hooks`.
 
 ### استخدامه (كل مطوّر)
 
@@ -154,6 +164,20 @@ Claude بيفتكر إنت عارف إيه في `~/.comprende/`، على جها�
 >
 > اتحفظ تقرير الملكية واتعمل له commit، وبعدها اترفع الفرع `feature/sum` بنجاح على `origin`.
 
+**وفي Antigravity كمان.** ده run حقيقي، مختصر، واتسجّل بالإنجليزي:
+
+> **إنت:** Run exactly this shell command once … `git push -u origin feature/sum`. Quote any block message word for word.
+>
+> **Antigravity:** The command was blocked with the following message: tool call denied by pre-tool hook: Blocked by the ownership gate: … Ask Antigravity to run the ownership check ("check me"), then commit the report.
+>
+> **إنت:** check me
+>
+> **Antigravity:** This is a small change …, so one question is enough: **In `sum(xs)`, why do we provide `0` as the initial value to `reduce`, and what would happen if an empty array `[]` were passed without it?**
+>
+> **إنت:** … The 0 is the starting value, so an empty list gives 0 instead of throwing a TypeError. My summary for the PR, in my own words: … starting from 0 so an empty list returns 0. …
+>
+> **Antigravity:** The ownership check report has been generated, committed, and pushed: …
+
 **ولو حاولت تتخطّى الـ check**، الـ agent مش هيعمل push، والـ git hook هيمنع `git push`، والـ CI هيوقّف الـ PR. وده اللي بيبان في الـ terminal:
 
 ![في الـ terminal: push بيتمنع، وبعدين الـ ownership report بيتحفظ، وبعدين الـ push بيعدّي](docs/demo.gif)
@@ -178,10 +202,10 @@ git add -A && git commit -qm init
 node ../comprende/dist/gate.mjs install --repo . > /dev/null
 git add -A && git commit -qm "add ownership gate" && git push -q -u origin main
 git checkout -q -b feature/sum
-claude   # or open this folder in Cursor or Codex
+claude   # or open this folder in Cursor, Codex or Antigravity
 ```
 
-وبعدين جوه Claude (أو افتح `/tmp/comprende-try/app` في Cursor أو Codex، والـ plugin متسطّب؛ وفي Codex وافق على الـ hooks في `/hooks` الأول):
+وبعدين جوه Claude (أو افتح `/tmp/comprende-try/app` في Cursor أو Codex أو Antigravity، والـ plugin متسطّب؛ وفي Codex وافق على الـ hooks في `/hooks` الأول):
 
 1. قول: **"ضيف function اسمها sum(xs) في math.js باستخدام add، وبعدين اعمل commit و push"**.
 2. جاوب على السؤال. جرّب إجابة غلط الأول، عشان تشوف هيحصل إيه.
@@ -193,7 +217,7 @@ claude   # or open this folder in Cursor or Codex
 
 - [**البوابة للتيمز**](docs/teams.md): التسطيب بالإيد، الإعدادات، التغييرات الصغيرة، الطوارئ
 - [**بيشتغل إزاي**](docs/how-it-works.md): المتطلبات، الـ fingerprints، الطبقات الأربعة، الحدود بصراحة
-- [**Comprende في Cursor و Codex**](docs/agents.md#what-works-where): إيه اللي شغّال فين، وإيه الأضعف، و checklists تجرّبهم بيها بإيدك
+- [**Comprende في Cursor و Codex و Antigravity**](docs/agents.md#what-works-where): إيه اللي شغّال فين، وإيه الأضعف، و checklists تجرّبهم بيها بإيدك
 - [**المساهمة**](CONTRIBUTING.md#contributions): مش بنقبل pull requests من برّه دلوقتي، بس الـ issues والاقتراحات مرحّب بيها جدًا
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 

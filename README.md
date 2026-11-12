@@ -6,7 +6,7 @@
 
 <p align="center"><a href="README.ar.md">Arabic</a></p>
 
-Comprende is a plugin for Claude Code, Cursor and Codex. It does two things:
+Comprende is a plugin for Claude Code, Cursor, Codex and Antigravity. It does two things:
 
 1. **The agent explains the code it writes**, briefly and in your language, but only the parts worth explaining: new APIs, non-obvious logic, risks. This works in every project.
 2. **The ownership check** (optional, per repo). Before your code is pushed, the agent asks you a few questions about it, and you write the PR summary. Without that, the push and the merge are blocked.
@@ -55,7 +55,17 @@ codex plugin add comprende@comprende
 
 Then open Codex in a repo, type `/hooks`, and trust Comprende's two hooks. Trust them again after every update (`codex plugin marketplace upgrade comprende`): until then Codex skips them without a word, so the agent's push isn't checked, though the git hook and CI still check it.
 
-On Windows, Comprende is experimental in all three tools ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
+### Antigravity
+
+```bash
+agy plugin install https://github.com/AbdulrahmanMasoud/comprende
+```
+
+Then start a new `agy` session. You need the Antigravity CLI 1.5.3 or later. To update, run the same command again. Brought your Claude Code plugins over with `agy plugin import claude`? Run it anyway: it replaces the converted copy, which would send the always-on instruction a second time.
+
+It's tested in the CLI, on macOS. The Antigravity IDE and App aren't tested yet: [a checklist to try them by hand](docs/agents.md#checking-it-in-antigravity).
+
+On Windows, Comprende is experimental in Claude Code, Cursor and Codex. In Antigravity on Windows, its hooks don't do anything yet: CI still checks, and so does the git hook once you run `node .learning/gate.mjs install-hooks` ([#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)).
 
 ## 1. Explanations: just use Claude
 
@@ -87,9 +97,9 @@ Claude remembers what you already know in `~/.comprende/`, on your machine only.
 ### Turn it on (team lead, once per repo)
 
 1. Open Claude in the repo and say: **"Enable the ownership gate in this repo."**
-2. Claude opens a PR that adds the gate (`.learning/`), a CI check, and hooks for Claude Code, Cursor and Codex. Review `.learning/config.json`, mainly `sensitive`: paths like auth or payments, which always get questions. Then merge it.
+2. Claude opens a PR that adds the gate (`.learning/`), a CI check, and hooks for Claude Code, Cursor and Codex (Antigravity needs only the plugin). Review `.learning/config.json`, mainly `sensitive`: paths like auth or payments, which always get questions. Then merge it.
 3. Make the check required: run `node .learning/gate.mjs protect --apply`, or ask Claude to. It needs admin rights on GitHub.
-4. Ask your team to install the plugin, in Claude Code, Cursor or Codex. That's all they need: their first session in the repo sets up the rest. In Codex they also trust the project and the hooks, in `/hooks`.
+4. Ask your team to install the plugin, in Claude Code, Cursor, Codex or Antigravity. That's all they need: their first session in the repo sets up the rest. In Codex they also trust the project and the hooks, in `/hooks`.
 
 ### Use it (every developer)
 
@@ -142,6 +152,20 @@ A real session, shortened:
 >
 > **Codex:** … Blocked by the ownership gate: … Ask Codex to run the ownership check ("check me"), then commit the report. …
 
+**And in Antigravity.** A real run, shortened:
+
+> **You:** Run exactly this shell command once … `git push -u origin feature/sum`. Quote any block message word for word.
+>
+> **Antigravity:** The command was blocked with the following message: tool call denied by pre-tool hook: Blocked by the ownership gate: … Ask Antigravity to run the ownership check ("check me"), then commit the report.
+>
+> **You:** check me
+>
+> **Antigravity:** This is a small change …, so one question is enough: **In `sum(xs)`, why do we provide `0` as the initial value to `reduce`, and what would happen if an empty array `[]` were passed without it?**
+>
+> **You:** … The 0 is the starting value, so an empty list gives 0 instead of throwing a TypeError. My summary for the PR, in my own words: … starting from 0 so an empty list returns 0. …
+>
+> **Antigravity:** The ownership check report has been generated, committed, and pushed: …
+
 **If you skip the check**, the agent won't push, `git push` is blocked by a git hook, and CI fails the PR. This is what you see in a terminal:
 
 ![In a terminal: a push is blocked, the ownership report is saved, then the push goes through](docs/demo.gif)
@@ -175,10 +199,10 @@ git add -A && git commit -qm init
 node ../comprende/dist/gate.mjs install --repo . > /dev/null
 git add -A && git commit -qm "add ownership gate" && git push -q -u origin main
 git checkout -q -b feature/sum
-claude   # or open this folder in Cursor or Codex
+claude   # or open this folder in Cursor, Codex or Antigravity
 ```
 
-Then, in Claude (or open `/tmp/comprende-try/app` in Cursor or Codex, with the plugin installed; in Codex, trust the hooks in `/hooks` first):
+Then, in Claude (or open `/tmp/comprende-try/app` in Cursor, Codex or Antigravity, with the plugin installed; in Codex, trust the hooks in `/hooks` first):
 
 1. Say: **"add a sum(xs) function to math.js using add, then commit and push it"**.
 2. Answer its question. Try a wrong answer first, to see what happens.
@@ -188,7 +212,7 @@ Then, in Claude (or open `/tmp/comprende-try/app` in Cursor or Codex, with the p
 
 - [**The gate for teams**](docs/teams.md): setup by hand, settings, small changes, emergencies
 - [**How it works**](docs/how-it-works.md): requirements, fingerprints, the four layers, honest limits
-- [**Comprende in Cursor and Codex**](docs/agents.md#what-works-where): what works where, what's weaker, and checklists to try them by hand
+- [**Comprende in Cursor, Codex and Antigravity**](docs/agents.md#what-works-where): what works where, what's weaker, and checklists to try them by hand
 - [**Contributing**](CONTRIBUTING.md#contributions): pull requests from outside aren't accepted right now, but issues and feedback are welcome
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 

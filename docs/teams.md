@@ -45,17 +45,18 @@ node <plugin>/dist/gate.mjs install --upgrade --repo .
 
 CI runs the base branch's gate. So when an upgrade brings something the older gate doesn't know yet, CI still checks the upgrade PR the old way. From 0.3.0, the upgrade also adds `.cursor/hooks.json`, and from 0.4.0 `.codex/hooks.json`. Until the base branch runs a gate that knows each as one of its own files, CI counts it as a change: one small-change question, or the skip label. For example, the `.gitattributes` line from 0.2.1 counts as a change until the upgrade is merged: a one-line small change, so one question. Or use the skip label. The local checks follow the same rule, so they never pass what CI then fails. From 0.4.1 the upgrade also adds a session start to `.codex/hooks.json`. A 0.4.0 base already knows that file, so it needs no question, but each Codex user trusts the new hook once in `/hooks`.
 
-## Mixed teams: Claude Code, Cursor and Codex
+## Mixed teams: Claude Code, Cursor, Codex and Antigravity
 
-One repo works for everyone. `install` writes the hooks for each tool, and the report is the same file whichever tool saved it, so CI checks it the same way.
+One repo works for everyone. `install` writes the hooks for each tool that reads a repo hook file, and the report is the same file whichever tool saved it, so CI checks it the same way.
 
-- **Each developer installs the plugin in the tool they use** ([Install](../README.md#install)). Someone with Comprende in Claude Code who also opens Cursor already has it there: Cursor runs Claude Code's plugins while its Third-Party Imports setting is on. Codex doesn't, so it needs its own install.
-- **Without the plugin,** the repo's own hook files still stop the agent's push: `.claude/settings.json` in Claude Code, `.cursor/hooks.json` in Cursor, `.codex/hooks.json` in Codex (once trusted). Developers without the plugin run `node .learning/gate.mjs install-hooks` once per clone to get the git hook.
+- **Each developer installs the plugin in the tool they use** ([Install](../README.md#install)). Someone with Comprende in Claude Code who also opens Cursor already has it there: Cursor runs Claude Code's plugins while its Third-Party Imports setting is on. Codex and Antigravity don't, so each needs its own install.
+- **Without the plugin,** the repo's own hook files still stop the agent's push: `.claude/settings.json` in Claude Code, `.cursor/hooks.json` in Cursor, `.codex/hooks.json` in Codex (once trusted). Antigravity has no repo hook file, so there only the plugin stops it. Developers without the plugin run `node .learning/gate.mjs install-hooks` once per clone to get the git hook.
 - **Each push is checked once,** whichever hook files and plugins are present ([how](agents.md#step-aside-rules)).
 - **Codex users trust the hooks.** Once per repo: the project and the two hooks in its `.codex/hooks.json`. And the plugin's two hooks in `/hooks`, after installing and after every update. Codex skips untrusted hooks without a word, but the repo's session start keeps its trust, so after an update the agent tells you.
 - **Repos set up before 0.3.0 or 0.4.0** get `.cursor/hooks.json` and `.codex/hooks.json` with `install --upgrade` ([Upgrading the gate](#upgrading-the-gate)).
+- **Antigravity users need `agy` 1.5.3 or later.** On Windows, and before 1.5.3, the plugin's hooks do nothing, so they also run `node .learning/gate.mjs install-hooks` once per clone to get the git hook.
 - **Cursor's agent signs its commits** with `Co-authored-by: Cursor <cursoragent@cursor.com>`. If the team doesn't want that line, each Cursor user turns off `attribution.attributeCommitsToAgent`.
-- **What's weaker** in [Cursor](agents.md#whats-weaker-in-cursor-than-in-claude-code) and in [Codex](agents.md#whats-weaker-in-codex-than-in-claude-code) is listed in docs/agents.md.
+- **What's weaker** in [Cursor](agents.md#whats-weaker-in-cursor-than-in-claude-code), in [Codex](agents.md#whats-weaker-in-codex-than-in-claude-code) and in [Antigravity](agents.md#whats-weaker-in-antigravity-than-in-claude-code) is listed in docs/agents.md.
 
 ## Make the check required
 
