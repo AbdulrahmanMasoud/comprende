@@ -25,23 +25,25 @@
 
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   Blocked,
-  checkExplanation,
   checkMeTurns,
   commandLine,
-  EXPLAIN,
+  explainScenario,
   gateLog,
   git,
+  howSaved,
   jsonLines,
+  LEARNING_CONTEXT,
+  LS,
   makeDemo,
   PUSH,
   REPO,
   remoteHas,
   runScenarios,
   stepResults,
+  toolEnv,
 } from "./e2e-common.mjs";
 
 const { run: RUN, model: MODEL, only: ONLY, option } = commandLine("codex");
@@ -72,24 +74,17 @@ for (const signal of ["SIGINT", "SIGTERM"])
     process.exit(130);
   });
 
-const steps = stepResults("Codex");
+const steps = stepResults("Codex", RUN);
 const { report } = steps;
 const gate = gateLog(RUN);
-const gateRuns = gate.runs;
 
 // ---------------------------------------------------------------- running codex
 
-const ENV = {
+const ENV = toolEnv(RUN, gate, {
   HOME,
   CODEX_HOME,
-  PATH: process.env.PATH,
-  USER: process.env.USER ?? "",
-  LANG: "en_US.UTF-8",
-  TMPDIR: process.env.TMPDIR ?? tmpdir(),
-  COMPRENDE_HOME: join(RUN, "comprende-home"),
-  NODE_OPTIONS: gate.nodeOptions,
   ...(process.env.CODEX_API_KEY ? { CODEX_API_KEY: process.env.CODEX_API_KEY } : {}),
-};
+});
 
 /** @param {string} cwd @param {string[]} argv */
 const codex = (cwd, argv) => spawnSync(CODEX, argv, { cwd, env: ENV, encoding: "utf8", input: "", timeout: 600_000 });
@@ -213,14 +208,16 @@ function installPlugin() {
 
 /** The repo's session-start runs since `from` (the plugin's pass --from-plugin). @param {number} from */
 const repoSessionStarts = (from) =>
-  gateRuns()
+  gate
+    .runs()
     .slice(from)
     .filter((r) => r.argv.includes("session-start") && r.argv.includes("--from-repo")).length;
 
 /** The agents' hook runs since `from`, split by copy, and the ones that blocked.
  *  Git's pre-push hook isn't counted: each session start installs it again. @param {number} from */
 function hookRuns(from) {
-  const runs = gateRuns()
+  const runs = gate
+    .runs()
     .slice(from)
     .filter((r) => r.argv.includes("agent-hook") || r.argv.includes("claude-hook"));
   return {
@@ -246,10 +243,8 @@ function main() {
   report("session start: the gate's message", /This repository uses the ownership gate/.test(start.said));
   const session = start.session;
 
-  const lsFrom = gateRuns().length;
-  const ls = turn("2-ls", demo.app, "Run exactly this shell command once: `ls`. Then say what it printed.", {
-    resume: session,
-  });
+  const lsFrom = gate.runs().length;
+  const ls = turn("2-ls", demo.app, LS, { resume: session });
   const lsRuns = hookRuns(lsFrom);
   report(
     "an ordinary command runs, and the hook is silent",
@@ -257,7 +252,7 @@ function main() {
     `${lsRuns.plugin} plugin hook run(s)`,
   );
 
-  const pushFrom = gateRuns().length;
+  const pushFrom = gate.runs().length;
   const push = turn("3-unverified-push", demo.app, `${PUSH} Quote any block message word for word.`, {
     resume: session,
   });
@@ -277,22 +272,17 @@ function main() {
   );
   // The agent may start the check right after the blocked push, so its question can come a turn early.
   report("check me: questions asked", /[?؟]/.test(turns[0]?.said ?? "") || /[?؟]/.test(push.said));
-  const savedWith = turns.some((t) => t.tools.some((tool) => /save_check_report/.test(tool)))
-    ? "the memory server"
-    : turns.some((t) => t.commands.some((c) => /gate\.mjs"? save/.test(c.command)))
-      ? "save --input"
-      : null;
+  // Codex's events don't say whether an MCP call failed, so any call counts.
+  const savedWith = howSaved({
+    mcpTools: turns.flatMap((t) => t.tools),
+    commands: turns.flatMap((t) => t.commands.filter((c) => c.exit === 0).map((c) => c.command)),
+  });
   report("check me: the report saved", savedWith !== null, `with ${savedWith}`);
   report("check me: committed, then a separate push goes through", remoteHas(demo.remote, "feature/sum"));
   const trailer = git(demo.app, "log", "-1", "--format=%B").match(/^Co-authored-by: .*/m)?.[0] ?? "none";
   report("the agent's commit: its trailer", true, trailer);
 
-  const memory = turn(
-    "6-memory",
-    demo.app,
-    "Call the comprende memory server's learning_context tool for this project, and tell me in one line what it returned.",
-    { resume: session },
-  );
+  const memory = turn("5-memory", demo.app, LEARNING_CONTEXT, { resume: session });
   report(
     "the memory server: learning_context works",
     memory.tools.some((t) => /learning_context/.test(t)),
@@ -301,11 +291,10 @@ function main() {
 }
 
 function explain() {
-  const { app } = makeDemo(RUN, "demo-explain");
-  git(app, "checkout", "-q", "-b", "feature/retry", "main");
-  trust(app);
-  const t = turn("7-explain-as-you-build", app, EXPLAIN);
-  checkExplanation(steps, app, t.said, "7-explain-as-you-build.reply.md");
+  explainScenario(RUN, steps, (app, name, prompt) => {
+    trust(app);
+    return turn(name, app, prompt);
+  });
 }
 
 // The plugin and the repo's .codex/hooks.json, both trusted: both run, and they
@@ -318,7 +307,7 @@ function repoHook() {
     keys.filter((k) => k.includes(".codex/hooks.json")).length === 2,
     keys.join(", "),
   );
-  const from = gateRuns().length;
+  const from = gate.runs().length;
   turn("8-repo-hook-push", demo.app, PUSH);
   const runs = hookRuns(from);
   report(
@@ -338,7 +327,7 @@ function afterUpdate() {
   const marker = join(cache, version, "CHANGED-BY-E2E.txt");
   writeFileSync(marker, "a change, as an update makes\n");
   try {
-    const from = gateRuns().length;
+    const from = gate.runs().length;
     turn("9-after-update-push", demo.app, PUSH);
     const runs = hookRuns(from);
     report("after an update: Codex skips the plugin's hooks", runs.plugin === 0, `${runs.plugin} plugin hook run(s)`);
@@ -371,7 +360,7 @@ function noPlugin() {
   if (keys.some((k) => !k.includes(".codex/hooks.json")))
     throw new Error(`the plugin is installed in ${CODEX_HOME}: run no-plugin with a fresh --out`);
   report("without the plugin: only the repo's two hooks are there to trust", keys.length === 2, keys.join(", "));
-  const from = gateRuns().length;
+  const from = gate.runs().length;
   const t = turn(
     "11-no-plugin-code",
     demo.app,
@@ -386,11 +375,11 @@ function noPlugin() {
   );
 }
 
-/** Installs the plugin before the first scenario that needs it: once installed, it stays. */
-let installed = false;
+let pluginInstalled = false;
+/** Wraps a scenario that needs the plugin: the first one installs it, and it stays. */
 const withPlugin = (/** @type {() => void} */ run) => () => {
-  if (!installed) installPlugin();
-  installed = true;
+  if (!pluginInstalled) installPlugin();
+  pluginInstalled = true;
   run();
 };
 
@@ -409,5 +398,5 @@ try {
   );
 } finally {
   deleteLoginCopy();
-  steps.finish(RUN);
+  steps.finish();
 }

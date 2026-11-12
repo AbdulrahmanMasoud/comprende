@@ -1,8 +1,8 @@
 // What the end-to-end tools (tools/e2e-*.mjs) share: the command line, the step
-// results, the gated demo repo, the log of every gate.mjs run, and the prompts and
-// checks that are the same in every AI tool. Each tool adds how it drives its AI
-// tool, and its scenarios. How to run them: CONTRIBUTING.md, "Testing in Cursor" and
-// "Testing in Codex".
+// results, the gated demo repo, the log of every gate.mjs run, the environment an
+// AI tool runs in, and the prompts and checks that are the same in every AI tool.
+// Each tool adds how it drives its AI tool, and its scenarios. How to run them:
+// CONTRIBUTING.md, "Testing in Cursor" and "Testing in Codex".
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -14,8 +14,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 export const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
- * The options every tool takes: --out (the run folder, a new temp folder by default),
- * --model and --only (scenario names, comma-separated). `option` reads a tool's own.
+ * Reads the options every tool takes, and creates the run folder: --out (a new temp
+ * folder by default), --model and --only (scenario names, comma-separated). `option`
+ * reads a tool's own options.
  * @param {string} tool names the default run folder
  */
 export function commandLine(tool) {
@@ -35,9 +36,9 @@ export class Blocked extends Error {}
 
 /**
  * One line per step, PASS, FAIL or BLOCKED, and results.json in the run folder.
- * @param {string} toolName names the tool in a BLOCKED line: "Cursor said: …"
+ * @param {string} toolName names the tool in a BLOCKED line: "Cursor said: …" @param {string} run the run folder
  */
-export function stepResults(toolName) {
+export function stepResults(toolName, run) {
   /** @type {StepResult[]} */
   const results = [];
   return {
@@ -51,8 +52,8 @@ export function stepResults(toolName) {
       results.push({ step: scenario, status: "BLOCKED", detail: message });
       console.log(`BLOCKED  ${scenario}: the rest wasn't run. ${toolName} said: ${message}`);
     },
-    /** Saves results.json, and fails the process unless every step passed. @param {string} run */
-    finish(run) {
+    /** Saves results.json, and fails the process unless every step passed. */
+    finish() {
       writeFileSync(join(run, "results.json"), `${JSON.stringify(results, null, 2)}\n`);
       console.log(`\nTranscripts and replies: ${run}`);
       process.exitCode = results.every((r) => r.status === "PASS") ? 0 : 1;
@@ -81,7 +82,7 @@ export function runScenarios(scenarios, only, steps) {
   }
 }
 
-// ---------------------------------------------------------------- the gate's runs
+// ---------------------------------------------------------------- the gate's runs, and the AI tool's environment
 
 /** @typedef {{ script: string, argv: string[], cwd: string, exit: number, stdout: string, stderr: string }} GateRun */
 
@@ -110,12 +111,35 @@ if ((process.argv[1] ?? "").endsWith("gate.mjs")) {
   return {
     /** The NODE_OPTIONS value that loads the preload. */
     nodeOptions: `--import=${pathToFileURL(preload).href}`,
-    /** @returns {GateRun[]} */
-    runs: () => (existsSync(log) ? jsonLines(readFileSync(log, "utf8")) : []),
+    /** Every run so far. A line that isn't JSON throws: steps count these runs, so a
+     *  lost line could pass a double check for a single one. @returns {GateRun[]} */
+    runs: () =>
+      existsSync(log)
+        ? readFileSync(log, "utf8")
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => JSON.parse(line))
+        : [],
   };
 }
 
-/** The JSON objects in newline-delimited output, skipping lines that aren't JSON. @param {string} text */
+/**
+ * The environment an AI tool runs in: none of yours but PATH and USER, so no personal
+ * config loads; the memory server's home inside the run folder, so your memory is
+ * untouched; and the gate's log. `own` adds the tool's: its HOME, a sign-in.
+ * @param {string} run @param {ReturnType<typeof gateLog>} gate @param {Record<string, string>} own
+ */
+export const toolEnv = (run, gate, own) => ({
+  PATH: process.env.PATH ?? "",
+  USER: process.env.USER ?? "",
+  LANG: "en_US.UTF-8",
+  TMPDIR: process.env.TMPDIR ?? tmpdir(),
+  COMPRENDE_HOME: join(run, "comprende-home"),
+  NODE_OPTIONS: gate.nodeOptions,
+  ...own,
+});
+
+/** The JSON objects in an AI tool's newline-delimited output, skipping lines that aren't JSON. @param {string} text */
 export const jsonLines = (text) =>
   text
     .split("\n")
@@ -179,8 +203,13 @@ export const remoteHas = (remote, branch) =>
 
 // ---------------------------------------------------------------- the prompts and checks every tool shares
 
+export const LS = "Run exactly this shell command once: `ls`. Then say what it printed.";
+
 export const PUSH =
   "Run exactly this shell command once, and don't retry or work around it if it's blocked: `git push -u origin feature/sum`.";
+
+export const LEARNING_CONTEXT =
+  "Call the comprende memory server's learning_context tool for this project, and tell me in one line what it returned.";
 
 const ANSWER =
   "sum totals the list with reduce. The 0 is the starting value, so an empty list gives 0 instead of throwing a TypeError. " +
@@ -206,19 +235,39 @@ export function checkMeTurns(label, turn, pushed) {
   return turns;
 }
 
-export const EXPLAIN =
+/**
+ * How "check me" saved the report: the memory server's save_check_report, else the
+ * gate's own `save --input` (the skill's fallback), else null.
+ * @param {{ mcpTools: string[], commands: string[] }} used the MCP tools and shell commands the turns ran without an error
+ */
+export const howSaved = ({ mcpTools, commands }) =>
+  mcpTools.some((tool) => /save_check_report/.test(tool))
+    ? "the memory server's save_check_report"
+    : commands.some((command) => /gate\.mjs"? save --input/.test(command))
+      ? "save --input"
+      : null;
+
+const EXPLAIN =
   "Add a small function retryWithBackoff(fn, attempts) in retry.js that retries an async function, waiting with exponential backoff and full jitter between attempts. Don't commit.";
 
 /**
- * Explain-as-you-build, after a turn that ran EXPLAIN in `app`: the file is there, and
- * the agent explained the non-obvious part (the jitter), briefly.
- * @param {Steps} steps @param {string} app @param {string} said what the agent said @param {string} replyFile
+ * Explain-as-you-build, in its own demo repo: the agent writes retry.js and explains
+ * the non-obvious part (the jitter), briefly. Returns the turn, for a tool's own checks.
+ * @template {{ said: string }} T
+ * @param {string} run @param {Steps} steps
+ * @param {(app: string, name: string, prompt: string) => T} ask one turn, in a new conversation in `app`
+ * @returns {{ app: string, turn: T }}
  */
-export function checkExplanation(steps, app, said, replyFile) {
+export function explainScenario(run, steps, ask) {
+  const { app } = makeDemo(run, "demo-explain");
+  git(app, "checkout", "-q", "-b", "feature/retry", "main");
+  const name = "7-explain-as-you-build";
+  const turn = ask(app, name, EXPLAIN);
   steps.report("explain as you build: retry.js written", existsSync(join(app, "retry.js")));
   steps.report(
     "explain as you build: a short explanation of the non-obvious part",
-    /jitter/i.test(said) && said.length < 2500,
-    `${said.length} characters; read ${replyFile}`,
+    /jitter/i.test(turn.said) && turn.said.length < 2500,
+    `${turn.said.length} characters; read ${name}.reply.md`,
   );
+  return { app, turn };
 }

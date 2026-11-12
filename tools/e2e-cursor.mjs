@@ -23,23 +23,25 @@
 
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   Blocked,
-  checkExplanation,
   checkMeTurns,
   commandLine,
-  EXPLAIN,
+  explainScenario,
   gateLog,
-  git,
+  howSaved,
   jsonLines,
+  LEARNING_CONTEXT,
+  LS,
   makeDemo,
   PUSH,
   REPO,
   remoteHas,
   runScenarios,
   stepResults,
+  toolEnv,
 } from "./e2e-common.mjs";
 
 const { run: RUN, model: MODEL, only: ONLY } = commandLine("cursor");
@@ -48,7 +50,7 @@ const AGENT = spawnSync("/bin/sh", ["-c", "command -v cursor-agent || command -v
 }).stdout.trim();
 if (!AGENT) throw new Error("cursor-agent isn't installed: https://cursor.com/docs/cli/installation");
 
-const steps = stepResults("Cursor");
+const steps = stepResults("Cursor", RUN);
 const { report } = steps;
 const gate = gateLog(RUN);
 
@@ -118,16 +120,10 @@ function agent(name, workspace, home, prompt, { resume, plugin = REPO } = {}) {
   argv.push("--plugin-dir", plugin, "--workspace", workspace);
   if (resume) argv.push("--resume", resume);
   if (MODEL) argv.push("--model", MODEL);
-  const env = {
+  const env = toolEnv(RUN, gate, {
     HOME: home,
-    PATH: process.env.PATH,
-    USER: process.env.USER ?? "",
-    LANG: "en_US.UTF-8",
-    TMPDIR: process.env.TMPDIR ?? tmpdir(),
-    COMPRENDE_HOME: join(RUN, "comprende-home"),
-    NODE_OPTIONS: gate.nodeOptions,
     ...(process.env.CURSOR_API_KEY ? { CURSOR_API_KEY: process.env.CURSOR_API_KEY } : {}),
-  };
+  });
   const r = spawnSync(AGENT, [...argv, prompt], { cwd: workspace, env, encoding: "utf8", timeout: 600_000 });
   writeFileSync(join(RUN, `${name}.jsonl`), r.stdout ?? "");
   writeFileSync(join(RUN, `${name}.stderr.txt`), `exit ${r.status ?? r.signal}\n${r.stderr ?? ""}`);
@@ -165,13 +161,11 @@ function checkMeFlow(label, { app, remote }, home, { resume, plugin }) {
     },
     () => remoteHas(remote, "feature/sum"),
   );
-  const used = (/** @type {(t: ToolCall) => boolean} */ match) =>
-    turns.some((t) => t.tools.some((c) => match(c) && "success" in c.result));
-  const savedWith = used((c) => c.kind === "mcpToolCall" && /save_check_report/.test(c.args.name ?? ""))
-    ? "the memory server's save_check_report"
-    : used((c) => c.kind === "shellToolCall" && /gate\.mjs"? save --input/.test(c.args.command ?? ""))
-      ? "save --input"
-      : null;
+  const succeeded = turns.flatMap((t) => t.tools).filter((c) => "success" in c.result);
+  const savedWith = howSaved({
+    mcpTools: succeeded.filter((c) => c.kind === "mcpToolCall").map((c) => c.args.name ?? ""),
+    commands: succeeded.filter((c) => c.kind === "shellToolCall").map((c) => c.args.command ?? ""),
+  });
   return { asked: /\?/.test(turns[0]?.reply ?? ""), savedWith, pushed: remoteHas(remote, "feature/sum") };
 }
 
@@ -201,9 +195,7 @@ function main() {
   const chat = start.chat;
 
   const before = gate.runs().length;
-  const ls = agent("2-ls", demo.app, home, "Run exactly this shell command once: `ls`. Then say what it printed.", {
-    resume: chat,
-  });
+  const ls = agent("2-ls", demo.app, home, LS, { resume: chat });
   const lsRuns = gate
     .runs()
     .slice(before)
@@ -235,13 +227,7 @@ function main() {
   report("check me: the report saved", flow.savedWith !== null, `with ${flow.savedWith}`);
   report("check me: committed, then a separate push goes through", flow.pushed);
 
-  const memory = agent(
-    "5-memory",
-    demo.app,
-    home,
-    "Call the comprende memory server's learning_context tool for this project, and tell me in one line what it returned.",
-    { resume: chat },
-  );
+  const memory = agent("5-memory", demo.app, home, LEARNING_CONTEXT, { resume: chat });
   report(
     "the memory server: learning_context works",
     memory.tools.some(
@@ -264,10 +250,9 @@ function noMemory() {
 }
 
 function explain() {
-  const { app } = makeDemo(RUN, "demo-explain");
-  git(app, "checkout", "-q", "-b", "feature/retry", "main");
-  const turn = agent("7-explain-as-you-build", app, makeHome("home-explain"), EXPLAIN);
-  checkExplanation(steps, app, turn.reply, "7-explain-as-you-build.reply.md");
+  explainScenario(RUN, steps, (app, name, prompt) => ({
+    said: agent(name, app, makeHome("home-explain"), prompt).reply,
+  }));
 }
 
 // The Claude Code plugin imported too: each session line once, one check per push.
@@ -320,5 +305,5 @@ try {
     steps,
   );
 } finally {
-  steps.finish(RUN);
+  steps.finish();
 }
