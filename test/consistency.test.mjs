@@ -480,6 +480,19 @@ const antigravityFormatCommands = (file) =>
     ),
   );
 const antigravityHookCommands = () => antigravityFormatCommands(json("hooks.json"));
+
+/** The one command each Antigravity hook runs. Antigravity blocks the tool call on any non-zero
+ *  exit, non-JSON stdout or a timeout (docs/agents.md, "Comprende 0.4.3 in Antigravity"), so the
+ *  shell, not node, turns every failure into exit 0 with nothing on stdout. And no && or ||,
+ *  which Windows PowerShell 5.1 can't parse:
+ *  - sh: `set "A=$(… ; printf 'x%s' "$?")"` keeps the gate's output with `x<its exit code>` at
+ *    the end, in $1. `ok` is "0" when that code is 0, and empty otherwise, so the gate's output
+ *    goes out only then. Hooks run in the plugin's folder, so ./dist/gate.mjs is the plugin's.
+ *  - cmd.exe: the whole line is one `set "A=…"`, which succeeds: exit 0, the gate never runs.
+ *  - PowerShell: `$(exit 0)`, evaluated in the string, ends the script with 0 after the gate. */
+const antigravityCommand = (entry) =>
+  `set "A=$(node "./dist/gate.mjs" ${entry} --from-plugin; printf 'x%s' "$?")$(exit 0)"; ` +
+  `out=\${1#A=}; s=\${out##*x}; ok=\${s%%[1-9]*}; printf '%s' "\${ok:+\${out%x*}}"; exit 0`;
 const antigravityPayload = (name) => read(`test/fixtures/antigravity/${name}`).toString("utf8");
 
 test("the Antigravity plugin has its own manifest, with the plugin's name and version", () => {
@@ -522,13 +535,8 @@ test("the Antigravity plugin's hook commands run the plugin's gate, and the shel
   const entries = antigravityHookCommands();
   assert.deepEqual(entries.map((h) => h.event).sort(), ["PreToolUse", "SessionStart"]);
   for (const h of entries) {
-    // Antigravity blocks the command on any non-zero exit, so the shell, not node, turns
-    // every failure into exit 0 with nothing on stdout. Plugin hooks run in the plugin's
-    // folder, so ./dist/gate.mjs is the plugin's own (docs/agents.md, "Antigravity: what we found").
-    assert.match(
-      h.command,
-      /^out=\$\(node "\.\/dist\/gate\.mjs" (session-start|claude-hook) --from-plugin\) && printf '%s' "\$out" \|\| exit 0$/,
-    );
+    const entry = h.event === "SessionStart" ? "session-start" : "claude-hook";
+    assert.equal(h.command, antigravityCommand(entry), h.event);
     assert.ok(h.timeout > 0);
   }
   assert.equal(entries.find((h) => h.event === "PreToolUse").matcher, "run_command");
@@ -617,9 +625,9 @@ test("Antigravity's hook commands exit 0 in PowerShell 7 too, with or without no
 });
 
 // On Windows, which shell Antigravity runs hooks in isn't documented: its build names both
-// cmd.exe and PowerShell. This records what each Windows shell does with the commands, and
-// asserts the ones that exit 0. Only the Windows workflow runs it.
-test("on Windows, Antigravity's hook commands exit 0 in cmd.exe and PowerShell 7, with or without node", {
+// cmd.exe and PowerShell. So the commands must exit 0 with nothing on stdout in each of them.
+// Only the Windows workflow runs this.
+test("on Windows, Antigravity's hook commands exit 0 silently in cmd.exe and both PowerShells, with or without node", {
   skip: process.platform !== "win32" && "Windows only",
 }, (t) => {
   const shells = [
@@ -627,20 +635,16 @@ test("on Windows, Antigravity's hook commands exit 0 in cmd.exe and PowerShell 7
       name: "cmd.exe",
       program: process.env.ComSpec ?? "cmd.exe",
       args: (c) => ["/d", "/s", "/c", `"${c}"`],
-      asserted: true,
     },
     {
       name: "PowerShell 7",
       program: "pwsh.exe",
       args: (c) => ["-NoProfile", "-NonInteractive", "-Command", c],
-      asserted: true,
     },
-    // Can't parse && or ||: recorded only, in docs/agents.md.
     {
       name: "Windows PowerShell 5.1",
       program: "powershell.exe",
       args: (c) => ["-NoProfile", "-NonInteractive", "-Command", c],
-      asserted: false,
     },
   ];
   for (const shell of shells) {
@@ -659,10 +663,8 @@ test("on Windows, Antigravity's hook commands exit 0 in cmd.exe and PowerShell 7
         t.diagnostic(
           `${shell.name}, ${h.event}, ${label}: exit ${r.status}, stdout ${JSON.stringify(r.stdout)}, stderr ${JSON.stringify((r.stderr ?? "").slice(0, 200))}`,
         );
-        if (shell.asserted) {
-          assert.equal(r.status, 0, `${shell.name}, ${h.event}, ${label}: ${r.stderr}`);
-          assert.equal(r.stdout, "", `${shell.name}, ${h.event}, ${label}`);
-        }
+        assert.equal(r.status, 0, `${shell.name}, ${h.event}, ${label}: ${r.stderr}`);
+        assert.equal(r.stdout, "", `${shell.name}, ${h.event}, ${label}`);
       }
     }
   }
