@@ -3,7 +3,7 @@
     "SessionStart": [
       {
         "type": "command",
-        "command": "set \"A=$(node \"./dist/gate.mjs\" session-start --from-plugin; printf 'x%s' \"$?\")$(exit 0)\"; out=${1#A=}; s=${out##*x}; ok=${s%%[1-9]*}; printf '%s' \"${ok:+${out%x*}}\"; exit 0",
+        "command": "set \"A=$(node \"./dist/gate.mjs\" session-start --from-plugin; printf 'x%s' \"$?\")$(exit 0)\"; out=${1#A=}; s=${out##*x}; ok=${s%%[1-9]*}; a=${out%x*}; printf '%s' \"${ok:+$a}\"; exit 0",
         "timeout": 30
       }
     ],
@@ -13,7 +13,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "set \"A=$(node \"./dist/gate.mjs\" claude-hook --from-plugin; printf 'x%s' \"$?\")$(exit 0)\"; out=${1#A=}; s=${out##*x}; ok=${s%%[1-9]*}; printf '%s' \"${ok:+${out%x*}}\"; exit 0",
+            "command": "set \"A=$(node \"./dist/gate.mjs\" claude-hook --from-plugin; printf 'x%s' \"$?\")$(exit 0)\"; out=${1#A=}; s=${out##*x}; ok=${s%%[1-9]*}; a=${out%x*}; printf '%s' \"${ok:+$a}\"; exit 0",
             "timeout": 60
           }
         ]

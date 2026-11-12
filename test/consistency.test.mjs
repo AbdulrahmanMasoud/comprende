@@ -486,13 +486,14 @@ const antigravityHookCommands = () => antigravityFormatCommands(json("hooks.json
  *  shell, not node, turns every failure into exit 0 with nothing on stdout. And no && or ||,
  *  which Windows PowerShell 5.1 can't parse:
  *  - sh: `set "A=$(… ; printf 'x%s' "$?")"` keeps the gate's output with `x<its exit code>` at
- *    the end, in $1. `ok` is "0" when that code is 0, and empty otherwise, so the gate's output
- *    goes out only then. Hooks run in the plugin's folder, so ./dist/gate.mjs is the plugin's.
+ *    the end, in $1. `ok` is "0" when that code is 0, and empty otherwise, so the gate's output,
+ *    `a`, goes out only then. Hooks run in the plugin's folder, so ./dist/gate.mjs is the plugin's.
  *  - cmd.exe: the whole line is one `set "A=…"`, which succeeds: exit 0, the gate never runs.
- *  - PowerShell: `$(exit 0)`, evaluated in the string, ends the script with 0 after the gate. */
+ *  - PowerShell: `$(exit 0)`, evaluated in the string, ends the script with 0 after the gate.
+ *    It parses the whole line first, so no `${…}` holds another: PowerShell can't parse that. */
 const antigravityCommand = (entry) =>
   `set "A=$(node "./dist/gate.mjs" ${entry} --from-plugin; printf 'x%s' "$?")$(exit 0)"; ` +
-  `out=\${1#A=}; s=\${out##*x}; ok=\${s%%[1-9]*}; printf '%s' "\${ok:+\${out%x*}}"; exit 0`;
+  `out=\${1#A=}; s=\${out##*x}; ok=\${s%%[1-9]*}; a=\${out%x*}; printf '%s' "\${ok:+$a}"; exit 0`;
 const antigravityPayload = (name) => read(`test/fixtures/antigravity/${name}`).toString("utf8");
 
 test("the Antigravity plugin has its own manifest, with the plugin's name and version", () => {

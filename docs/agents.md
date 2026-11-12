@@ -272,21 +272,40 @@ Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is
 - **The session start finds the repo, and its reply is rejected.** The payload has `cwd`, so the gate printed the always-on line and the ownership-gate note (`mode: required`). The reply is in Claude Code's shape, and Antigravity rejects it: `unknown field "hookSpecificOutput"`, in its own log only. The agent gets nothing (tested).
 - **The memory server starts:** Antigravity cached a schema for each of its 10 tools (tested). No step called one.
 
+### Comprende 0.4.3 in Antigravity
+
+0.4.3 gives Antigravity its own plugin files, so a failed hook no longer blocks the command ([recording](recordings/antigravity/#the-043-fix-a-failed-hook-lets-the-command-run)):
+
+- **`.antigravity-plugin/plugin.json`, a root `hooks.json` and a root `mcp_config.json`.** Only Antigravity reads them. With its own manifest, `agy plugin install` takes the plugin as it is (`Source: antigravity`) and stops converting the Claude Code one. Without the manifest, the conversion writes its own `hooks.json` over a root one (tested). The manifest also stops the conversion of `.mcp.json`, hence `mcp_config.json`.
+- **Each hook command holds the gate's output in the shell, with no `&&` or `||`:**
+
+  ```sh
+  set "A=$(node "./dist/gate.mjs" … --from-plugin; printf 'x%s' "$?")$(exit 0)"; out=${1#A=}; s=${out##*x}; ok=${s%%[1-9]*}; a=${out%x*}; printf '%s' "${ok:+$a}"; exit 0
+  ```
+
+  In `sh`, it keeps the gate's output with `x` and its exit code at the end, and prints the output only when that code is 0. Anything else exits 0 with nothing on stdout: `node` missing (exit 127), `gate.mjs` missing, a crash, exit 2 (tested, each case). The shell does it, not `node`, so it holds when `node` can't run. `node … || exit 0` alone isn't enough: a crash's partial output would go out, and non-JSON stdout on exit 0 blocks too (tested). Antigravity runs hooks with `sh` on macOS, even when `$SHELL` is zsh (tested). The command also passes in `dash` and `zsh` (tested outside Antigravity).
+- **The commands run the same gate entry points as before,** `session-start --from-plugin` and `claude-hook --from-plugin`, with no `--agent`. So 0.4.3 still can't check a push in Antigravity: git's `pre-push` hook and CI do (tested). The adapter comes in 0.5.0.
+- **Every path is the plugin's own.** Hooks run `./dist/gate.mjs` in the plugin's folder, and the MCP server starts from `${PLUGIN_ROOT}/dist/server.mjs`. In a repo with its own `dist/gate.mjs` and `dist/server.mjs`, neither ran (tested, with marker files). A `gate_status` call through the MCP server worked (tested).
+- **Upgrading:** `agy plugin install https://github.com/AbdulrahmanMasoud/comprende` again. It replaces a converted install ("replaced existing installation", tested).
+- **What it can't fix:** a hook that outlives its timeout is killed, and that blocks the command (tested, with a test hook). No wrapper helps, since the shell itself is killed. In 0.4.3 the gate allows Antigravity's payload before doing any work.
+- **No logo yet.** The icon is in `.claude-plugin/`, and Antigravity's Marketplace bundle leaves out dot-folders. Without it, `agy plugin validate` warns only that `.mcp.json` and `hooks/hooks.json` are never loaded, which is right: they're Claude Code's.
+- **Windows:** WINDOWS_TBD
+
 ### Hooks
 
 | Question | Answer | Source |
 |---|---|---|
 | Events | `SessionStart`, `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop` | Docs: [hooks](https://antigravity.google/docs/hooks/) |
-| Where | The project's `.agents/hooks.json`, the user's `~/.gemini/config/hooks.json`, and a plugin's `hooks.json` at its root. Not `hooks/hooks.json`. Project hooks need the workspace trusted | Docs: [hooks](https://antigravity.google/docs/hooks/), [changelog](https://antigravity.google/docs/changelog/) ("a hooks/hooks.json file (which isn't read)") |
+| Where | The project's `.agents/hooks.json`, the user's `~/.gemini/config/hooks.json`, and a plugin's `hooks.json` at its root. Not `hooks/hooks.json`. A plugin's root `hooks.json` counts only when the plugin has its own manifest: for a Claude Code plugin, `agy plugin install` writes the converted hooks over it. Project hooks need the workspace trusted | Docs: [hooks](https://antigravity.google/docs/hooks/), [changelog](https://antigravity.google/docs/changelog/) ("a hooks/hooks.json file (which isn't read)"). Tested (0.4.3: the root `hooks.json`) |
 | The file's shape | Named groups: `{"<group>": {"PreToolUse": [{"matcher": "run_command", "hooks": [{"type": "command", "command": "…", "timeout": 30}]}]}}`. `SessionStart` takes a flat list. Each hook has an `enabled` key | Docs: [build plugins](https://antigravity.google/docs/build-plugins/). Tested (the converted plugin's `hooks.json`) |
 | Input on stdin | camelCase. Both events we saw (`SessionStart`, `PreToolUse`) have `hookEventName`, `conversationId`, `cwd`, `workspacePaths` (a list), `transcriptPath`, `artifactDirectoryPath`, `modelName` and `lastUserInput`. `PreToolUse` adds `stepIdx` and `toolCall: {id, name, args}`. For `run_command`, `args` held `CommandLine`, `WaitMsBeforeAsync` and `toolSummary`. The docs also list `Cwd`, which the agent didn't set in our runs. The docs don't list `cwd`, `hookEventName` or `toolCall.id` | Tested (Step 0). Docs: [hooks](https://antigravity.google/docs/hooks/) |
 | The reply | Exit 0, and a JSON object on stdout with `decision`: `allow`, `auto_approve`, `deny`, `ask`, `force_ask` or `deny_unless_prior_grant`, plus an optional `reason` | Docs: [hooks](https://antigravity.google/docs/hooks/), [build plugins](https://antigravity.google/docs/build-plugins/) |
 | Exit codes | Any non-zero exit blocks the tool call: exit 1 and exit 2 both ended it with "JSON hook … failed: command failed: exit status N", and the command didn't run. The docs say a non-zero exit is "logged as a hook execution error and ignored (failing open)". It isn't, in `agy` 1.5.5 | Tested (Step 0, with test hooks in `~/.gemini/config/hooks.json`). Docs: [build plugins](https://antigravity.google/docs/build-plugins/) |
-| Empty or non-JSON stdout | Empty stdout on exit 0 doesn't block: the command goes on to the permission check. A `SessionStart` reply with a field Antigravity doesn't know is rejected whole (strict parsing), logged as failed, and ignored. So a reply must carry no extra fields. Non-JSON stdout from `PreToolUse` is Unknown. Not documented: the changelog only mentions "safely handling empty decision strings" | Tested (Step 0: empty, and the session start) |
+| Empty or non-JSON stdout | Empty stdout on exit 0 doesn't block: the command goes on to the permission check. A `SessionStart` reply with a field Antigravity doesn't know is rejected whole (strict parsing), logged as failed, and ignored. So a reply must carry no extra fields. Non-JSON stdout on exit 0 from `PreToolUse` blocks the command: `failed to unmarshal result … invalid value`. Not documented: the changelog only mentions "safely handling empty decision strings" | Tested (Step 0: empty, and the session start. 0.4.3: non-JSON, with a test hook) |
 | Session context | `injectSteps`. The two pages differ: `[{"userMessage": "…"}]` on one, and "the same schema as PreInvocation" (`systemMessage`) on the other. Claude Code's `hookSpecificOutput` is rejected: `unknown field "hookSpecificOutput"`, in Antigravity's log only, and the agent gets nothing | Tested (Step 0: `hookSpecificOutput`). Docs: [build plugins](https://antigravity.google/docs/build-plugins/), [hooks](https://antigravity.google/docs/hooks/). Unknown which `injectSteps` shape works |
 | Plugin hooks' folder and environment | They run in the plugin's folder, with `PLUGIN_ROOT`, `PLUGIN_DATA` and `ANTIGRAVITY_CONVERSATION_ID` set. The changelog says CLI 1.5.3 added the first two | Tested (Step 0). Docs: [build plugins](https://antigravity.google/docs/build-plugins/), [changelog](https://antigravity.google/docs/changelog/) |
 | A feature flag | None. Project hooks, skills and MCP servers need the workspace trusted | Docs: [hooks](https://antigravity.google/docs/hooks/), [changelog](https://antigravity.google/docs/changelog/) |
-| Timeout | 30 seconds by default, per hook | Docs: [hooks](https://antigravity.google/docs/hooks/) |
+| Timeout | 30 seconds by default, per hook. A hook that outlives it is killed, and that blocks the command: `command failed: signal: killed` | Docs: [hooks](https://antigravity.google/docs/hooks/). Tested (0.4.3, with a test hook) |
 | In the IDE | Disputed. A forum user says hooks run only in the CLI (IDE 2.1.1, App 2.5.0, August 2026). Later App releases fix hooks. The IDE's changelog never mentions hooks | Third party: [forum](https://discuss.ai.google.dev/t/do-antigravity-ide-2-0-actually-execute-plugin-hooks-pretooluse-posttooluse-or-is-that-cli-only-right-now/176814). Docs: [changelog](https://antigravity.google/docs/changelog/). Unknown: we can't drive the IDE |
 
 ### Plugins
@@ -297,9 +316,9 @@ Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is
 | Fields | `name` (the only required one), `displayName`, `description`, `version`, `logo` (a square image of 128px or more, inside the plugin), `suggestedPrompts`, `skills`, `disabled`, `author`, `homepage`, `repository`, `license`, `keywords`, `extensions`. Unknown fields are rejected | Docs: [build plugins](https://antigravity.google/docs/build-plugins/) |
 | Components | At the plugin root: `skills/`, `mcp_config.json`, `agents/`, `rules/` and `hooks.json`. The manifest can't point elsewhere | Docs: [build plugins](https://antigravity.google/docs/build-plugins/) |
 | The plugin-root variable | `${PLUGIN_ROOT}` in MCP `args`, `cwd` and `env`. Hooks should use relative paths (`node ./dist/gate.mjs`), since they run in the plugin's folder | Docs: [build plugins](https://antigravity.google/docs/build-plugins/) |
-| Install | `agy plugin install https://github.com/<owner>/<repo>`, or a local folder. It lands in `~/.gemini/config/plugins/<name>`, which is "replaced when the plugin updates". A plugin folder in the project's `.agents/plugins/` works too. No App screen installs from GitHub | Tested (a local copy of this repo). Docs: [plugins](https://antigravity.google/docs/plugins/), [build plugins](https://antigravity.google/docs/build-plugins/) |
-| Claude Code plugins | `agy plugin install` converts one (tested, above). `agy plugin import claude` imports those in `~/.claude/plugins/`, once | Tested (install). Docs: [plugins](https://antigravity.google/docs/plugins/) (import) |
-| Today's repo as is | `agy plugin validate` fails: "no plugin.json found at the plugin root or in .antigravity-plugin or .gemini-plugin. This looks like a Claude Code plugin: `plugin install` converts it, but it doesn't load as is" | Tested |
+| Install | `agy plugin install https://github.com/<owner>/<repo>`, or a local folder. It lands in `~/.gemini/config/plugins/<name>`, which is "replaced when the plugin updates". A plugin folder in the project's `.agents/plugins/` works too. No App screen installs from GitHub. Running it again replaces the installed copy, a converted one included ("replaced existing installation"). Installed clients notice an update by the manifest's `version` | Tested (a local copy of this repo, and installing over a converted copy). Docs: the `version` field. Docs: [plugins](https://antigravity.google/docs/plugins/), [build plugins](https://antigravity.google/docs/build-plugins/) |
+| Claude Code plugins | `agy plugin install` converts one (tested, above), unless it has its own Antigravity manifest. The conversion writes its own `plugin.json`, `hooks.json` and `mcp_config.json` at the root, over any already there. `agy plugin import claude` imports those in `~/.claude/plugins/`, once | Tested (install, and a root `hooks.json` written over). Docs: [plugins](https://antigravity.google/docs/plugins/) (import) |
+| This repo, validated | Before 0.4.3, `agy plugin validate` failed: "no plugin.json found at the plugin root or in .antigravity-plugin or .gemini-plugin. This looks like a Claude Code plugin: `plugin install` converts it, but it doesn't load as is". From 0.4.3 it passes, warning that `.mcp.json` and `hooks/hooks.json` are never loaded, which is right: they're Claude Code's. A logo in a dot-folder gets a warning of its own, since the Marketplace bundle leaves dot-folders out | Tested |
 | Sharing `skills/` | Yes, if each skill's `name` matches its folder (`skills/comprende/` and `name: comprende` do). Plugin skills are named `<plugin>:<skill>` | Docs: [build plugins](https://antigravity.google/docs/build-plugins/). Tested (the conversion kept it) |
 | Sharing the MCP server | It needs its own `mcp_config.json`: `.mcp.json` is read only by an import | Docs: [build plugins](https://antigravity.google/docs/build-plugins/) |
 
@@ -310,8 +329,8 @@ Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is
 | Where skills are found | `.agents/skills/` (and the older `.agent/skills/`), `~/.gemini/config/skills/`, and plugins' `skills/`. Gemini CLI's `.gemini/skills/` has to be moved | Docs: [skills](https://antigravity.google/docs/skills/), [Gemini CLI migration](https://antigravity.google/docs/cli/gcli-migration/). Unknown by test: needs a later signed-in run |
 | Loaded automatically | Yes: "If a skill looks relevant to your task, the agent reads the full SKILL.md" | Docs: [skills](https://antigravity.google/docs/skills/) |
 | Always-on rules | `AGENTS.md` or `GEMINI.md`, `.agents/rules/*.md` with a `trigger`, and a plugin's `rules/AGENTS.md`, "loaded automatically as an always-on rule whenever the plugin is enabled" | Docs: [rules](https://antigravity.google/docs/rules/), [build plugins](https://antigravity.google/docs/build-plugins/) |
-| MCP config | `~/.gemini/config/mcp_config.json`, the project's `.agents/mcp_config.json`, or a plugin's own `mcp_config.json`, named `<plugin>_<server>`. The converted plugin's server started, and Antigravity cached a schema for each of its 10 tools, as `comprende_comprende` | Docs: [MCP](https://antigravity.google/docs/mcp/). Tested (Step 0: the tools cached, none called) |
-| Headless runs | `agy -p "<prompt>" --output-format json\|stream-json`, `--dangerously-skip-permissions`, `--add-dir`, `--print-timeout`. The workspace is the folder it starts in. An action that needs approval is soft-denied: the run goes on and exits 0. A shell command needs approval unless an allow rule matches it, such as `--settings '{"permissions":{"allow":["command(ls)"]}}'` for one run | Tested (Step 0). Docs: [headless](https://antigravity.google/docs/cli/headless/) (the soft deny) |
+| MCP config | `~/.gemini/config/mcp_config.json`, the project's `.agents/mcp_config.json`, or a plugin's own `mcp_config.json`, named `<plugin>_<server>`. The converted plugin's server started, and Antigravity cached a schema for each of its 10 tools, as `comprende_comprende`. 0.4.3's own `mcp_config.json`, with `${PLUGIN_ROOT}/dist/server.mjs`, started the plugin's server, and a `gate_status` call worked | Docs: [MCP](https://antigravity.google/docs/mcp/). Tested (Step 0: the tools cached. 0.4.3: one call) |
+| Headless runs | `agy -p "<prompt>" --output-format json\|stream-json`, `--dangerously-skip-permissions`, `--add-dir`, `--print-timeout`. The workspace is the folder it starts in. An action that needs approval is soft-denied: the run goes on and exits 0. A shell command needs approval unless an allow rule matches it, such as `--settings '{"permissions":{"allow":["command(ls)"]}}'` for one run. An MCP tool's rule is `mcp(<server>/<tool>)`, such as `mcp(comprende_comprende/gate_status)` | Tested (Step 0, 0.4.3). Docs: [headless](https://antigravity.google/docs/cli/headless/) (the soft deny) |
 | A config-folder override | None: it uses `HOME` | Tested (a throwaway `HOME` worked). Docs: [CLI reference](https://antigravity.google/docs/cli/reference/) (none listed) |
 | Sign-in | Google OAuth in the browser. The CLI prints the link and waits 60 seconds, for the browser to hand the sign-in back or for the code to be pasted in. It takes a pasted code only on a terminal: with stdin from a pipe, it stops with "authentication required". A code works only in the run that asked for it (PKCE). The token goes to the OS keyring: on macOS, the login keychain, so a throwaway `HOME` needs its own. A Gemini API key works only with `modelProvider: "gemini"` | Tested (Step 0). Docs: [install](https://antigravity.google/docs/install/) |
 | Install | The App and IDE: a `.dmg`. The CLI: `curl -fsSL https://antigravity.google/cli/install.sh \| bash` (to `~/.local/bin/agy`, or `--dir <folder>`). It checks the download's SHA-512 and updates itself | Tested (the script read, then run with a throwaway `HOME` and `--dir`). Docs: [getting started](https://antigravity.google/docs/getting-started/) |
@@ -683,16 +702,16 @@ The adapter, `src/gate/agents/antigravity.ts`:
 
 **One change in the core,** not in the interface. Today, when stdin isn't JSON, `readHookInput` returns no adapter, and the hook replies with an empty allow. For a tool that wants a JSON reply, the core should resolve `--agent` anyway and answer in that adapter's format. A crash inside `agentHook` already replies in the adapter's format, from its `catch`. A crash outside it, in `cli.ts`, exits 1 with nothing on stdout, and Antigravity blocks on any non-zero exit (Step 0). So Antigravity's hook commands must always exit 0, a crash included. A deny is JSON on exit 0.
 
-**The files to add:**
+**The files:** 0.4.3 added the first three, to stop a failed hook from blocking ([Comprende 0.4.3 in Antigravity](#comprende-043-in-antigravity)). 0.5.0 changes their commands, and maybe adds a rule.
 - **`.antigravity-plugin/plugin.json`:**
-  - `name`, `displayName`, `description`, `version`, `author`, `homepage`, `repository`, `license`, `keywords`, `logo` (the 1024px icon, inside the repo)
+  - `name`, `displayName`, `description`, `version`, `author`, `homepage`, `repository`, `license`, `keywords`. A `logo` once the icon is outside a dot-folder
   - Antigravity reads it before a root `plugin.json`, and Codex doesn't read it.
   - Codex does read a root `plugin.json` (Agent Plugins), so we don't add one.
 - **A root `hooks.json`:** Antigravity reads a plugin's hooks only there.
-  - `SessionStart`: `node ./dist/gate.mjs session-start --from-plugin --agent antigravity`
-  - `PreToolUse`, `matcher: "run_command"`: `node ./dist/gate.mjs agent-hook --from-plugin --agent antigravity`
+  - `SessionStart`: 0.4.3's command, with `session-start --from-plugin --agent antigravity`
+  - `PreToolUse`, `matcher: "run_command"`: the same with `agent-hook`
   - Relative paths, since hooks run in the plugin's folder.
-  - Without `node`, a plain `node` line fails, and Antigravity would block the command: Step 0 didn't remove `node`, but it showed that a failed hook blocks. So these commands need a fallback that doesn't depend on `node`, and plain lines were chosen for Windows shells. An open question.
+  - The shell holds the gate's output and exits 0 whenever the gate fails, as 0.4.3's commands do. A deny is JSON on exit 0, so it still goes out.
 - **A root `mcp_config.json`:** `node` with `${PLUGIN_ROOT}/dist/server.mjs`.
 - **Maybe `rules/AGENTS.md`,** for the always-on line (a decision, below). Cursor's plugin would load it too, since Cursor discovers `rules/` unless the manifest sets `rules`. So `.cursor-plugin/plugin.json` would need a `rules` path of its own.
 - **Claude Code and Codex read none of these.** `agy plugin validate` warns about our `hooks/hooks.json` ("isn't read"), which is only an error with `--strict`.
@@ -716,6 +735,7 @@ The adapter, `src/gate/agents/antigravity.ts`:
 - **The plugin's files sit at the repo's root.**
 - **The tool-call id isn't documented,** though the payload has one (`toolCall.id`, Step 0).
 - **There's no config-folder override,** so tests need a throwaway `HOME`.
+- **A hook that times out blocks the command,** and no wrapper can stop it. The gate's work must stay well inside the timeout.
 - **The shell on Windows isn't documented.**
 - **An update replaces the installed folder,** and how it's triggered isn't documented.
 
@@ -790,13 +810,13 @@ The maintainer settled the open questions on 2026-11-11:
 6. **Antigravity: should `install` write `.agents/hooks.json`?** Better decided after a later signed-in run shows which folder project hooks run in.
 7. **One release or two?** Decided: 0.4.0 is Codex, 0.5.0 Antigravity, 0.6.0 GitLab.
 
-**What a later signed-in Antigravity run must answer,** before the adapter. Step 0 answered two:
+**What a later signed-in Antigravity run must answer,** before the adapter. Step 0 and 0.4.3's runs answered three:
 - **What an empty stdout does:** answered, it doesn't block (Step 0). It mattered for safety: every path that can't format a reply prints nothing, such as an unknown `--agent` passed to an older repo copy of `gate.mjs`.
 - **Whether `stepIdx` is unique per tool call:** no longer needed. Claims can key on `toolCall.id`, which the payload has (Step 0).
 - Which `injectSteps` shape reaches the agent.
 - When the agent sets `toolCall.args.Cwd`, and whether it's an absolute path.
 - Which folder project hooks run in.
-- Whether a hook that times out blocks, now that a failed one does.
+- **Whether a hook that times out blocks:** answered, it does (0.4.3's runs).
 - Whether `--dangerously-skip-permissions` skips hooks too.
 
 ## How we tested
@@ -833,5 +853,6 @@ The maintainer settled the open questions on 2026-11-11:
   - the converted hooks run the way Antigravity runs them, on payloads built from the docs' fields
 - **Signed in (Step 0, 2026-11-12):** the gated demo and a repo without the gate, with 0.4.2 installed by `agy plugin install`, headless, with the gate's runs logged. Plus test hooks in `~/.gemini/config/hooks.json` that exit 1 and 2. See the [recording](recordings/antigravity/). The preload and the driver aren't committed, so Step 0 can't be repeated as is until `tools/e2e-antigravity.mjs` exists.
 - **The Windows build** (`1.5.6`): downloaded from the manifest the install script reads, its SHA-512 checked, and only its strings read, for the shell it might run hooks in.
-- **Still to run signed in:** hooks in `.agents/hooks.json`, each `injectSteps` shape, a JSON deny, a hook that times out, whether `--dangerously-skip-permissions` skips hooks, the skill loading, and an MCP tool call.
+- **Signed in (0.4.3, 2026-11-12):** the fix's own plugin files, with `node` missing, `gate.mjs` missing, a crash after partial output, decoy `dist/` files in the repo, a push and an MCP call. Plus test hooks for non-JSON stdout and a timeout. See the [recording](recordings/antigravity/).
+- **Still to run signed in:** hooks in `.agents/hooks.json`, each `injectSteps` shape, a JSON deny, whether `--dangerously-skip-permissions` skips hooks, the skill loading, and an MCP tool call.
 - **The docs:** each key quote was also checked against the page's own text.
