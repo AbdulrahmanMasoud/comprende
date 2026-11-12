@@ -753,11 +753,11 @@ The adapter, `src/gate/agents/antigravity.ts`:
 - **The shell on Windows isn't documented.** The hook commands are written to exit 0 in `cmd.exe` and both PowerShells, but they check nothing there.
 - **An update replaces the installed folder,** and how it's triggered isn't documented.
 
-**The end-to-end script, `tools/e2e-antigravity.mjs`:**
+**The end-to-end script, [`tools/e2e-antigravity.mjs`](../tools/e2e-antigravity.mjs) (0.5.0).** How to run it: CONTRIBUTING.md, [Testing in Antigravity](../CONTRIBUTING.md#testing-in-antigravity).
 - A throwaway `HOME`, signed in first, with its own keychain on macOS: the token goes to the login keychain, and a pasted code works only on a terminal (Step 0).
-- `agy plugin install <this repo>`.
-- Each turn is `agy -p "<prompt>" --output-format stream-json --dangerously-skip-permissions` in the demo.
-- The same steps as for Codex.
+- `agy plugin install` of a copy of this repo's plugin files, and a check that `agy plugin list` finds Antigravity's own manifest: 1 skill, 1 rule, 1 MCP server, 1 hook.
+- Each turn is `agy -p "<prompt>" --output-format stream-json` in the demo, with only the allow rules its step needs in `--settings`. Not `--dangerously-skip-permissions`: what the agent may run stays part of the test.
+- The same steps as for Codex, plus: the session start's reply is a system message, and every hook ran the installed plugin's `gate.mjs`, never the repo's.
 - The App and the IDE stay manual, with a checklist like Cursor's.
 
 ### The order of PRs

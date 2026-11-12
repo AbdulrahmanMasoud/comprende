@@ -1,0 +1,74 @@
+[
+  {
+    "step": "install: Antigravity's own manifest, with its rule",
+    "status": "PASS",
+    "detail": "1 skill, 1 rule, 1 MCP server, 1 hook"
+  },
+  {
+    "step": "session start: the rule's instruction, once",
+    "status": "PASS",
+    "detail": "1 time(s)"
+  },
+  {
+    "step": "session start: the line that says the hooks run",
+    "status": "PASS"
+  },
+  {
+    "step": "session start: the gate's note",
+    "status": "PASS"
+  },
+  {
+    "step": "session start: the reply is Antigravity's system message",
+    "status": "PASS",
+    "detail": "1 run(s)"
+  },
+  {
+    "step": "an ordinary command runs, and the hook ran and replied with nothing",
+    "status": "PASS",
+    "detail": "1 hook run(s)"
+  },
+  {
+    "step": "an unverified push is denied by the hook, once, and the agent sees why",
+    "status": "PASS",
+    "detail": "1 deny(ies)"
+  },
+  {
+    "step": "check me: questions asked",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "step": "check me: the report saved",
+    "status": "PASS",
+    "detail": "with the memory server's save_check_report"
+  },
+  {
+    "step": "check me: committed, then a separate push goes through",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "step": "the memory server: learning_context works",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "step": "every hook ran the installed plugin's gate.mjs",
+    "status": "PASS",
+    "detail": "~/.gemini/config/plugins/comprende/dist/gate.mjs"
+  },
+  {
+    "step": "explain as you build: retry.js written",
+    "status": "PASS"
+  },
+  {
+    "step": "explain as you build: a short explanation of the non-obvious part",
+    "status": "PASS",
+    "detail": "976 characters; read 7-explain-as-you-build.reply.md"
+  },
+  {
+    "step": "explain as you build: the skill loaded",
+    "status": "PASS",
+    "detail": ""
+  }
+]

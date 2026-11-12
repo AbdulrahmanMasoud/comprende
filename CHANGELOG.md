@@ -5,6 +5,7 @@
 - **Antigravity checks a push** (part of [#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)). An Antigravity adapter reads Antigravity's own hook payload, so an unverified `git push` from the agent is blocked with a JSON deny, and the agent sees why. The gate's note in a gated repo now reaches the agent, as a system message. The always-on instruction comes from a plugin rule, `rules/AGENTS.md`, once, and the session start says the hooks ran. Tested in the Antigravity CLI ([recording](docs/recordings/antigravity/#050-the-adapter)).
   - `install` writes no repo hook file for Antigravity: a repo's `.agents/hooks.json` would run alongside the plugin's hooks, and check each command twice.
   - With `COMPRENDE_QUIET=1`, Antigravity's session start sends the quiet line, but the plugin's rule still loads. Which one the agent follows isn't tested.
+- **`tools/e2e-antigravity.mjs`:** the end-to-end run in the real Antigravity CLI, by hand, in a throwaway `HOME` where `agy` is signed in (CONTRIBUTING.md, "Testing in Antigravity"). Its first run passed every step, the skill's loading and a memory-server call included. Its replies are kept in `docs/recordings/antigravity/0.5.0-e2e/`.
 
 ## 0.4.3
 

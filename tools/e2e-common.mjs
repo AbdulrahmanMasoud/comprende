@@ -2,7 +2,7 @@
 // results, the gated demo repo, the log of every gate.mjs run, the environment an
 // AI tool runs in, and the prompts and checks that are the same in every AI tool.
 // Each tool adds how it drives its AI tool, and its scenarios. How to run them:
-// CONTRIBUTING.md, "Testing in Cursor" and "Testing in Codex".
+// CONTRIBUTING.md, "Testing in Cursor", "Testing in Codex" and "Testing in Antigravity".
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

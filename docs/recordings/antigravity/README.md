@@ -133,3 +133,27 @@ The same way as 0.4.3, in the same signed-in throwaway `HOME`. Steps `e1` to `e5
 - **The system message is the shape for the gate's note:** the agent reads it as instructions, not as the user's request.
 - **The always-on instruction comes once,** from the plugin's rule, and the session start only says the hooks ran. The rule leaves out the words "Comprende is installed", which the skill reads as "the hooks ran", since a rule also loads where hooks don't run.
 - **A repo's `.agents/hooks.json` would run the gate a second time,** so `install` doesn't write one.
+
+## 0.5.0: the end-to-end script's first run
+
+[`tools/e2e-antigravity.mjs`](../../../tools/e2e-antigravity.mjs), on the `chore/e2e-antigravity` branch, with `main` at ba1b1b7 (the adapter, #63). The files: `0.5.0-e2e/`, the replies the script saved and its `results.json`, with the run folders replaced by `/work` and the throwaway `HOME` by `~`. Nothing else was changed.
+
+### How it was recorded
+
+- **When and where:** 2026-11-12, on macOS, `agy` 1.5.5, headless, in the same signed-in throwaway `HOME` as the runs above.
+- **The prompts:** the script's own, shared with the Cursor and Codex scripts (`tools/e2e-common.mjs`). Each turn allowed only what its step needs.
+- **Three runs, all 15 steps passed once:**
+  - **Run 1:** everything in `main` passed. `explain` failed: the skill read its files, then called the memory server's `learning_context`, which that turn had no allow rule for, so the turn ended with no reply. The script now allows the memory server there.
+  - **Run 2, `explain` only:** the run folder sat inside a scratch folder that also held a draft of the script. Looking for existing code, the agent searched the folders around the run, listed their files, and tried to read the draft; that read was denied, and the turn ended with no reply. Only file names were sent. Since then, CONTRIBUTING.md says to give each run a fresh `--out` with nothing beside it.
+  - **Run 3, `explain` only, in a new temp folder:** passed. `results.json` here is run 1's `main` and run 3's `explain`.
+
+### What they show
+
+- **The plugin installs as Antigravity's own:** "1 skill, 1 rule, 1 MCP server, 1 hook".
+- **Session start:** the instruction once, "a rule", and one system message with "Comprende is installed, and its hooks run in this session." and the gate's note (`1-session-start.reply.md`).
+- **The hooks run the installed plugin's `gate.mjs`,** never the repo's: every hook run in the log was `~/.gemini/config/plugins/comprende/dist/gate.mjs`.
+- **An ordinary command runs,** and the hook ran and replied with nothing.
+- **An unverified push is denied once,** with the reason (`3-unverified-push.reply.md`): `tool call denied by pre-tool hook: Blocked by the ownership gate: …`.
+- **"check me":** one question for the small change (`4-check-me.reply.md`). After the answer, the agent saved the report with the memory server's `save_check_report`, committed it, and the push went through (`4-answers.reply.md`).
+- **The memory server:** `learning_context` answered (`5-memory.reply.md`).
+- **Explain-as-you-build:** the agent's first step read the plugin's `SKILL.md`, and it explained only the full jitter, briefly (`7-explain-as-you-build.reply.md`). The demo is gated, so it ended with an optional in-flight question, as the skill's ownership check says.
