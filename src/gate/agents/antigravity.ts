@@ -5,7 +5,7 @@
 // --agent antigravity. docs/agents.md, "Antigravity: what we found".
 // https://antigravity.google/docs/hooks/
 
-import { isAbsolute } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { isRecord } from "../../util.js";
 import { SILENT_ALLOW } from "../hook-replies.js";
 import type { Agent } from "./types.js";
@@ -16,37 +16,44 @@ interface AntigravityPayload {
   readonly toolName: string | null;
   /** toolCall.args.CommandLine, or "" when there's none. */
   readonly command: string;
-  /** toolCall.args.Cwd, the command's folder, when the agent set an absolute one. */
+  /** toolCall.args.Cwd, the command's folder, made absolute against cwd; null when the
+   *  agent set none, or it's relative with no absolute cwd to resolve it against. */
   readonly commandCwd: string | null;
-  /** The payload's cwd: the workspace's folder (Step 0). */
+  /** The payload's cwd, the workspace's folder (Step 0), when it's absolute. */
   readonly cwd: string | null;
   /** toolCall.id, the same for every hook on one call. The docs don't list it. */
   readonly toolCallId: string | null;
   readonly conversationId: string | null;
 }
 
-const text = (value: unknown): string | null => (typeof value === "string" && value ? value : null);
+const nonEmptyString = (value: unknown): string | null => (typeof value === "string" && value ? value : null);
 
 function readAntigravity(payload: unknown): AntigravityPayload {
   const p = isRecord(payload) ? payload : {};
   const call = isRecord(p.toolCall) ? p.toolCall : {};
   const args = isRecord(call.args) ? call.args : {};
-  const commandCwd = text(args.Cwd);
+  const given = nonEmptyString(p.cwd);
+  const cwd = given && isAbsolute(given) ? given : null;
+  const commandCwd = nonEmptyString(args.Cwd);
   return {
-    toolName: text(call.name),
+    toolName: nonEmptyString(call.name),
     command: typeof args.CommandLine === "string" ? args.CommandLine : "",
-    commandCwd: commandCwd && isAbsolute(commandCwd) ? commandCwd : null,
-    cwd: text(p.cwd),
-    toolCallId: text(call.id),
-    conversationId: text(p.conversationId),
+    // A relative Cwd is the command's folder seen from the workspace's: resolve it, and
+    // without an absolute cwd, don't guess (a wrong repo would mean a deny that isn't a
+    // verdict on this push).
+    commandCwd: !commandCwd ? null : isAbsolute(commandCwd) ? commandCwd : cwd && resolve(cwd, commandCwd),
+    cwd,
+    toolCallId: nonEmptyString(call.id),
+    conversationId: nonEmptyString(p.conversationId),
   };
 }
 
 export const antigravity: Agent = {
   id: "antigravity",
 
-  // camelCase, which no other tool sends. Our own hook file passes --agent antigravity;
-  // this is for a hook that doesn't, such as one a user writes for the gate.
+  // camelCase, which no other tool sends. Our own hook file passes --agent antigravity.
+  // This is for the hooks Antigravity converts from the Claude Code plugin (`agy plugin
+  // import claude`), which pass none: both copies then claim the same tool call.
   detects: (payload) =>
     isRecord(payload) && typeof payload.conversationId === "string" && typeof payload.hookEventName === "string",
 
@@ -67,7 +74,7 @@ export const antigravity: Agent = {
   pluginUpdateHint: "`agy plugin install https://github.com/AbdulrahmanMasoud/comprende` again",
 
   // The plugin's rules/AGENTS.md is loaded as an always-on rule whenever the plugin is
-  // enabled, hooks or not (tested), so the session start doesn't repeat that line.
+  // enabled, hooks or not (tested). So the session start only says the hooks ran.
   alwaysOnFromRule: true,
 
   // None: Antigravity runs a repo's .agents/hooks.json alongside the plugin's hooks, so

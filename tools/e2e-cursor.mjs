@@ -268,10 +268,15 @@ function main() {
     "1-session-start",
     demo.app,
     home,
-    "Without running any tools: quote, word for word, the context you were given at the start of this session about Comprende and about an ownership gate. If there was none, say NONE.",
+    "Without running any tools: quote, word for word, every instruction or message in your context about Comprende or an ownership gate, each on its own line, and say where each came from (a rule, a hook's session start, or the user). If there was none, say NONE.",
   );
-  // Once: from the session start, not also from Antigravity's rules/AGENTS.md.
-  report("session start: the always-on line, once", (start.reply.match(/Comprende is installed/g) ?? []).length === 1);
+  // Once: from the session start, not also from Antigravity's rules/AGENTS.md, which Cursor
+  // discovers too. The instruction appears once, and only the session start says it's installed.
+  report(
+    "session start: the always-on line, once",
+    (start.reply.match(/Comprende is installed/g) ?? []).length === 1 &&
+      (start.reply.match(/Whenever you write or change code in this session/g) ?? []).length === 1,
+  );
   report(
     "session start: the gate's message",
     /ownership gate/i.test(start.reply) && /mode: required/.test(start.reply),

@@ -186,6 +186,19 @@ test("on a Node.js that's too old, session start names the app to restart", (t) 
     ).hookSpecificOutput.additionalContext;
   assert.match(start("cursor"), /Node\.js 20 or newer.*then a restart of Cursor\./);
   assert.match(start("claude-code"), /then a restart of Claude Code\./);
+  // Antigravity's reply is an injected system message.
+  const antigravity = JSON.parse(
+    sh(
+      dev,
+      process.execPath,
+      ["--import", pathToFileURL(preload).href, GATE, "session-start", "--from-plugin", "--agent", "antigravity"],
+      {
+        input: fixture("antigravity", "session-start.json").replaceAll("/work/probe-app", dev),
+        env: { ...ENV, OWNERSHIP_GATE_NO_AUTO_HOOK: "1" },
+      },
+    ).stdout,
+  ).injectSteps[0].systemMessage.systemMessage;
+  assert.match(antigravity, /Node\.js 20 or newer.*then a restart of Antigravity\./);
 });
 
 test("--agent wins over detection, and an unknown --agent resolves to no adapter", () => {
@@ -893,9 +906,12 @@ test("Antigravity's command is run_command's CommandLine, and its repo the comma
   assert.equal(read(push).projectDir, "/work/probe-app");
   const withCwd = (Cwd) => ({ ...push, toolCall: { ...push.toolCall, args: { ...push.toolCall.args, Cwd } } });
   assert.equal(read(withCwd("/work/other")).projectDir, "/work/other");
-  // A relative Cwd could mean anything: the workspace's folder instead.
-  assert.equal(read(withCwd("sub")).projectDir, "/work/probe-app");
-  // Never the process's folder: Antigravity runs plugin hooks in the plugin's.
+  // A relative Cwd is seen from the workspace's folder.
+  assert.equal(read(withCwd("sub")).projectDir, "/work/probe-app/sub");
+  // Without an absolute cwd, no guess: a wrong repo would mean a deny that isn't a verdict
+  // on this push. Never the process's folder either: Antigravity runs plugin hooks in the plugin's.
+  assert.equal(read({ ...withCwd("sub"), cwd: "work" }).projectDir, null);
+  assert.equal(read({ ...push, cwd: "work" }).projectDir, null);
   assert.equal(read({ ...push, cwd: "" }).projectDir, null);
 });
 
@@ -910,33 +926,60 @@ test("from Antigravity, an unverified push gets a JSON deny on exit 0, and ls an
   assert.equal(reply.decision, "deny");
   assert.match(reply.reason, /No ownership report for branch 'feature\/rate-limit'/);
   assert.match(reply.reason, /Ask Antigravity to run the ownership check/);
-  assert.deepEqual(
-    [hook("pre-tool-use.run-command.ls.json").status, hook("pre-tool-use.run-command.ls.json").stdout],
-    [0, ""],
-  );
+  const ls = hook("pre-tool-use.run-command.ls.json");
+  assert.deepEqual([ls.status, ls.stdout], [0, ""]);
 });
 
-test("from Antigravity, session start gives the gate's note as a system message, and no always-on line", (t) => {
+test("from Antigravity's own hook file, session start says the hooks run, and gives the gate's note as a system message", (t) => {
   const { dev } = unverifiedRepo(t);
-  const start = (input) =>
-    runGate(dev, ["session-start", "--from-plugin", "--agent", "antigravity"], {
+  const start = (input, args = ["--agent", "antigravity"], extra = {}) =>
+    runGate(dev, ["session-start", "--from-plugin", ...args], {
       input,
-      env: { ...ENV, OWNERSHIP_GATE_NO_AUTO_HOOK: "1", TMPDIR: tmpDir(t) },
+      env: { ...ENV, OWNERSHIP_GATE_NO_AUTO_HOOK: "1", TMPDIR: tmpDir(t), ...extra },
     });
-  const gated = start(antigravityPayload("session-start.json", dev));
-  assert.equal(gated.status, 0, gated.stderr);
-  const reply = JSON.parse(gated.stdout);
-  // Only the shape Antigravity accepts: any field it doesn't know fails the whole reply.
-  assert.deepEqual(Object.keys(reply), ["injectSteps"]);
-  assert.deepEqual(Object.keys(reply.injectSteps[0]), ["systemMessage"]);
-  const context = reply.injectSteps[0].systemMessage.systemMessage;
-  assert.match(context, /This repository uses the ownership gate \(mode: required\)/);
-  // The plugin's rules/AGENTS.md brings that line.
-  assert.doesNotMatch(context, /Comprende is installed/);
-  // Outside a gated repo there's nothing to say: an empty JSON object, never non-JSON text.
-  const plain = tmpDir(t);
-  const elsewhere = start(antigravityPayload("session-start.json", plain));
-  assert.deepEqual([elsewhere.status, elsewhere.stdout.trim()], [0, "{}"]);
+  const contextOf = (r) => {
+    const reply = JSON.parse(r.stdout);
+    // Only the shape Antigravity accepts: any field it doesn't know fails the whole reply.
+    assert.deepEqual(Object.keys(reply), ["injectSteps"]);
+    assert.deepEqual(Object.keys(reply.injectSteps[0]), ["systemMessage"]);
+    return reply.injectSteps[0].systemMessage.systemMessage;
+  };
+  const payload = antigravityPayload("session-start.json", dev);
+  const own = contextOf(start(payload));
+  assert.match(own, /This repository uses the ownership gate \(mode: required\)/);
+  // The plugin's rules/AGENTS.md gives the instruction. The session start only says the hooks
+  // ran, in the words the skill looks for: a rule loads even where hooks don't run.
+  assert.ok(own.startsWith(gate.const("HOOKS_RUN_LINE")), own);
+  assert.ok(!own.includes(gate.const("ALWAYS_ON_RULE")), own);
+  // A copy converted from the Claude Code plugin (no --agent) may come without the rule: the full line.
+  assert.ok(contextOf(start(payload, [])).startsWith(gate.const("ALWAYS_ON")));
+  // Quiet mode sends its own line, as in every tool.
+  assert.ok(contextOf(start(payload, undefined, { COMPRENDE_QUIET: "1" })).startsWith(gate.const("QUIET_MODE")));
+  // Outside a gated repo, only the line that says the hooks run.
+  assert.equal(contextOf(start(antigravityPayload("session-start.json", tmpDir(t)))), gate.const("HOOKS_RUN_LINE"));
+});
+
+test("in Antigravity, with the plugin and a converted copy, the session's lines come once", (t) => {
+  const { dev } = unverifiedRepo(t);
+  const env = { ...ENV, OWNERSHIP_GATE_NO_AUTO_HOOK: "1", TMPDIR: tmpDir(t) };
+  const payload = antigravityPayload("session-start.json", dev);
+  // Both claim the session's conversationId: the first one speaks, the other replies {}.
+  const own = runGate(dev, ["session-start", "--from-plugin", "--agent", "antigravity"], { input: payload, env });
+  const converted = runGate(dev, ["session-start", "--from-plugin"], { input: payload, env });
+  assert.match(own.stdout, /ownership gate/);
+  assert.equal(converted.stdout.trim(), "{}");
+});
+
+test("with --agent antigravity, input that isn't JSON still gets Antigravity's replies, never a block", (t) => {
+  const { dev } = unverifiedRepo(t);
+  for (const input of ["not json", "{"]) {
+    const start = runGate(dev, ["session-start", "--from-plugin", "--agent", "antigravity"], { input });
+    assert.equal(start.status, 0, start.stderr);
+    assert.ok(!start.stdout.includes("hookSpecificOutput"), start.stdout);
+    assert.equal(JSON.parse(start.stdout).injectSteps[0].systemMessage.systemMessage, gate.const("HOOKS_RUN_LINE"));
+    const hook = runGate(dev, ["agent-hook", "--from-plugin", "--agent", "antigravity"], { input });
+    assert.deepEqual([hook.status, hook.stdout], [0, ""], JSON.stringify(input));
+  }
 });
 
 test("in Antigravity, the plugin and a converted Claude Code copy of it check a push once", (t) => {

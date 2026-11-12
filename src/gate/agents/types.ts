@@ -57,9 +57,10 @@ export interface Agent {
    *  plugin's hooks without asking. */
   readonly pluginNotRunningHint?: string;
 
-  /** True when the plugin brings the always-on line itself, as a rule the tool loads
-   *  whenever the plugin is enabled (Antigravity's rules/AGENTS.md). The plugin's session
-   *  start then leaves that line out, so it comes once (session-start.ts). */
+  /** True when this tool's own plugin brings the always-on instruction as a rule it loads
+   *  whenever the plugin is enabled (Antigravity's rules/AGENTS.md). The session start from
+   *  that plugin's hook file (--agent) then only says the hooks ran, so the instruction
+   *  comes once (session-start.ts). */
   readonly alwaysOnFromRule?: boolean;
 
   /** The repo-level hook files this tool runs, most specific first; `install`

@@ -527,10 +527,12 @@ test("the Antigravity plugin has its own manifest, with only the fields Antigrav
     assert.ok(documented.includes(key), `${key} isn't an Antigravity manifest field`);
 });
 
-test("the Antigravity plugin's rule is the always-on line, word for word", () => {
-  // Antigravity loads rules/AGENTS.md whenever the plugin is enabled, and the plugin's session
-  // start leaves the line out there, so the rule must say exactly what the others' session starts say.
-  assert.equal(read("rules/AGENTS.md").toString("utf8"), `${gate.const("ALWAYS_ON")}\n`);
+test("the Antigravity plugin's rule is the always-on instruction, without the words that say the hooks ran", () => {
+  // Antigravity loads rules/AGENTS.md whenever the plugin is enabled, and its session start then
+  // only says the hooks ran. So the rule says what the others' session starts say, word for word...
+  assert.equal(read("rules/AGENTS.md").toString("utf8"), `${gate.const("ALWAYS_ON_RULE")}\n`);
+  // ...but never the words the skill reads as "the hooks ran": a rule loads where hooks don't run.
+  assert.ok(!read("rules/AGENTS.md").toString("utf8").includes(gate.const("PLUGIN_LINE_START")));
   // No frontmatter: Cursor, which also discovers a plugin's rules/, applies a rule by itself only
   // with alwaysApply: true, so it doesn't add the line a second time.
   assert.ok(!read("rules/AGENTS.md").toString("utf8").startsWith("---"));
@@ -636,20 +638,25 @@ test("Antigravity's hooks let the command run when the gate fails: no node, no g
     };
 
     // The real gate. The session start's reply goes out byte for byte: the gate's note as a
-    // system message, without the always-on line, which the plugin's rule brings.
+    // system message, after the line that says the hooks ran. The plugin's rule brings the instruction.
     useGate(readFileSync(GATE));
-    const direct = spawnSync(NODE, [join(plugin, "dist/gate.mjs"), "session-start", "--from-plugin"], {
-      cwd: plugin,
-      input: start,
-      encoding: "utf8",
-      env: env(process.env.PATH, plugin),
-    });
+    const direct = spawnSync(
+      NODE,
+      [join(plugin, "dist/gate.mjs"), "session-start", "--from-plugin", "--agent", "antigravity"],
+      {
+        cwd: plugin,
+        input: start,
+        encoding: "utf8",
+        env: env(process.env.PATH, plugin),
+      },
+    );
     const r = run(shell, sessionStart.command, start);
     assert.equal(r.status, 0, `${shell}: ${r.stderr}`);
     assert.equal(r.stdout, direct.stdout, shell);
     const context = JSON.parse(r.stdout).injectSteps[0].systemMessage.systemMessage;
     assert.match(context, /ownership gate \(mode: required\)/, shell);
-    assert.doesNotMatch(context, /Comprende is installed/, shell);
+    assert.ok(context.startsWith(gate.const("HOOKS_RUN_LINE")), shell);
+    assert.ok(!context.includes(gate.const("ALWAYS_ON_RULE")), shell);
     // A command gets an empty allow, and the unverified push a JSON deny on exit 0.
     const allowed = run(shell, preToolUse.command, ls);
     assert.deepEqual([allowed.status, allowed.stdout], [0, ""], `${shell}: ${allowed.stderr}`);

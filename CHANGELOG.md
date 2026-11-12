@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-- **Antigravity checks a push** (part of [#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)). An Antigravity adapter reads Antigravity's own hook payload, so an unverified `git push` from the agent is blocked with a JSON deny, and the agent sees why. The gate's note in a gated repo now reaches the agent, as a system message. The always-on line comes from a plugin rule, `rules/AGENTS.md`, once. Tested in the Antigravity CLI ([recording](docs/recordings/antigravity/#050-the-adapter)).
+- **Antigravity checks a push** (part of [#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)). An Antigravity adapter reads Antigravity's own hook payload, so an unverified `git push` from the agent is blocked with a JSON deny, and the agent sees why. The gate's note in a gated repo now reaches the agent, as a system message. The always-on instruction comes from a plugin rule, `rules/AGENTS.md`, once, and the session start says the hooks ran. Tested in the Antigravity CLI ([recording](docs/recordings/antigravity/#050-the-adapter)).
   - `install` writes no repo hook file for Antigravity: a repo's `.agents/hooks.json` would run alongside the plugin's hooks, and check each command twice.
-  - In Antigravity, `COMPRENDE_QUIET=1` doesn't change the always-on line, since a rule's text is fixed.
+  - With `COMPRENDE_QUIET=1`, Antigravity's session start sends the quiet line, but the plugin's rule still loads. Which one the agent follows isn't tested.
 
 ## 0.4.3
 

@@ -38,10 +38,10 @@ import { join as join11 } from "node:path";
 
 // src/gate/commands.ts
 import { existsSync as existsSync2, unlinkSync as unlinkSync2 } from "node:fs";
-import { basename as basename2, dirname as dirname3, join as join8, resolve as resolve2 } from "node:path";
+import { basename as basename2, dirname as dirname3, join as join8, resolve as resolve3 } from "node:path";
 
 // src/gate/agents/antigravity.ts
-import { isAbsolute } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 
 // src/gate/hook-replies.ts
 var SILENT_ALLOW = { stdout: "", stderr: "", exitCode: 0 };
@@ -58,25 +58,31 @@ function sessionContextReply(agent, lines) {
 }
 
 // src/gate/agents/antigravity.ts
-var text = (value) => typeof value === "string" && value ? value : null;
+var nonEmptyString = (value) => typeof value === "string" && value ? value : null;
 function readAntigravity(payload) {
   const p = isRecord(payload) ? payload : {};
   const call = isRecord(p.toolCall) ? p.toolCall : {};
   const args = isRecord(call.args) ? call.args : {};
-  const commandCwd = text(args.Cwd);
+  const given = nonEmptyString(p.cwd);
+  const cwd = given && isAbsolute(given) ? given : null;
+  const commandCwd = nonEmptyString(args.Cwd);
   return {
-    toolName: text(call.name),
+    toolName: nonEmptyString(call.name),
     command: typeof args.CommandLine === "string" ? args.CommandLine : "",
-    commandCwd: commandCwd && isAbsolute(commandCwd) ? commandCwd : null,
-    cwd: text(p.cwd),
-    toolCallId: text(call.id),
-    conversationId: text(p.conversationId)
+    // A relative Cwd is the command's folder seen from the workspace's: resolve it, and
+    // without an absolute cwd, don't guess (a wrong repo would mean a deny that isn't a
+    // verdict on this push).
+    commandCwd: !commandCwd ? null : isAbsolute(commandCwd) ? commandCwd : cwd && resolve(cwd, commandCwd),
+    cwd,
+    toolCallId: nonEmptyString(call.id),
+    conversationId: nonEmptyString(p.conversationId)
   };
 }
 var antigravity = {
   id: "antigravity",
-  // camelCase, which no other tool sends. Our own hook file passes --agent antigravity;
-  // this is for a hook that doesn't, such as one a user writes for the gate.
+  // camelCase, which no other tool sends. Our own hook file passes --agent antigravity.
+  // This is for the hooks Antigravity converts from the Claude Code plugin (`agy plugin
+  // import claude`), which pass none: both copies then claim the same tool call.
   detects: (payload) => isRecord(payload) && typeof payload.conversationId === "string" && typeof payload.hookEventName === "string",
   shellCommand(payload) {
     const { toolName, command } = readAntigravity(payload);
@@ -91,7 +97,7 @@ var antigravity = {
   names: { assistant: "Antigravity", app: "Antigravity" },
   pluginUpdateHint: "`agy plugin install https://github.com/AbdulrahmanMasoud/comprende` again",
   // The plugin's rules/AGENTS.md is loaded as an always-on rule whenever the plugin is
-  // enabled, hooks or not (tested), so the session start doesn't repeat that line.
+  // enabled, hooks or not (tested). So the session start only says the hooks ran.
   alwaysOnFromRule: true,
   // None: Antigravity runs a repo's .agents/hooks.json alongside the plugin's hooks, so
   // install doesn't write one (docs/agents.md, "Antigravity: the design").
@@ -146,7 +152,7 @@ var SELF = (() => {
     return "";
   }
 })();
-var withoutBom = (text2) => text2.replace(/^\uFEFF/, "");
+var withoutBom = (text) => text.replace(/^\uFEFF/, "");
 var sorted = (xs) => [...xs].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
 var splitLines = (s) => {
   const parts = s.split(/\r\n|\r|\n/);
@@ -155,9 +161,9 @@ var splitLines = (s) => {
 };
 var VERSION_RE = /^\/\/ ownership-gate-version: (\d+)/m;
 var FEATURES_RE = /^\/\/ ownership-gate-features: (.*)$/m;
-function oneLine(text2) {
+function oneLine(text) {
   let out = "";
-  for (const ch of text2) {
+  for (const ch of text) {
     const code = ch.charCodeAt(0);
     if (ch === "\n") out += "\\n";
     else if (ch === "\r") out += "\\r";
@@ -548,7 +554,7 @@ function samePath(a, b, platform = process.platform) {
 // src/gate/git.ts
 import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync as statSync3, utimesSync } from "node:fs";
 import { devNull, homedir, tmpdir } from "node:os";
-import { dirname as dirname2, isAbsolute as isAbsolute2, join as join2, resolve } from "node:path";
+import { dirname as dirname2, isAbsolute as isAbsolute2, join as join2, resolve as resolve2 } from "node:path";
 
 // src/gate/run.ts
 import { spawnSync } from "node:child_process";
@@ -784,7 +790,7 @@ var gitSucceeds = (root, args) => {
   }
 };
 function repoRoot(path) {
-  let start = resolve((path || process.cwd()).replace(/^~(?=$|[/\\])/, homedir()));
+  let start = resolve2((path || process.cwd()).replace(/^~(?=$|[/\\])/, homedir()));
   if (!existsSync(start)) throw new GateError(`Path does not exist: ${start}`);
   if (isFile(start)) start = dirname2(start);
   let out;
@@ -795,7 +801,7 @@ function repoRoot(path) {
   }
   const top = out.stdout.toString("utf8").trim();
   if (out.status !== 0 || !top) throw new GateError(`Not inside a git working tree: ${start}`);
-  return resolve(top);
+  return resolve2(top);
 }
 var refExists = (root, ref) => gitSucceeds(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
 var revHasFile = (root, rev, rel) => gitSucceeds(root, ["cat-file", "-e", `${rev}:${rel}`]);
@@ -1130,9 +1136,9 @@ var INSTALL_LINES = [
   { file: ".gitignore", line: REPORT_INPUT },
   { file: ".gitattributes", line: GATE_ATTRIBUTES_LINE, feature: "gitattributes" }
 ];
-function withLine(text2, line) {
-  const sep2 = text2.length && text2[text2.length - 1] !== 10 ? "\n" : "";
-  return Buffer.concat([text2, Buffer.from(`${sep2}${line}
+function withLine(text, line) {
+  const sep2 = text.length && text[text.length - 1] !== 10 ? "\n" : "";
+  return Buffer.concat([text, Buffer.from(`${sep2}${line}
 `)]);
 }
 function addInstallLine(root, file, line) {
@@ -1140,18 +1146,18 @@ function addInstallLine(root, file, line) {
   const st = lstat(path);
   if (st && (st.isSymbolicLink() || !st.isFile()))
     return `SKIPPED ${file}: not a regular file; add ${line} to it by hand.`;
-  let text2 = Buffer.alloc(0);
+  let text = Buffer.alloc(0);
   if (st) {
     try {
-      text2 = Buffer.from(readRepoFile(path, MAX_CONFIG_BYTES), "utf8");
-      if (!text2.equals(readFileSync(path))) throw new GateError("it isn't valid UTF-8");
+      text = Buffer.from(readRepoFile(path, MAX_CONFIG_BYTES), "utf8");
+      if (!text.equals(readFileSync(path))) throw new GateError("it isn't valid UTF-8");
     } catch (e) {
       return `SKIPPED ${file}: ${e.message}; add ${line} to it by hand.`;
     }
   }
   const sameLine = (l) => l.trim().replace(/^\//, "").split(/\s+/).join(" ") === line;
-  if (splitLines(text2.toString("utf8")).some(sameLine)) return `${file} already has ${line}`;
-  atomicWrite(path, withLine(text2, line).toString("utf8"));
+  if (splitLines(text.toString("utf8")).some(sameLine)) return `${file} already has ${line}`;
+  atomicWrite(path, withLine(text, line).toString("utf8"));
   return `added ${line} to ${file}`;
 }
 function isInstallLineEdit(root, path, c, ciGateHas) {
@@ -1356,8 +1362,8 @@ function renderReport(data) {
   lines.push("", DATA_MARKER, "```json", sortedKeysJson(data, 1), "```", "");
   return lines.join("\n");
 }
-function extractDataBlock(text2) {
-  const after = text2.split(DATA_MARKER).slice(1).join(DATA_MARKER);
+function extractDataBlock(text) {
+  const after = text.split(DATA_MARKER).slice(1).join(DATA_MARKER);
   const m = /```json\r?\n([\s\S]*?)\r?\n```/.exec(after);
   return m ? m[1] : null;
 }
@@ -1365,10 +1371,10 @@ var ReportError = class extends GateError {
 };
 var ReportVersionError = class extends ReportError {
 };
-function parseReport(text2) {
-  if (!text2.includes(DATA_MARKER))
+function parseReport(text) {
+  if (!text.includes(DATA_MARKER))
     throw new ReportError("Report is missing its data block \u2014 run the check again to regenerate it.");
-  const block = extractDataBlock(text2);
+  const block = extractDataBlock(text);
   if (block === null) throw new ReportError("Report data block is malformed \u2014 run the check again to regenerate it.");
   let data;
   try {
@@ -1410,14 +1416,14 @@ var unusableReport = (e) => [
   { files: {}, verified: {}, summary: "", _outdated: true },
   `Existing report can't be used (${e.message}); its files need verifying again.`
 ];
-function parseReportLeniently(text2) {
+function parseReportLeniently(text) {
   try {
-    return [parseReport(text2), null];
+    return [parseReport(text), null];
   } catch (e) {
     let files = {};
-    if (text2.includes(DATA_MARKER)) {
+    if (text.includes(DATA_MARKER)) {
       try {
-        const data = JSON.parse(extractDataBlock(text2) ?? "null");
+        const data = JSON.parse(extractDataBlock(text) ?? "null");
         if (isRecord(data) && isRecord(data.files)) files = data.files;
       } catch {
       }
@@ -1656,7 +1662,7 @@ function checkForHook(root, options, versionGapIsVerdict) {
 }
 function deleteReportInputFile(input, repo) {
   try {
-    const abs = resolve2(input);
+    const abs = resolve3(input);
     const expected = join8(realPath(repoRoot(repo)), REPORT_INPUT);
     if (!samePath(join8(realPath(dirname3(abs)), basename2(abs)), expected)) return "";
     unlinkSync2(abs);
@@ -1748,7 +1754,7 @@ function readHookInput(stdinText, requested) {
     const payload = JSON.parse(withoutBom(stdinText) || "{}");
     return { payload, agent: resolveAgent(payload, process.env, requested) };
   } catch {
-    return { payload: void 0, agent: null };
+    return { payload: void 0, agent: requested ? resolveAgent(void 0, process.env, requested) : null };
   }
 }
 
@@ -1908,8 +1914,8 @@ function agentHook(stdinText, source, requested) {
 }
 
 // src/gate/ci-summary.ts
-function escapeMarkdown(text2) {
-  let t = text2.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function escapeMarkdown(text) {
+  let t = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   for (const ch of ["\\", "[", "]", "|", "`", "*", "_"]) t = t.split(ch).join(`\\${ch}`);
   return t.replace(/\r\n|\r|\n/g, "\\n");
 }
@@ -1969,7 +1975,7 @@ function jobSummary(root, branch, rev, base, passed, messages, mode) {
 
 // src/gate/install.ts
 import { chmodSync as chmodSync3, copyFileSync as copyFileSync2, existsSync as existsSync4, mkdirSync as mkdirSync4, readFileSync as readFileSync3 } from "node:fs";
-import { dirname as dirname5, join as join14, resolve as resolve4 } from "node:path";
+import { dirname as dirname5, join as join14, resolve as resolve5 } from "node:path";
 
 // src/gate/codeowners.ts
 import { readdirSync as readdirSync2 } from "node:fs";
@@ -2029,7 +2035,7 @@ function gateCopyDifference(repoCopy, pluginCopy) {
 import { createHash as createHash2 } from "node:crypto";
 import { chmodSync as chmodSync2, existsSync as existsSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync2, realpathSync as realpathSync2, writeFileSync as writeFileSync3 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { isAbsolute as isAbsolute3, join as join13, relative, resolve as resolve3, sep } from "node:path";
+import { isAbsolute as isAbsolute3, join as join13, relative, resolve as resolve4, sep } from "node:path";
 function prePush(stdinText, repo) {
   let root, baseBranch;
   try {
@@ -2098,7 +2104,7 @@ function installHooks(repo, auto = false) {
   const configured = git(root, ["config", "--get", "core.hooksPath"], { check: false }).trim();
   if (configured) {
     const expanded = configured.replace(/^~(?=$|[/\\])/, homedir2());
-    let custom = resolve3(isAbsolute3(expanded) ? expanded : join13(root, expanded));
+    let custom = resolve4(isAbsolute3(expanded) ? expanded : join13(root, expanded));
     try {
       custom = realpathSync2(custom);
     } catch {
@@ -2120,10 +2126,10 @@ function installHooks(repo, auto = false) {
   if (isSymlink(hook)) return [`SKIPPED pre-push hook: ${hook} is a symlink.`];
   let verb = "installed";
   if (existsSync3(hook)) {
-    const text2 = readFileSync2(hook, "utf8");
-    if (!text2.includes("comprende ownership gate"))
+    const text = readFileSync2(hook, "utf8");
+    if (!text.includes("comprende ownership gate"))
       return [`SKIPPED pre-push hook: ${hook} already exists. Add this line to it: ${manualLine}`];
-    if (text2.includes(`pinned-sha256: ${pin}`)) return [`pre-push hook already installed (${hook})`];
+    if (text.includes(`pinned-sha256: ${pin}`)) return [`pre-push hook already installed (${hook})`];
     verb = "re-pinned";
   }
   mkdirSync3(hooksDir, { recursive: true });
@@ -2145,7 +2151,7 @@ function install(repo, upgrade = false, owner) {
   const done = [];
   const target = join14(root, GATE_REL);
   if (!SELF) throw new GateError("Can't locate this gate's own file to install it.");
-  if (existsSync4(target) && resolve4(target) === resolve4(SELF)) done.push(`${GATE_REL} is this file`);
+  if (existsSync4(target) && resolve5(target) === resolve5(SELF)) done.push(`${GATE_REL} is this file`);
   else if (existsSync4(target) && !upgrade) {
     done.push(`${GATE_REL} ${EXISTING_GATE_NOTE[gateCopyDifference(readFileSync3(target), readFileSync3(SELF))]}`);
   } else {
@@ -2189,7 +2195,9 @@ import { join as join15 } from "node:path";
 var MIN_NODE = 20;
 var nodeNote = (app) => `Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of ${app}.`;
 var PLUGIN_LINE_START = "Comprende is installed";
-var ALWAYS_ON = `${PLUGIN_LINE_START}. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.`;
+var ALWAYS_ON_RULE = "Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
+var ALWAYS_ON = `${PLUGIN_LINE_START}. ${ALWAYS_ON_RULE}`;
+var HOOKS_RUN_LINE = `${PLUGIN_LINE_START}, and its hooks run in this session.`;
 var QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
 var pluginNotRunningNote = (agent, hint) => `If this session didn't also get a note starting with "${PLUGIN_LINE_START}", Comprende's plugin isn't running in ${agent.names.app}: either it isn't installed, or its hooks were skipped. Tell the user once, in one line, in their language, with both options: ${hint}`;
 var untrustedGateNote = (agent) => ({
@@ -2208,10 +2216,13 @@ function sessionStart(stdinText, source, requested) {
     lines.push(
       `Comprende is running on Node.js ${node}, which is too old. ${nodeNote((agent?.names ?? UNKNOWN_AGENT_NAMES).app)}`
     );
-  if (source === "plugin" && !agent?.alwaysOnFromRule)
-    lines.push(process.env.COMPRENDE_QUIET === "1" ? QUIET_MODE : ALWAYS_ON);
+  if (source === "plugin") lines.push(pluginLine(agent, requested));
   if (run2) lines.push(...gatedRepoContext(run2, payload));
   return sessionContextReply(agent, lines);
+}
+function pluginLine(agent, requested) {
+  if (process.env.COMPRENDE_QUIET === "1") return QUIET_MODE;
+  return agent?.alwaysOnFromRule && requested === agent.id ? HOOKS_RUN_LINE : ALWAYS_ON;
 }
 function gatedRepoContext(run2, payload) {
   try {
@@ -2257,6 +2268,8 @@ function testCall(fn, a) {
     CHECK_NAME: REPO_PLATFORM.checkName,
     REPO_GATE: GATE_REL,
     ALWAYS_ON,
+    ALWAYS_ON_RULE,
+    HOOKS_RUN_LINE,
     QUIET_MODE,
     PLUGIN_LINE_START,
     // Every adapter, so a per-agent test can check it covers them all.

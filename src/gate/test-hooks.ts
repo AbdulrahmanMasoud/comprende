@@ -15,7 +15,7 @@ import { ciPlatform, REPO_PLATFORM } from "./platforms/index.js";
 import { addProjectHook } from "./project-hooks.js";
 import { isPushCommand } from "./push-detect.js";
 import { parseReport, readReport, renderReport, reportPath } from "./report.js";
-import { ALWAYS_ON, PLUGIN_LINE_START, QUIET_MODE } from "./session-start.js";
+import { ALWAYS_ON, ALWAYS_ON_RULE, HOOKS_RUN_LINE, PLUGIN_LINE_START, QUIET_MODE } from "./session-start.js";
 import { GATE_REL, GATE_VERSION, GateError, sorted } from "./shared.js";
 
 /** Internal functions, JSON in / JSON out, for the black-box test suite. */
@@ -29,6 +29,8 @@ export function testCall(fn: string, a: unknown[]): unknown {
     CHECK_NAME: REPO_PLATFORM.checkName,
     REPO_GATE: GATE_REL,
     ALWAYS_ON,
+    ALWAYS_ON_RULE,
+    HOOKS_RUN_LINE,
     QUIET_MODE,
     PLUGIN_LINE_START,
     // Every adapter, so a per-agent test can check it covers them all.
