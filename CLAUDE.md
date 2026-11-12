@@ -48,7 +48,7 @@ actionlint                        # the GitHub workflows
 - `src/server.ts`: the MCP server (thin: tools in, store or gate out). `src/learning.ts`: the skill's file-only helper
 - `src/util.ts`: helpers the gate and the store share, including the prototype-free `dict`/`own`/`get`
 - `dist/`: built output, **committed on purpose**, because that's what the plugin runs
-- `test/`: `node:test` suites against real git repos, one file per topic (install, config, fingerprints, checks, report, small-changes, push-detection, hooks, agents, platforms, security, ci, store, mcp, consistency, release). `helpers.mjs` has the fixtures, and `fixtures/<tool>/` the payloads captured from each AI tool.
+- `test/`: `node:test` suites against real git repos, one file per topic (install, config, fingerprints, checks, report, small-changes, push-detection, hooks, agents, platforms, security, ci, store, mcp, consistency, release, e2e-tools). `helpers.mjs` has the fixtures, and `fixtures/<tool>/` the payloads captured from each AI tool.
 - `docs/`: `teams.md` (setting up the gate), `how-it-works.md` (requirements, internals, limits), `agents.md` (other AI tools: Cursor research and the adapter design), `demo.tape` → `demo.gif` (VHS), `recordings/cursor/` (real Cursor replies, which the READMEs quote)
 - `.github/`:
   - `workflows/ci.yml`: the PR checks
@@ -58,6 +58,7 @@ actionlint                        # the GitHub workflows
 - `tools/release.mjs`: the version check and the release notes, for both workflows
 - `tools/e2e-cursor.mjs`: the end-to-end run in the real Cursor CLI. By hand, since it needs a Cursor login: CONTRIBUTING.md, "Testing in Cursor"
 - `tools/e2e-codex.mjs`: the same in the real Codex CLI: CONTRIBUTING.md, "Testing in Codex"
+- `tools/e2e-common.mjs`: what the end-to-end tools share: the command line, the gated demo repo, the log of every `gate.mjs` run, the PASS/FAIL/BLOCKED results, and the prompts and checks that are the same in every AI tool
 - `CONTRIBUTING.md`: setup, the workflow, the code rules, layout, tests, the demo, releasing
 - `biome.json`: formatting and lint (Markdown is left alone). `build.mjs`: the bundler.
 - `.gitattributes`: keeps `dist/` and `skills/comprende/scripts/` byte for byte on every platform, since SessionStart compares the repo's `gate.mjs` with `dist/gate.mjs` byte for byte

@@ -19,6 +19,8 @@ They live in `docs/`, not `test/fixtures/`: no test reads them. Fixtures are hoo
 
 ## The prompts
 
+These runs used an earlier version of the script. Today's names "check me"'s later turns `4-answers` and `4-follow-up-N`, and the memory step `5-memory`.
+
 | Step | Prompt |
 |---|---|
 | `1-session-start` | Without running any tools: quote, word for word, the context you were given at the start of this session about Comprende and about an ownership gate. If there was none, say NONE. |
