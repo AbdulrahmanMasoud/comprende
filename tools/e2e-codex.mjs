@@ -27,7 +27,9 @@ import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
+  askedQuestion,
   Blocked,
+  beforeFirst,
   checkMeTurns,
   commandLine,
   explainScenario,
@@ -39,6 +41,7 @@ import {
   LS,
   makeDemo,
   PUSH,
+  PUSH_AND_QUOTE,
   REPO,
   remoteHas,
   runScenarios,
@@ -208,18 +211,12 @@ function installPlugin() {
 
 /** The repo's session-start runs since `from` (the plugin's pass --from-plugin). @param {number} from */
 const repoSessionStarts = (from) =>
-  gate
-    .runs()
-    .slice(from)
-    .filter((r) => r.argv.includes("session-start") && r.argv.includes("--from-repo")).length;
+  gate.runsSince(from, ["session-start"]).filter((r) => r.argv.includes("--from-repo")).length;
 
 /** The agents' hook runs since `from`, split by copy, and the ones that blocked.
  *  Git's pre-push hook isn't counted: each session start installs it again. @param {number} from */
 function hookRuns(from) {
-  const runs = gate
-    .runs()
-    .slice(from)
-    .filter((r) => r.argv.includes("agent-hook") || r.argv.includes("claude-hook"));
+  const runs = gate.runsSince(from, ["agent-hook", "claude-hook"]);
   return {
     plugin: runs.filter((r) => r.argv.includes("--from-plugin")).length,
     repo: runs.filter((r) => !r.argv.includes("--from-plugin")).length,
@@ -253,9 +250,7 @@ function main() {
   );
 
   const pushFrom = gate.runs().length;
-  const push = turn("3-unverified-push", demo.app, `${PUSH} Quote any block message word for word.`, {
-    resume: session,
-  });
+  const push = turn("3-unverified-push", demo.app, PUSH_AND_QUOTE, { resume: session });
   const pushRuns = hookRuns(pushFrom);
   report(
     "an unverified push is blocked by Codex's hook, once, and the agent sees why",
@@ -271,7 +266,7 @@ function main() {
     () => remoteHas(demo.remote, "feature/sum"),
   );
   // The agent may start the check right after the blocked push, so its question can come a turn early.
-  report("check me: questions asked", /[?؟]/.test(turns[0]?.said ?? "") || /[?؟]/.test(push.said));
+  report("check me: questions asked", askedQuestion(turns[0]?.said ?? "", push.said));
   // Codex's events don't say whether an MCP call failed, so any call counts.
   const savedWith = howSaved({
     mcpTools: turns.flatMap((t) => t.tools),
@@ -375,13 +370,7 @@ function noPlugin() {
   );
 }
 
-let pluginInstalled = false;
-/** Wraps a scenario that needs the plugin: the first one installs it, and it stays. */
-const withPlugin = (/** @type {() => void} */ run) => () => {
-  if (!pluginInstalled) installPlugin();
-  pluginInstalled = true;
-  run();
-};
+const withPlugin = beforeFirst(installPlugin);
 
 try {
   // Inside the try, so the login copy is still deleted. no-plugin runs first, before the install.

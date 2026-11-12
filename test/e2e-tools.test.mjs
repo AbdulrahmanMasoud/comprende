@@ -1,13 +1,23 @@
 // tools/e2e-common.mjs, the part of the end-to-end tools that needs no AI tool: the
-// log of every gate.mjs run, the gated demo repo, and the scenario runner. The tools
-// themselves run by hand, so a change that breaks these would otherwise go unseen.
+// log of every gate.mjs run, the gated demo repo, the plugin's copy, and the scenario
+// runner. The tools themselves run by hand, so a change that breaks these would
+// otherwise go unseen.
 
 import assert from "node:assert/strict";
-import { realpathSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, realpathSync } from "node:fs";
+import { join, relative } from "node:path";
 import { test } from "node:test";
-import { Blocked, gateLog, makeDemo, remoteHas, runScenarios } from "../tools/e2e-common.mjs";
-import { GATE, NODE, REPO_GATE, sh, tmp } from "./helpers.mjs";
+import {
+  askedQuestion,
+  Blocked,
+  beforeFirst,
+  copyPlugin,
+  gateLog,
+  makeDemo,
+  remoteHas,
+  runScenarios,
+} from "../tools/e2e-common.mjs";
+import { GATE, NODE, REPO, REPO_GATE, sh, tmp } from "./helpers.mjs";
 
 test("the gate log records a gate.mjs run: which copy, its arguments, folder, exit code and output", (t) => {
   const run = tmp(t);
@@ -27,6 +37,23 @@ test("the gate log skips other scripts, and an empty log has no runs", (t) => {
   const gate = gateLog(run);
   sh(run, NODE, ["-e", "console.log('not the gate')"], { env: { ...process.env, NODE_OPTIONS: gate.nodeOptions } });
   assert.deepEqual(gate.runs(), []);
+});
+
+test("the gate log's runs since a point, of some subcommands only", (t) => {
+  const run = tmp(t);
+  const gate = gateLog(run);
+  const env = { ...process.env, NODE_OPTIONS: gate.nodeOptions };
+  sh(run, NODE, [GATE, "--help"], { env });
+  sh(run, NODE, [GATE, "status", "--json"], { env, check: false });
+  assert.equal(gate.runsSince(0).length, 2);
+  assert.deepEqual(
+    gate.runsSince(1).map((r) => r.argv[0]),
+    ["status"],
+  );
+  assert.deepEqual(
+    gate.runsSince(0, ["--help", "session-start"]).map((r) => r.argv[0]),
+    ["--help"],
+  );
 });
 
 test("the demo repo: the gate on main, and an unverified change on feature/sum that isn't pushed", (t) => {
@@ -83,4 +110,31 @@ test("scenarios: a blocked one is reported and the next still runs; an unknown n
       ),
     /a bug/,
   );
+});
+
+test("the plugin's copy has every file git tracks, and nothing else", (t) => {
+  const copy = copyPlugin(tmp(t), "plugin");
+  const files = (/** @type {string} */ dir) =>
+    readdirSync(dir, { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile())
+      .map((e) => relative(copy, join(e.parentPath, e.name)).replaceAll("\\", "/"))
+      .sort();
+  const tracked = sh(REPO, "git", ["ls-files"]).stdout.trim().split("\n").sort();
+  assert.deepEqual(files(copy), tracked);
+});
+
+test("a setup runs once, before the first scenario that needs it", () => {
+  const order = [];
+  const withSetup = beforeFirst(() => order.push("setup"));
+  const first = withSetup(() => order.push("first"));
+  const second = withSetup(() => order.push("second"));
+  second();
+  first();
+  assert.deepEqual(order, ["setup", "second", "first"]);
+});
+
+test("a question is a question in English or in Arabic, in any of the replies", () => {
+  assert.equal(askedQuestion("Done.", "Why is 0 the starting value?"), true);
+  assert.equal(askedQuestion("ليه الـ 0 هو القيمة الأولى؟"), true);
+  assert.equal(askedQuestion("Saved the report.", ""), false);
 });

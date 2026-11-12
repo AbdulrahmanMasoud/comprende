@@ -18,6 +18,7 @@ npm run build                     # rebuild dist/ and skills/comprende/scripts/
 npm test                          # tests only
 node tools/release.mjs check      # the version files agree with the newest CHANGELOG entry
 node tools/e2e-cursor.mjs --out <folder>   # the real Cursor CLI, end to end (needs a Cursor login)
+node tools/e2e-antigravity.mjs --home <signed-in HOME> --out <folder>   # the same in the real Antigravity CLI
 claude plugin validate ./.claude-plugin/plugin.json
 claude plugin validate ./.claude-plugin/marketplace.json
 actionlint                        # the GitHub workflows
@@ -58,6 +59,7 @@ actionlint                        # the GitHub workflows
 - `tools/release.mjs`: the version check and the release notes, for both workflows
 - `tools/e2e-cursor.mjs`: the end-to-end run in the real Cursor CLI. By hand, since it needs a Cursor login: CONTRIBUTING.md, "Testing in Cursor"
 - `tools/e2e-codex.mjs`: the same in the real Codex CLI: CONTRIBUTING.md, "Testing in Codex"
+- `tools/e2e-antigravity.mjs`: the same in the real Antigravity CLI, in a throwaway `HOME` where `agy` is signed in: CONTRIBUTING.md, "Testing in Antigravity"
 - `tools/e2e-common.mjs`: what the end-to-end tools share: the command line, the gated demo repo, the log of every `gate.mjs` run, the PASS/FAIL/BLOCKED results, and the prompts and checks that are the same in every AI tool
 - `CONTRIBUTING.md`: setup, the workflow, the code rules, layout, tests, the demo, releasing
 - `biome.json`: formatting and lint (Markdown is left alone). `build.mjs`: the bundler.

@@ -753,11 +753,11 @@ The adapter, `src/gate/agents/antigravity.ts`:
 - **The shell on Windows isn't documented.** The hook commands are written to exit 0 in `cmd.exe` and both PowerShells, but they check nothing there.
 - **An update replaces the installed folder,** and how it's triggered isn't documented.
 
-**The end-to-end script, `tools/e2e-antigravity.mjs`:**
+**The end-to-end script, [`tools/e2e-antigravity.mjs`](../tools/e2e-antigravity.mjs) (0.5.0).** How to run it: CONTRIBUTING.md, [Testing in Antigravity](../CONTRIBUTING.md#testing-in-antigravity).
 - A throwaway `HOME`, signed in first, with its own keychain on macOS: the token goes to the login keychain, and a pasted code works only on a terminal (Step 0).
-- `agy plugin install <this repo>`.
-- Each turn is `agy -p "<prompt>" --output-format stream-json --dangerously-skip-permissions` in the demo.
-- The same steps as for Codex.
+- `agy plugin install` of a copy of this repo's plugin files, and a check that `agy plugin list` finds Antigravity's own manifest: 1 skill, 1 rule, 1 MCP server, 1 hook.
+- Each turn is `agy -p "<prompt>" --output-format stream-json` in the demo, with only the allow rules its step needs in `--settings`. Not `--dangerously-skip-permissions`: what the agent may run stays part of the test.
+- The steps: session start (the hook's one system message, read from the log, and the rule's instruction once, from the agent's quotes), an ordinary command, an unverified push denied by the hook, "check me" through to a push that goes through, the memory server, every hook running the installed plugin's `gate.mjs` and never the repo's, and explain-as-you-build with the skill loaded. Not Codex's after-update, repo-hook or commit-trailer steps: Antigravity has no hook trust to lose on an update, and no repo hook file, and its agent's commits in the script's runs had no trailer.
 - The App and the IDE stay manual, with a checklist like Cursor's.
 
 ### The order of PRs
