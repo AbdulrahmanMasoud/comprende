@@ -255,6 +255,7 @@ test/                 node:test suites against real git repos, one file per topi
 tools/release.mjs     the version check and the release notes, for CI and releases
 tools/e2e-cursor.mjs  the end-to-end run in the real Cursor CLI (by hand, not in CI)
 tools/e2e-codex.mjs   the same in the real Codex CLI
+tools/e2e-common.mjs  what the end-to-end runs share: the demo repo, the gate's run log, the results
 docs/                 the longer docs, the terminal demo (demo.tape, demo.gif), and recordings/cursor/:
                       real Cursor replies, which the READMEs quote
 .github/              CI and release workflows, Dependabot, PR and issue templates

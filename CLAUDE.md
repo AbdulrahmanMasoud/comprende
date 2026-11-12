@@ -58,6 +58,7 @@ actionlint                        # the GitHub workflows
 - `tools/release.mjs`: the version check and the release notes, for both workflows
 - `tools/e2e-cursor.mjs`: the end-to-end run in the real Cursor CLI. By hand, since it needs a Cursor login: CONTRIBUTING.md, "Testing in Cursor"
 - `tools/e2e-codex.mjs`: the same in the real Codex CLI: CONTRIBUTING.md, "Testing in Codex"
+- `tools/e2e-common.mjs`: what the end-to-end tools share: the command line, the gated demo repo, the log of every `gate.mjs` run, the PASS/FAIL/BLOCKED results, and the prompts and checks that are the same in every AI tool
 - `CONTRIBUTING.md`: setup, the workflow, the code rules, layout, tests, the demo, releasing
 - `biome.json`: formatting and lint (Markdown is left alone). `build.mjs`: the bundler.
 - `.gitattributes`: keeps `dist/` and `skills/comprende/scripts/` byte for byte on every platform, since SessionStart compares the repo's `gate.mjs` with `dist/gate.mjs` byte for byte
