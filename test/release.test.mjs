@@ -37,6 +37,7 @@ function project(
     plugin = version,
     cursor = version,
     codex = version,
+    antigravity = version,
     pkg = version,
     lock = version,
     changelog = CHANGELOG,
@@ -46,6 +47,7 @@ function project(
   write(dir, ".claude-plugin/plugin.json", JSON.stringify({ name: "x", version: plugin }));
   write(dir, ".cursor-plugin/plugin.json", JSON.stringify({ name: "x", version: cursor }));
   write(dir, ".codex-plugin/plugin.json", JSON.stringify({ name: "x", version: codex }));
+  write(dir, ".antigravity-plugin/plugin.json", JSON.stringify({ name: "x", version: antigravity }));
   write(dir, "package.json", JSON.stringify({ name: "x", version: pkg }));
   write(dir, "package-lock.json", JSON.stringify({ name: "x", version: lock, packages: { "": { version: lock } } }));
   write(dir, "CHANGELOG.md", changelog);
@@ -57,7 +59,7 @@ test("check skips the Unreleased section and compares with the newest release", 
   assert.equal(r.status, 0, r.stderr);
   assert.equal(
     r.stdout,
-    "1.2.0: .claude-plugin/plugin.json, .cursor-plugin/plugin.json, .codex-plugin/plugin.json, package.json, package-lock.json, CHANGELOG.md agree.\n",
+    "1.2.0: .claude-plugin/plugin.json, .cursor-plugin/plugin.json, .codex-plugin/plugin.json, .antigravity-plugin/plugin.json, package.json, package-lock.json, CHANGELOG.md agree.\n",
   );
 });
 
@@ -86,6 +88,15 @@ test("the Codex plugin's manifest has to keep the same version", (t) => {
   const r = release(project(t, { codex: "1.1.0" }), "check");
   assert.equal(r.status, 1);
   assert.match(r.stderr, /the newest CHANGELOG\.md entry is 1\.2\.0, but \.codex-plugin\/plugin\.json says "1\.1\.0"/);
+});
+
+test("the Antigravity plugin's manifest has to keep the same version", (t) => {
+  const r = release(project(t, { antigravity: "1.1.0" }), "check");
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /the newest CHANGELOG\.md entry is 1\.2\.0, but \.antigravity-plugin\/plugin\.json says "1\.1\.0"/,
+  );
 });
 
 test("a version bump without its CHANGELOG entry fails", (t) => {

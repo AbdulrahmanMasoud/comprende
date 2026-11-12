@@ -1,0 +1,20 @@
+{
+  "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000003",
+  "conversationId": "00000000-0000-4000-8000-000000000003",
+  "cwd": "/work/probe-app",
+  "hookEventName": "PreToolUse",
+  "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+  "modelName": "gemini-3.8-flash-high",
+  "stepIdx": 2,
+  "toolCall": {
+    "args": {
+      "CommandLine": "ls",
+      "WaitMsBeforeAsync": 5000,
+      "toolSummary": "List directory contents"
+    },
+    "id": "call_00000000-0000-4000-8000-000000000004",
+    "name": "run_command"
+  },
+  "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000003/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": ["/work/probe-app"]
+}

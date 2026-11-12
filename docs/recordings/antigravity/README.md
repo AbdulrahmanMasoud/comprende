@@ -59,3 +59,47 @@ The IDE and the App, the interactive CLI, Linux and Windows, a gate crash or a N
 
 - `runs.json`: each step's prompt, `agy` flags, tool calls, the agent's reply, what `agy` printed on stderr, and each gate run with its payload and reply.
 - `agy-log-hook-lines.txt`: Antigravity's own log lines about hooks and settings, for each step.
+
+## The 0.4.3 fix: a failed hook lets the command run
+
+0.4.3 gives Antigravity its own plugin files: `.antigravity-plugin/plugin.json`, a root `hooks.json` and a root `mcp_config.json`. With its own manifest, `agy plugin install` uses them as they are, instead of converting the Claude Code plugin. Each hook command is:
+
+```sh
+set "A=$(node "$PLUGIN_ROOT/dist/gate.mjs" … --from-plugin; printf 'x%s' "$?")$(exit 0)"; held=${1#A=}; code=${held##*x}; ok=${code%%[1-9]*}; reply=${held%x*}; printf '%s' "${ok:+$reply}"; exit 0
+```
+
+The shell keeps the gate's output, prints it only when the gate exits 0, and otherwise exits 0 with nothing on stdout. It has no `&&` or `||`, so that `cmd.exe` and both PowerShells exit 0 too (tested in the Windows workflow), in case Antigravity uses one of them on Windows ([docs/agents.md](../../agents.md#comprende-043-in-antigravity)).
+
+### How it was recorded
+
+The same way as Step 0, with these changes:
+
+- **The plugin:** the fix's branch at dc8e731, installed with `agy plugin install` into a fresh throwaway `HOME`: "1 skill, 1 MCP server, 1 hook", `Source: antigravity`. For a plugin's own `hooks.json`, the install message counts hook groups ("1 installed (comprende)"); for a converted one, it counts events ("2 installed (PreToolUse, SessionStart)").
+- **The gated demo** also has its own `dist/gate.mjs` and `dist/server.mjs`, committed. Each writes a marker file in `/work/markers` if it ever runs. After every step, that folder was empty.
+- **The gate's runs** log the script's own path, and the MCP server's start.
+- **Steps 3 and 4** changed the installed plugin's `dist/gate.mjs`, and put it back after the step (the same SHA-256).
+- **Steps 1 to 6** ran with the final command. Step 6a, and steps 7 to 9, ran with an earlier draft (`out=$(…) && printf … || exit 0`): 6a only to learn the MCP permission's name, and 7 to 9 test Antigravity, not Comprende, with a user hook in `~/.gemini/config/hooks.json` that ran first and was removed after the step.
+- **The files:** `0.4.3/runs.json`, with the same replacements as Step 0 (paths, home folder, IDs). Its first entry names the commit and the hook command.
+
+### The runs
+
+| Step | Setup | Result | Comprende's hook |
+|---|---|---|---|
+| `1-normal-ls` | 0.4.3, `ls` allowed | `ls` ran | the plugin's own `dist/gate.mjs` ran in the plugin's folder: the session start (exit 0, its reply) and the shell hook (exit 0, nothing on stdout). The MCP server started from the plugin's `dist/server.mjs` |
+| `2-no-node-ls` | `node` not on PATH | `ls` ran | both hooks ran: Antigravity's log has `sh: node: command not found` twice (in `runs.json`, as `agy_log`) |
+| `3-no-gate-ls` | the plugin's `dist/gate.mjs` moved aside | `ls` ran | `node` exited 1 for both hooks, `ERR_MODULE_NOT_FOUND`. The repo's own `dist/gate.mjs` didn't run |
+| `4-partial-crash-ls` | a stand-in `gate.mjs` that writes partial JSON, then throws | `ls` ran | the stand-in exited 1 for both hooks. The log shows no stdout, because the stand-in writes with `writeSync`, which the preload doesn't see; the tests check that it prints the partial JSON |
+| `5-push` | the push allowed | git's `pre-push` hook blocked it; `origin` still had only `main` | the shell hook ran, and allowed: it can't read this payload yet (0.5.0) |
+| `6a-mcp-probe` | no allow rule | the MCP call denied: `mcp(comprende_comprende/gate_status)` needs an allow rule in headless mode | |
+| `6-mcp-gate-status` | `mcp(comprende_comprende/gate_status)` allowed | the agent called `gate_status` and summed up its answer | the server ran from the plugin's folder |
+| `7-user-hook-non-json-ls` | a user hook that prints `not-json` on exit 0 | `ls` blocked: `failed to unmarshal result … invalid value not-json` | |
+| `8-user-hook-timeout-ls` | a user hook that outlives its timeout | `ls` blocked: `command failed: signal: killed` | |
+| `9-shell-probe` | `SHELL=/bin/zsh`, and a user hook that prints its own shell | `ls` ran. The hook's shell was `sh` | |
+
+### What they show
+
+- **A failed hook no longer blocks.** Without `node`, without `gate.mjs`, or after a crash with partial output, the command ran (steps 2 to 4).
+- **Every path is the plugin's own.** The hooks ran the installed plugin's `dist/gate.mjs`, in its folder, and the MCP server its `dist/server.mjs`, through `${PLUGIN_ROOT}`. The repo's own `dist/` files never ran (all steps).
+- **The shell has to hold the output back.** Non-JSON stdout on exit 0 blocks the command too (step 7). So `node … || exit 0` alone would have let a crash's partial output through, and blocked.
+- **A timeout blocks, and no wrapper can help with it** (step 8): the shell itself is killed. In 0.4.3 the gate allows Antigravity's payload before doing any work.
+- **On macOS, Antigravity runs hooks with `sh`,** not the user's `$SHELL` (steps 2 and 9).

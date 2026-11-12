@@ -29,6 +29,7 @@ actionlint                        # the GitHub workflows
 - `hooks/hooks.json`: SessionStart (`gate.mjs session-start --from-plugin`), PreToolUse on Bash (`gate.mjs claude-hook --from-plugin`)
 - `.cursor-plugin/`: `plugin.json` (the same skill and MCP server, `hooks/cursor-hooks.json`) and `marketplace.json`. `hooks/cursor-hooks.json`: Cursor's format, plain `node "${CURSOR_PLUGIN_ROOT}/dist/gate.mjs" … --agent cursor` lines with no shell syntax, since Cursor runs hooks in PowerShell on Windows
 - `.codex-plugin/`: `plugin.json` (the same skill, and `hooks/codex-hooks.json`: Codex's format, which is Claude Code's, with plain `node "${PLUGIN_ROOT}/dist/gate.mjs" … --agent codex` lines, since Codex also runs hooks in PowerShell on Windows) and `mcp.json`, the same MCP server with a relative path, since Codex doesn't expand `${CLAUDE_PLUGIN_ROOT}` there. Codex reads this manifest before `.claude-plugin/`, and finds the plugin through `.claude-plugin/marketplace.json`
+- `.antigravity-plugin/`: `plugin.json`, Antigravity's manifest. With it, `agy plugin install` takes the plugin as it is instead of converting the Claude Code one, and reads two root files only Antigravity reads: `hooks.json` and `mcp_config.json` (the same MCP server, through `${PLUGIN_ROOT}`). Antigravity blocks a command on any non-zero exit, non-JSON stdout or timeout, so each `hooks.json` command runs `$PLUGIN_ROOT/dist/gate.mjs`, holds its output in the shell, and exits 0 whenever the gate fails, in `sh`, `cmd.exe` and both PowerShells (docs/agents.md, "Comprende 0.4.3 in Antigravity", for the rules that keep it so)
 - `.mcp.json`: the `comprende` MCP server (`dist/server.mjs`)
 - `skills/comprende/SKILL.md` plus `references/` (signals, formats, examples, memory, ownership-check)
 - `src/gate/`: the ownership gate, bundled into `dist/gate.mjs` from `cli.ts`. One module per concern, each with a header saying what it owns:
@@ -71,8 +72,9 @@ actionlint                        # the GitHub workflows
   - in code: `checkForHook` (`commands.ts`) is the one place that tells a verdict from a check that couldn't run
   - a report from another gate version is a verdict only in git's hook, which runs the repo's own gate. In the agents' hook, the plugin's copy may be newer than the repo's
   - Claude Code and Cursor read exit 2 as "block", so an accidental 2 would block every command for the user
+  - Antigravity blocks on any non-zero exit, non-JSON stdout or a timeout, so its `hooks.json` commands exit 0 from the shell whenever the gate fails, even without `node`
   - git's pre-push hook follows the same rule: it skips the branch and says so
-  - `test/agents.test.mjs` checks it for every adapter, and `test/hooks.test.mjs` for the git hook
+  - `test/agents.test.mjs` checks it for every adapter, `test/hooks.test.mjs` for the git hook, and `test/consistency.test.mjs` for Antigravity's `hooks.json`
 - **File paths are map keys.** Use the prototype-free helpers in `src/util.ts` (`dict`, `own`, `get`) and never plain `{}` lookups. A file named `__proto__` must behave like any other file.
 - **The lead never sees mistakes.** Reports and CI summaries contain only what was verified: the summary and concepts per file. They never include scores, wrong answers or attempt counts.
 - **Rules come from the base branch.** CI runs the base branch's `gate.mjs` and config, so a PR can't switch off its own check.
@@ -102,7 +104,7 @@ Every change goes through a branch, a pull request and CI. That includes one-lin
 - **Don't merge.** Report the PR link and stop. Merge only when the maintainer says so.
 - **SemVer.** While we're on 0.x, a new feature bumps the minor (0.2.0 → 0.3.0) and a fix bumps the patch (0.2.0 → 0.2.1). Separately, bump `GATE_VERSION` in `src/gate/shared.ts` only when the report format or the gate's behavior changes in a way that old copies can't handle.
 - **A release.** Users only get an update when the plugins' version changes.
-  1. On a `chore/release-X.Y.Z` branch, bump `version` in `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.codex-plugin/plugin.json` and `package.json`. `npm version X.Y.Z --no-git-tag-version` updates `package.json` and `package-lock.json` together. Before you start, check the pinned CI tools ("Pinned tools" in CONTRIBUTING.md), and bump any that are behind in their own `chore/` PR first.
+  1. On a `chore/release-X.Y.Z` branch, bump `version` in `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.codex-plugin/plugin.json`, `.antigravity-plugin/plugin.json` and `package.json`. `npm version X.Y.Z --no-git-tag-version` updates `package.json` and `package-lock.json` together. Before you start, check the pinned CI tools ("Pinned tools" in CONTRIBUTING.md), and bump any that are behind in their own `chore/` PR first.
   2. Add the CHANGELOG entry: rename `## Unreleased` to `## X.Y.Z`, and put a new empty `## Unreleased` above it.
   3. Open the PR, wait for green, and merge it once the maintainer says so.
   4. Tag the merge commit on `main`: `git switch main && git pull --ff-only && git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.

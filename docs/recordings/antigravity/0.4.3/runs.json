@@ -1,0 +1,649 @@
+[
+  {
+    "plugin": "this repo at dc8e731, installed with agy plugin install",
+    "hook_command_PreToolUse": "set \"A=$(node \"$PLUGIN_ROOT/dist/gate.mjs\" claude-hook --from-plugin; printf 'x%s' \"$?\")$(exit 0)\"; held=${1#A=}; code=${held##*x}; ok=${code%%[1-9]*}; reply=${held%x*}; printf '%s' \"${ok:+$reply}\"; exit 0"
+  },
+  {
+    "step": "1-normal-ls",
+    "folder": "/work/app",
+    "setup": "Comprende 0.4.3 on, `ls` allowed",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(ls)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "parameters": {
+          "CommandLine": "ls"
+        },
+        "state": "DONE"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "dist\tmath.js\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [
+      {
+        "mcp_server_start": "/home/user/.gemini/config/plugins/comprende/dist/server.mjs",
+        "cwd": "/home/user/.gemini/config/plugins/comprende"
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000001",
+          "conversationId": "00000000-0000-4000-8000-000000000001",
+          "cwd": "/work/app",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000001/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.\"}}\n",
+        "stderr": ""
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["claude-hook", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000001",
+          "conversationId": "00000000-0000-4000-8000-000000000001",
+          "cwd": "/work/app",
+          "hookEventName": "PreToolUse",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "stepIdx": 2,
+          "toolCall": {
+            "args": {
+              "CommandLine": "ls",
+              "IsDaemon": false,
+              "WaitMsBeforeAsync": 5000,
+              "toolSummary": "Directory listing"
+            },
+            "id": "call_00000000-0000-4000-8000-000000000002",
+            "name": "run_command"
+          },
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000001/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "markers_after": []
+  },
+  {
+    "step": "2-no-node-ls",
+    "folder": "/work/app",
+    "setup": "`node` not on PATH (PATH=/usr/bin:/bin:/usr/sbin:/sbin), `ls` allowed",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(ls)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "parameters": {
+          "CommandLine": "ls"
+        },
+        "state": "DONE"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "dist\tmath.js\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [],
+    "markers_after": [],
+    "agy_log": [
+      "JSON hook command stderr: sh: node: command not found",
+      "JSON hook command stderr: sh: node: command not found"
+    ]
+  },
+  {
+    "step": "3-no-gate-ls",
+    "folder": "/work/app",
+    "setup": "the installed plugin's dist/gate.mjs moved aside for this step, `ls` allowed",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(ls)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "parameters": {
+          "CommandLine": "ls"
+        },
+        "state": "DONE"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "dist\tmath.js\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [
+      {
+        "mcp_server_start": "/home/user/.gemini/config/plugins/comprende/dist/server.mjs",
+        "cwd": "/home/user/.gemini/config/plugins/comprende"
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 1,
+        "stdin": null,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["claude-hook", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 1,
+        "stdin": null,
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "markers_after": []
+  },
+  {
+    "step": "4-partial-crash-ls",
+    "folder": "/work/app",
+    "setup": "the installed plugin's dist/gate.mjs swapped for a stand-in that writes {\"decision\": \"de with writeSync(1, …), then throws; `ls` allowed",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(ls)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "parameters": {
+          "CommandLine": "ls"
+        },
+        "state": "DONE"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "dist\tmath.js\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [
+      {
+        "mcp_server_start": "/home/user/.gemini/config/plugins/comprende/dist/server.mjs",
+        "cwd": "/home/user/.gemini/config/plugins/comprende"
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 1,
+        "stdin": null,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["claude-hook", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 1,
+        "stdin": null,
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "markers_after": []
+  },
+  {
+    "step": "5-push",
+    "folder": "/work/app",
+    "setup": "Comprende 0.4.3 on, the push allowed",
+    "prompt": "Run exactly one shell command: git push origin feature/sum. Then reply with its full output, word for word, and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(git push origin feature/sum)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "parameters": {
+          "CommandLine": "git push origin feature/sum"
+        },
+        "state": "DONE"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "Ownership gate blocked for 'feature/sum':\n- No ownership report for branch 'feature/sum' (.learning/checks/feature%2Fsum.md). Ask your AI assistant to run the ownership check (\"check me\"), then commit the report.\n\n(Bypassing with --no-verify only delays this: CI runs the same check.)\n\nerror: failed to push some refs to '../origin.git'\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [
+      {
+        "mcp_server_start": "/home/user/.gemini/config/plugins/comprende/dist/server.mjs",
+        "cwd": "/home/user/.gemini/config/plugins/comprende"
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000003",
+          "conversationId": "00000000-0000-4000-8000-000000000003",
+          "cwd": "/work/app",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Run exactly one shell command: git push origin feature/sum. Then reply with its full output, word for word, and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000003/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.\"}}\n",
+        "stderr": ""
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["claude-hook", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000003",
+          "conversationId": "00000000-0000-4000-8000-000000000003",
+          "cwd": "/work/app",
+          "hookEventName": "PreToolUse",
+          "lastUserInput": "Run exactly one shell command: git push origin feature/sum. Then reply with its full output, word for word, and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "stepIdx": 2,
+          "toolCall": {
+            "args": {
+              "CommandLine": "git push origin feature/sum",
+              "WaitMsBeforeAsync": 10000,
+              "toolSummary": "Git push"
+            },
+            "id": "call_00000000-0000-4000-8000-000000000004",
+            "name": "run_command"
+          },
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000003/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "markers_after": [],
+    "checked_after": {
+      "command": "git ls-remote --heads origin",
+      "heads": ["refs/heads/main"]
+    }
+  },
+  {
+    "step": "6a-mcp-probe",
+    "folder": "/work/app",
+    "setup": "Comprende on, with an earlier draft of the hook command, no allow rule: to learn the MCP permission's name",
+    "prompt": "Call the comprende MCP server's gate_status tool for the repository in the current folder, then tell me in one line what it returned. Don't run any shell commands.",
+    "agy_flags": ["-p", "<prompt>", "--output-format", "stream-json", "--print-timeout", "300s"],
+    "tool_calls": [
+      {
+        "tool": "read_file",
+        "parameters": {
+          "Path": "/home/user/.gemini/antigravity-cli/mcp/comprende_comprende/gate_status.json"
+        },
+        "state": "DONE"
+      },
+      {
+        "tool": "call_mcp_tool",
+        "parameters": {
+          "Arguments": {
+            "repo_root": "/work/app"
+          },
+          "ServerName": "comprende_comprende",
+          "ToolName": "gate_status"
+        },
+        "state": "ERROR",
+        "error": "permission check failed for mcp \"comprende_comprende/gate_status\": user denied permission for mcp(comprende_comprende/gate_status)\nDo not attempt to circumvent this denial by rephrasing the command, using alternative tools/scripts (e.g. python, sh, curl), or accessing the same target resource. Proceed without performing this action."
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "",
+      "denied_actions": [
+        {
+          "action": "mcp",
+          "display_name": "CallMcpTool"
+        }
+      ]
+    },
+    "agy_stderr": "jetski: no output produced — a tool required the \"mcp\" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. mcp(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.\n",
+    "gate_runs": [
+      {
+        "mcp_server_start": "/home/user/.gemini/config/plugins/comprende/dist/server.mjs",
+        "cwd": "/home/user/.gemini/config/plugins/comprende"
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000005",
+          "conversationId": "00000000-0000-4000-8000-000000000005",
+          "cwd": "/work/app",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Call the comprende MCP server's gate_status tool for the repository in the current folder, then tell me in one line what it returned. Don't run any shell commands.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000005/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.\"}}\n",
+        "stderr": ""
+      }
+    ],
+    "markers_after": []
+  },
+  {
+    "step": "6-mcp-gate-status",
+    "folder": "/work/app",
+    "setup": "Comprende 0.4.3 on, the gate_status tool allowed",
+    "prompt": "Call the comprende MCP server's gate_status tool for the repository in the current folder, then tell me in one line what it returned. Don't run any shell commands.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"mcp(comprende_comprende/gate_status)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "read_file",
+        "parameters": {
+          "Path": "/home/user/.gemini/antigravity-cli/mcp/comprende_comprende/gate_status.json"
+        },
+        "state": "DONE"
+      },
+      {
+        "tool": "call_mcp_tool",
+        "parameters": {
+          "Arguments": {
+            "repo_root": "/work/app"
+          },
+          "ServerName": "comprende_comprende",
+          "ToolName": "gate_status"
+        },
+        "state": "DONE",
+        "output": "Ownership check — branch feature/sum vs origin/main (mode: required)\nReport: .learning/checks/feature%2Fsum.md (not yet saved)\n- math.js [new]\nSmall change (1 changed line): one question is enough, and the summary needs at least 30 characters."
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "The `gate_status` tool returned that the ownership check for branch `feature/sum` vs `origin/main` (mode: required) is not yet saved, showing one new file (`math.js`) and classifying it as a small change (1 changed line) requiring one question.\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [
+      {
+        "mcp_server_start": "/home/user/.gemini/config/plugins/comprende/dist/server.mjs",
+        "cwd": "/home/user/.gemini/config/plugins/comprende"
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000006",
+          "conversationId": "00000000-0000-4000-8000-000000000006",
+          "cwd": "/work/app",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Call the comprende MCP server's gate_status tool for the repository in the current folder, then tell me in one line what it returned. Don't run any shell commands.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000006/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.\"}}\n",
+        "stderr": ""
+      }
+    ],
+    "markers_after": []
+  },
+  {
+    "step": "7-user-hook-non-json-ls",
+    "folder": "/work/app",
+    "setup": "plus a user hook in ~/.gemini/config/hooks.json that prints not-json and exits 0; `ls` allowed (Comprende installed with an earlier draft of its hook command; the user hook ran first)",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(ls)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "parameters": {
+          "CommandLine": "ls"
+        },
+        "state": "ERROR",
+        "error": "failed to unmarshal result from hook jsonhook__probe-nonjson_PreToolUse_0_0 via protojson: not-json: proto: syntax error (line 1:1): invalid value not-json"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "Encountered error in tool execution: failed to unmarshal result from hook jsonhook__probe-nonjson_PreToolUse_0_0 via protojson: not-json: proto: syntax error (line 1:1): invalid value not-json\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [
+      {
+        "mcp_server_start": "/home/user/.gemini/config/plugins/comprende/dist/server.mjs",
+        "cwd": "/home/user/.gemini/config/plugins/comprende"
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000007",
+          "conversationId": "00000000-0000-4000-8000-000000000007",
+          "cwd": "/work/app",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000007/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.\"}}\n",
+        "stderr": ""
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["claude-hook", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000007",
+          "conversationId": "00000000-0000-4000-8000-000000000007",
+          "cwd": "/work/app",
+          "hookEventName": "PreToolUse",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "stepIdx": 2,
+          "toolCall": {
+            "args": {
+              "CommandLine": "ls",
+              "WaitMsBeforeAsync": 5000,
+              "toolSummary": "Run ls command"
+            },
+            "id": "call_00000000-0000-4000-8000-000000000008",
+            "name": "run_command"
+          },
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000007/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "markers_after": []
+  },
+  {
+    "step": "8-user-hook-timeout-ls",
+    "folder": "/work/app",
+    "setup": "plus a user hook that sleeps 8 seconds with a 2-second timeout; `ls` allowed (Comprende installed with an earlier draft of its hook command; the user hook ran first)",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(ls)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "parameters": {
+          "CommandLine": "ls"
+        },
+        "state": "ERROR",
+        "error": "JSON hook \"jsonhook__probe-timeout_PreToolUse_0_0\" failed: command failed: signal: killed, stderr:"
+      },
+      {
+        "tool": "read_file",
+        "parameters": {
+          "Path": "/home/user/.gemini/settings.json"
+        },
+        "state": "ERROR",
+        "error": "permission check failed for read_file \"/home/user/.gemini/settings.json\": user denied permission for read_file(/home/user/.gemini/settings.json)\nDo not attempt to circumvent this denial by rephrasing the command, using alternative tools/scripts (e.g. python, sh, curl), or accessing the same target resource. Proceed without performing this action."
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "",
+      "denied_actions": [
+        {
+          "action": "read_file",
+          "display_name": "ReadFile"
+        }
+      ]
+    },
+    "agy_stderr": "jetski: no output produced — a tool required the \"read_file\" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. read_file(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.\n",
+    "gate_runs": [
+      {
+        "mcp_server_start": "/home/user/.gemini/config/plugins/comprende/dist/server.mjs",
+        "cwd": "/home/user/.gemini/config/plugins/comprende"
+      },
+      {
+        "script": "/home/user/.gemini/config/plugins/comprende/dist/gate.mjs",
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000009",
+          "conversationId": "00000000-0000-4000-8000-000000000009",
+          "cwd": "/work/app",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000009/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.\"}}\n",
+        "stderr": ""
+      }
+    ],
+    "markers_after": []
+  },
+  {
+    "step": "9-shell-probe",
+    "folder": "/work/app",
+    "setup": "SHELL=/bin/zsh in agy's environment, plus a user hook that prints its own shell to stderr; `ls` allowed (Comprende installed with an earlier draft of its hook command; the user hook ran first)",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(ls)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "parameters": {
+          "CommandLine": "ls"
+        },
+        "state": "DONE"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "dist\tmath.js\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [],
+    "markers_after": [],
+    "agy_log": ["JSON hook command stderr: probe-shell: sh SHELL=/bin/zsh"]
+  }
+]

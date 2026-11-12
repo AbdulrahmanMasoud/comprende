@@ -1,0 +1,24 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "comprende",
+  "displayName": "Comprende",
+  "version": "0.4.2",
+  "description": "Proof of understanding for AI-written code. The agent explains the code it writes, briefly and only where it matters, and an optional ownership gate makes sure the developer who ships a change actually understands it.",
+  "author": {
+    "name": "Abdulrahman Masoud",
+    "url": "https://github.com/AbdulrahmanMasoud"
+  },
+  "homepage": "https://github.com/AbdulrahmanMasoud/comprende",
+  "repository": "https://github.com/AbdulrahmanMasoud/comprende",
+  "license": "MIT",
+  "keywords": [
+    "proof-of-understanding",
+    "ai-code",
+    "learning",
+    "code-explanation",
+    "onboarding",
+    "code-review",
+    "ownership",
+    "teams"
+  ]
+}

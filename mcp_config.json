@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "comprende": {
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/dist/server.mjs"]
+    }
+  }
+}

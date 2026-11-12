@@ -190,7 +190,7 @@ The end of "Clean code" in [CLAUDE.md](CLAUDE.md) lists where today's code doesn
 | --- | --- |
 | `Lint, typecheck and build` | `npm run typecheck`, `npm run lint`, and that `dist/` matches a fresh build |
 | `Tests (ubuntu-latest, Node 20)` … `Tests (macos-latest, Node 24)` | `npm test` on Ubuntu and macOS, Node 20, 22 and 24 |
-| `Consistency` | the versions agree (`node tools/release.mjs check`, including `.cursor-plugin/plugin.json` and `.codex-plugin/plugin.json`), `claude plugin validate` on both Claude Code manifests, `actionlint` on the workflows. Cursor and Codex have no validator we can run in CI, so the tests in `consistency.test.mjs` check their manifests, and that each tool finds only its own |
+| `Consistency` | the versions agree (`node tools/release.mjs check`, including `.cursor-plugin/plugin.json`, `.codex-plugin/plugin.json` and `.antigravity-plugin/plugin.json`), `claude plugin validate` on both Claude Code manifests, `actionlint` on the workflows. Cursor, Codex and Antigravity have no validator we can run in CI, so the tests in `consistency.test.mjs` check their manifests, and that each tool finds only its own |
 
 Branch protection requires every one of these jobs, by name. If you rename one, update the ruleset in the repo settings in the same PR.
 
@@ -325,7 +325,7 @@ The consistency test runs the same commands, so the demo can't drift from what t
 
 `plugin.json` sets `version`, so people who installed the plugin only get an update when it changes. Users update with `/plugin marketplace update comprende`, or by turning on auto-update for this marketplace in `/plugin`.
 
-1. **Bump the version** on a `chore/release-X.Y.Z` branch, in `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.codex-plugin/plugin.json` and `package.json`. `npm version X.Y.Z --no-git-tag-version` updates `package.json` and `package-lock.json` together. Before you start, check the [pinned CI tools](#pinned-tools), and bump any that are behind in their own `chore/` PR first.
+1. **Bump the version** on a `chore/release-X.Y.Z` branch, in `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.codex-plugin/plugin.json`, `.antigravity-plugin/plugin.json` and `package.json`. `npm version X.Y.Z --no-git-tag-version` updates `package.json` and `package-lock.json` together. Before you start, check the [pinned CI tools](#pinned-tools), and bump any that are behind in their own `chore/` PR first.
 2. **Add the CHANGELOG entry:** rename `## Unreleased` to `## X.Y.Z`, and put a new empty `## Unreleased` above it.
 3. **Open the PR.** The maintainer merges it once CI is green. The Consistency job runs `node tools/release.mjs check`, so a missed version file fails there.
 4. **Tag the merge commit on `main`:**
