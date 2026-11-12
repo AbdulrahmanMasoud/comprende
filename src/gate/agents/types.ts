@@ -5,7 +5,7 @@
 import type { ExistingFile } from "../files.js";
 
 /** The tools the gate has an adapter for. */
-export type AgentId = "claude-code" | "cursor" | "codex";
+export type AgentId = "claude-code" | "cursor" | "codex" | "antigravity";
 
 /** The environment a hook runs with, read-only. */
 export type HookEnv = Readonly<Record<string, string | undefined>>;
@@ -56,6 +56,12 @@ export interface Agent {
    *  repo (session-start.ts). Leave it out for a tool that runs an installed
    *  plugin's hooks without asking. */
   readonly pluginNotRunningHint?: string;
+
+  /** True when this tool's own plugin brings the always-on instruction as a rule it loads
+   *  whenever the plugin is enabled (Antigravity's rules/AGENTS.md). The session start from
+   *  that plugin's hook file (--agent) then only says the hooks ran, so the instruction
+   *  comes once (session-start.ts). */
+  readonly alwaysOnFromRule?: boolean;
 
   /** The repo-level hook files this tool runs, most specific first; `install`
    *  writes them. `alwaysRuns` is false for a file the tool runs only while a

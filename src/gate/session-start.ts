@@ -24,19 +24,29 @@ const nodeNote = (app: string) =>
   `Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of ${app}.`;
 
 // How the line a plugin's session start always gives begins. A session without it
-// had no plugin hooks run: the skill and the repo hook's note look for it.
+// had no plugin hooks run: the skill and the repo hook's note look for it. So only
+// a hook may send it, never a rule a tool loads without running hooks.
 export const PLUGIN_LINE_START = "Comprende is installed";
 
-// Every session, so explanations don't depend on the request sounding like a
-// wish to learn. Fixed text on purpose: nothing read from the repo goes into it.
-export const ALWAYS_ON =
-  `${PLUGIN_LINE_START}. Whenever you write or change code in this session, follow the comprende skill: ` +
+// The always-on instruction: every session, so explanations don't depend on the
+// request sounding like a wish to learn. Fixed text on purpose: nothing read from
+// the repo goes into it. Antigravity's plugin ships it as its rule, rules/AGENTS.md.
+export const ALWAYS_ON_RULE =
+  "Whenever you write or change code in this session, follow the comprende skill: " +
   "explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
+
+/** The always-on line: the instruction, after the words that say the hooks ran. */
+export const ALWAYS_ON = `${PLUGIN_LINE_START}. ${ALWAYS_ON_RULE}`;
+
+// Where the plugin's rule already gives the instruction, the session start only
+// says the hooks ran, so the instruction comes once and the skill still knows.
+export const HOOKS_RUN_LINE = `${PLUGIN_LINE_START}, and its hooks run in this session.`;
 
 // COMPRENDE_QUIET=1 still sends a line, not nothing: the skill now loads for any
 // code change, so it needs telling to stay quiet, and a session with no note at
 // all reads to the skill as hooks that didn't run.
-export const QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
+// "Replaces": in Antigravity, the plugin's rule still gives the always-on instruction.
+export const QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode, which replaces any always-on Comprende instruction: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
 
 /** What the repo's hook file says at session start, in a tool that can skip the
  *  plugin's hooks without a word: how the agent tells, and what it tells the user.
@@ -55,8 +65,8 @@ const untrustedGateNote = (agent: Agent): Record<Exclude<GateCopyDifference, "no
 });
 
 /** SessionStart hook: the stdout that adds context for the agent, in the
- *  adapter's format. A plugin's run gives the always-on line and, unless the
- *  repo's own hook file starts the session, the gate's context. A run from the
+ *  adapter's format. A plugin's run gives the always-on line (pluginLine) and,
+ *  unless the repo's own hook file starts the session, the gate's context. A run from the
  *  repo's hook file gives the gate's context, and the tool's note for a plugin
  *  that isn't running, if it has one. Never throws — a session must always start. */
 export function sessionStart(stdinText: string, source: HookSource, requested: string | null): string {
@@ -70,9 +80,18 @@ export function sessionStart(stdinText: string, source: HookSource, requested: s
     lines.push(
       `Comprende is running on Node.js ${node}, which is too old. ${nodeNote((agent?.names ?? UNKNOWN_AGENT_NAMES).app)}`,
     );
-  if (source === "plugin") lines.push(process.env.COMPRENDE_QUIET === "1" ? QUIET_MODE : ALWAYS_ON);
+  if (source === "plugin") lines.push(pluginLine(agent, requested));
   if (run) lines.push(...gatedRepoContext(run, payload));
   return sessionContextReply(agent, lines);
+}
+
+/** The line a plugin's session start always gives: the always-on line, or the quiet
+ *  one. Where the plugin brings the instruction as a rule (alwaysOnFromRule), only the
+ *  words that say the hooks ran, and only from our own hook file, which passes
+ *  --agent: a copy converted from the Claude Code plugin may come without the rule. */
+function pluginLine(agent: Agent | null, requested: string | null): string {
+  if (process.env.COMPRENDE_QUIET === "1") return QUIET_MODE;
+  return agent?.alwaysOnFromRule && requested === agent.id ? HOOKS_RUN_LINE : ALWAYS_ON;
 }
 
 /** In a repo that uses the gate: tell the agent the repo is gated so the

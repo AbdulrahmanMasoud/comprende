@@ -83,11 +83,11 @@ Before opening a PR, get a review from someone who hasn't seen the work. That ca
 
 ### Adapters
 
-Code that's specific to one AI tool (Claude Code, Cursor, Codex, and later Antigravity) lives in one adapter module, behind a small interface that every adapter implements. The same goes for git platforms (GitHub, and later GitLab).
+Code that's specific to one AI tool (Claude Code, Cursor, Codex, Antigravity) lives in one adapter module, behind a small interface that every adapter implements. The same goes for git platforms (GitHub, and later GitLab).
 
 ```
 src/gate/agents/      types.ts (the Agent interface), index.ts (the registry and the resolve step),
-                      one module per AI tool: claude-code.ts, cursor.ts, codex.ts, plus what they share:
+                      one module per AI tool: claude-code.ts, cursor.ts, codex.ts, antigravity.ts, plus what they share:
                       claude-format.ts (the payload), the repo hook files claude-settings.ts,
                       cursor-hooks.ts and codex-hooks.ts (with claude-format-hooks.ts and
                       compact-hooks-json.ts), and gate-command.ts (does a hook file's command run the gate)
@@ -119,7 +119,8 @@ The interface, with a comment on each member, is in `src/gate/agents/types.ts`. 
    - `names` and `pluginUpdateHint`: how messages name the tool, and how its users update the plugin. The core's own text never names a tool.
    - `projectHookFiles`: the repo-level files that register the gate's hook, most specific first. Mark a file `alwaysRuns: false` when the tool runs it only while a setting is on: no other copy steps aside for it.
    - `eventId`: the id the tool gives a tool call or a session, the same for every hook on it. Copies of the gate that can't step aside for each other claim it, so only one speaks. Return null when one session can't run two copies.
-   - `formatDecision` and `formatSessionContext`: only if the tool doesn't accept the defaults (exit 0 or exit 2 with stderr, and `hookSpecificOutput.additionalContext`).
+   - `formatDecision` and `formatSessionContext`: only if the tool doesn't accept the defaults (exit 0 or exit 2 with stderr, and `hookSpecificOutput.additionalContext`). Antigravity's are an example: a JSON deny on exit 0, and an injected system message.
+   - `alwaysOnFromRule`: only if the tool's own plugin ships the always-on instruction as a rule the tool loads without hooks (Antigravity's `rules/AGENTS.md`). Its session start then only says the hooks ran. The rule must never say "Comprende is installed", which the skill reads as "the hooks ran".
 3. **Register it in `src/gate/agents/index.ts`.** In `AGENTS`, a tool that runs another tool's hook commands goes before that tool. `PROJECT_HOOK_FILES`, and from it `GATE_FILES`, pick up its files.
 4. **Its plugin files,** if it has plugins:
    - a manifest in `.<tool>-plugin/plugin.json`, never at the root, where several tools would read it, plus its version in `VERSION_FIELDS` (`tools/release.mjs`)

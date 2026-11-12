@@ -56,7 +56,8 @@ class Blocked extends Error {}
  *  the memory server, for the run that must fall back to save --input. */
 function pluginCopy(/** @type {string} */ name, { memoryServer = true } = {}) {
   const copy = join(RUN, name);
-  for (const p of [".claude-plugin", ".cursor-plugin", "dist", "hooks", "skills", ".mcp.json"])
+  // rules/ too: Antigravity's always-on rule sits in the same repo, and Cursor must not load it.
+  for (const p of [".claude-plugin", ".cursor-plugin", "dist", "hooks", "skills", "rules", ".mcp.json"])
     cpSync(join(REPO, p), join(copy, p), { recursive: true });
   if (!memoryServer) {
     const manifest = join(copy, ".cursor-plugin", "plugin.json");
@@ -267,9 +268,16 @@ function main() {
     "1-session-start",
     demo.app,
     home,
-    "Without running any tools: quote, word for word, the context you were given at the start of this session about Comprende and about an ownership gate. If there was none, say NONE.",
+    "Without running any tools: quote, word for word, every instruction or message in your context about Comprende or an ownership gate, each on its own line, and say where each came from (a rule, a hook's session start, or the user). If there was none, say NONE.",
   );
-  report("session start: the always-on line", /Comprende is installed/.test(start.reply));
+  // Once: from the session start, not also from Antigravity's rules/AGENTS.md, which Cursor
+  // discovers too. Only the instruction is counted: the agent may repeat "Comprende is
+  // installed" while it says where each line came from.
+  report(
+    "session start: the always-on line, once",
+    /Comprende is installed/.test(start.reply) &&
+      (start.reply.match(/Whenever you write or change code in this session/g) ?? []).length === 1,
+  );
   report(
     "session start: the gate's message",
     /ownership gate/i.test(start.reply) && /mode: required/.test(start.reply),

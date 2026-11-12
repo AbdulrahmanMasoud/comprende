@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Antigravity checks a push** (part of [#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)). An Antigravity adapter reads Antigravity's own hook payload, so an unverified `git push` from the agent is blocked with a JSON deny, and the agent sees why. The gate's note in a gated repo now reaches the agent, as a system message. The always-on instruction comes from a plugin rule, `rules/AGENTS.md`, once, and the session start says the hooks ran. Tested in the Antigravity CLI ([recording](docs/recordings/antigravity/#050-the-adapter)).
+  - `install` writes no repo hook file for Antigravity: a repo's `.agents/hooks.json` would run alongside the plugin's hooks, and check each command twice.
+  - With `COMPRENDE_QUIET=1`, Antigravity's session start sends the quiet line, but the plugin's rule still loads. Which one the agent follows isn't tested.
+
 ## 0.4.3
 
 - **Antigravity: a hook that fails no longer blocks every command.** Antigravity blocks a command when a hook exits non-zero or prints something other than JSON (nothing is fine), though its docs say a failed hook fails open. Comprende's hooks exit 1 when they can't run, which is "skip this hook" in Claude Code. So in Antigravity, a crash, or a Node.js that can't load `gate.mjs`, would have blocked every command. Found in the first signed-in run ([recording](docs/recordings/antigravity/)).

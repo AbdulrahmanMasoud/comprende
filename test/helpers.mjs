@@ -128,6 +128,7 @@ export const gate = {
     gjson(["protect", "--json", ...opts({ repo, apply, approvals, "no-code-owners": !codeOwners })], undefined, env),
   reportRelpath: (branch) => testFn("report_relpath", branch),
   allowReply: (agentId) => testFn("allow_reply", agentId),
+  denyReply: (agentId, reason) => testFn("deny_reply", agentId, reason),
   readReport: (root, branch, rev = null) => testFn("read_report", root, branch, rev),
   isPushCommand: (cmd) => testFn("is_push_command", cmd),
   isPlumbing: (path, mode = "100644") => testFn("is_plumbing", path, mode),

@@ -122,15 +122,15 @@ Windows as a whole is tracked in [#10](https://github.com/AbdulrahmanMasoud/comp
 
 ## What works where
 
-| | Claude Code | Cursor (0.3.0) | Codex (0.4.0) |
-|---|---|---|---|
-| The skill (explain as you build) | yes | yes, the same `skills/` (tested in the CLI) | yes, the same `skills/` (tested in the CLI) |
-| Memory (the MCP server) | yes | yes, all 10 tools, once the server is approved (tested in the CLI) | yes, all 10 tools, from its own MCP config (tested in the CLI) |
-| The always-on line | at session start | at session start, from the plugin's `sessionStart` hook (tested in the CLI) | at session start, once the plugin's hooks are trusted in `/hooks` (tested in the CLI). After an update, the repo's session start says they need trusting again (tested in the CLI) |
-| The push guard (the agent's `git push`) | the plugin, or the repo's `.claude/settings.json` | the plugin, or the repo's `.cursor/hooks.json`. Also `.claude/settings.json` and an imported Claude Code plugin, while Third-Party Imports is on (tested in the CLI) | the plugin, or the repo's `.codex/hooks.json`, each once trusted. The repo's keeps its trust across updates (tested in the CLI) |
-| The git `pre-push` hook | installed by the plugin at session start | the same (tested in unit tests, not in the CLI run) | the same, once the hooks are trusted (tested in the CLI) |
-| CI | the same check: it doesn't depend on the tool | the same | the same |
-| Windows | experimental: hooks run in Git Bash | experimental: hooks run in PowerShell, which turns a block's exit 2 into 1, so the push guard fails open (tested in `pwsh` in CI, not on Windows; [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)) | the same as Cursor |
+| | Claude Code | Cursor (0.3.0) | Codex (0.4.0) | Antigravity (0.5.0) |
+|---|---|---|---|---|
+| The skill (explain as you build) | yes | yes, the same `skills/` (tested in the CLI) | yes, the same `skills/` (tested in the CLI) | yes, the same `skills/` (tested in the CLI) |
+| Memory (the MCP server) | yes | yes, all 10 tools, once the server is approved (tested in the CLI) | yes, all 10 tools, from its own MCP config (tested in the CLI) | yes, all 10 tools, from its own `mcp_config.json`. In a headless run, each tool needs an allow rule (tested in the CLI, one call) |
+| The always-on line | at session start | at session start, from the plugin's `sessionStart` hook (tested in the CLI) | at session start, once the plugin's hooks are trusted in `/hooks` (tested in the CLI). After an update, the repo's session start says they need trusting again (tested in the CLI) | the instruction from the plugin's rule, `rules/AGENTS.md`, and a session-start line that the hooks run (tested in the CLI) |
+| The push guard (the agent's `git push`) | the plugin, or the repo's `.claude/settings.json` | the plugin, or the repo's `.cursor/hooks.json`. Also `.claude/settings.json` and an imported Claude Code plugin, while Third-Party Imports is on (tested in the CLI) | the plugin, or the repo's `.codex/hooks.json`, each once trusted. The repo's keeps its trust across updates (tested in the CLI) | the plugin only: a JSON deny (tested in the CLI). No repo hook file, which would run alongside the plugin's |
+| The git `pre-push` hook | installed by the plugin at session start | the same (tested in unit tests, not in the CLI run) | the same, once the hooks are trusted (tested in the CLI) | installed by the plugin at session start, as in the other tools (not tested in Antigravity) |
+| CI | the same check: it doesn't depend on the tool | the same | the same | the same |
+| Windows | experimental: hooks run in Git Bash | experimental: hooks run in PowerShell, which turns a block's exit 2 into 1, so the push guard fails open (tested in `pwsh` in CI, not on Windows; [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10)) | the same as Cursor | experimental: which shell runs hooks isn't documented. The hook commands exit 0 in `cmd.exe` and both PowerShells, and check nothing there (tested in CI, not in Antigravity) |
 
 Each push is checked once, whatever mix of hook files and plugins is present ([Step-aside rules](#step-aside-rules)).
 
@@ -294,18 +294,28 @@ Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is
 - **No logo yet.** The icon is in `.claude-plugin/`, and Antigravity's Marketplace bundle leaves out dot-folders. Without it, `agy plugin validate` warns only that `.mcp.json` and `hooks/hooks.json` are never loaded, which is right: they're Claude Code's.
 - **Windows:** which shell Antigravity runs hooks in there isn't documented, and its Windows build names both `cmd.exe` and PowerShell. So the command has no `&&` or `||`, and it exits 0 with nothing on stdout in `cmd.exe`, PowerShell 7 and Windows PowerShell 5.1, with or without `node` (tested in the Windows workflow, not in Antigravity). In `cmd.exe` it's one `set "A=…"` and the gate doesn't run, also when quoted the way Go's `os/exec` quotes an argument. In PowerShell, `$PLUGIN_ROOT` is an unset PowerShell variable, so no gate runs, and `$(exit 0)` ends the script with 0. So on Windows, 0.4.3's hooks never block, and never check either: git's `pre-push` hook and CI do. The converted command before 0.4.3 used `||`, which Windows PowerShell 5.1 can't parse, so if Antigravity runs hooks there, that one failed on every command.
 
+### Comprende 0.5.0 in Antigravity
+
+0.5.0 gives Antigravity its own adapter, `src/gate/agents/antigravity.ts` ([Antigravity: the design](#antigravity-the-design), [recording](recordings/antigravity/#050-the-adapter)):
+
+- **The push check works.** The plugin's hook passes `--agent antigravity`, the gate reads `toolCall.args.CommandLine`, and an unverified push gets a JSON deny on exit 0. Antigravity blocks the command and the agent sees the reason, `tool call denied by pre-tool hook: Blocked by the ownership gate: …`. Git's `pre-push` hook never ran: the push didn't start (tested). Any other command gets an empty allow (tested).
+- **The gate's note reaches the agent,** as `injectSteps` with a system message, which Antigravity shows the agent as "injected by a SessionStart hook" (tested). Outside a gated repo, it sends only the line that says the hooks run (tested).
+- **The always-on instruction comes from a plugin rule,** `rules/AGENTS.md`, which Antigravity loads whenever the plugin is enabled, hooks or not. The rule leaves out the words "Comprende is installed": the skill reads them as "the hooks ran", and a rule also loads where hooks don't run (Windows, maybe the IDE, `agy` before 1.5.3). So the session start sends only `Comprende is installed, and its hooks run in this session.`, and the agent gets the instruction once. That's only for our own hook file, which passes `--agent antigravity`: a copy converted from the Claude Code plugin may come without the rule, so it gets the full line. With `COMPRENDE_QUIET=1`, the session start sends the quiet line, and the rule still loads; which one the agent follows is untested.
+- **No `.agents/hooks.json`:** a repo file would run the gate a second time on every command (tested). See [Antigravity: the design](#antigravity-the-design).
+- **The hook commands** stay 0.4.3's, so a failed gate still lets the command run, in every shell.
+
 ### Hooks
 
 | Question | Answer | Source |
 |---|---|---|
 | Events | `SessionStart`, `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop` | Docs: [hooks](https://antigravity.google/docs/hooks/) |
-| Where | The project's `.agents/hooks.json`, the user's `~/.gemini/config/hooks.json`, and a plugin's `hooks.json` at its root. Not `hooks/hooks.json`. A plugin's root `hooks.json` counts only when the plugin has its own manifest: for a Claude Code plugin, `agy plugin install` writes the converted hooks over it. Project hooks need the workspace trusted | Docs: [hooks](https://antigravity.google/docs/hooks/), [changelog](https://antigravity.google/docs/changelog/) ("a hooks/hooks.json file (which isn't read)"). Tested (0.4.3: the root `hooks.json`) |
+| Where | The project's `.agents/hooks.json`, the user's `~/.gemini/config/hooks.json`, and a plugin's `hooks.json` at its root. Not `hooks/hooks.json`. A plugin's root `hooks.json` counts only when the plugin has its own manifest: for a Claude Code plugin, `agy plugin install` writes the converted hooks over it. Project hooks need the workspace trusted, per the docs. In a headless run, a repo's `.agents/hooks.json` ran with no trust step, in the `.agents/` folder, and alongside the plugin's hooks on the same events | Docs: [hooks](https://antigravity.google/docs/hooks/), [changelog](https://antigravity.google/docs/changelog/) ("a hooks/hooks.json file (which isn't read)"). Tested (0.4.3: the root `hooks.json`. 0.5.0: `.agents/hooks.json`) |
 | The file's shape | Named groups: `{"<group>": {"PreToolUse": [{"matcher": "run_command", "hooks": [{"type": "command", "command": "…", "timeout": 30}]}]}}`. `SessionStart` takes a flat list. Each hook has an `enabled` key | Docs: [build plugins](https://antigravity.google/docs/build-plugins/). Tested (the converted plugin's `hooks.json`) |
 | Input on stdin | camelCase. Both events we saw (`SessionStart`, `PreToolUse`) have `hookEventName`, `conversationId`, `cwd`, `workspacePaths` (a list), `transcriptPath`, `artifactDirectoryPath`, `modelName` and `lastUserInput`. `PreToolUse` adds `stepIdx` and `toolCall: {id, name, args}`. For `run_command`, `args` held `CommandLine`, `WaitMsBeforeAsync` and `toolSummary`. The docs also list `Cwd`, which the agent didn't set in our runs. The docs don't list `cwd`, `hookEventName` or `toolCall.id` | Tested (Step 0). Docs: [hooks](https://antigravity.google/docs/hooks/) |
-| The reply | Exit 0, and a JSON object on stdout with `decision`: `allow`, `auto_approve`, `deny`, `ask`, `force_ask` or `deny_unless_prior_grant`, plus an optional `reason` | Docs: [hooks](https://antigravity.google/docs/hooks/), [build plugins](https://antigravity.google/docs/build-plugins/) |
+| The reply | Exit 0, and a JSON object on stdout with `decision`: `allow`, `auto_approve`, `deny`, `ask`, `force_ask` or `deny_unless_prior_grant`, plus an optional `reason`. `{"decision": "deny", "reason": …}` blocks the command, and the agent sees `tool call denied by pre-tool hook: <reason>`. `{"decision": "allow"}` doesn't skip Antigravity's own permission check: it means the same as an empty reply. `auto_approve` would skip it, so the gate never sends it | Docs: [hooks](https://antigravity.google/docs/hooks/), [build plugins](https://antigravity.google/docs/build-plugins/). Tested (0.5.0: `deny` and `allow`) |
 | Exit codes | Any non-zero exit blocks the tool call: exit 1 and exit 2 both ended it with "JSON hook … failed: command failed: exit status N", and the command didn't run. The docs say a non-zero exit is "logged as a hook execution error and ignored (failing open)". It isn't, in `agy` 1.5.5 | Tested (Step 0, with test hooks in `~/.gemini/config/hooks.json`). Docs: [build plugins](https://antigravity.google/docs/build-plugins/) |
 | Empty or non-JSON stdout | Empty stdout on exit 0 doesn't block: the command goes on to the permission check. A `SessionStart` reply with a field Antigravity doesn't know is rejected whole (strict parsing), logged as failed, and ignored. So a reply must carry no extra fields. Non-JSON stdout on exit 0 from `PreToolUse` blocks the command: `failed to unmarshal result … invalid value`. Not documented: the changelog only mentions "safely handling empty decision strings" | Tested (Step 0: empty, and the session start. 0.4.3: non-JSON, with a test hook) |
-| Session context | `injectSteps`. The two pages differ: `[{"userMessage": "…"}]` on one, and "the same schema as PreInvocation" (`systemMessage`) on the other. Claude Code's `hookSpecificOutput` is rejected: `unknown field "hookSpecificOutput"`, in Antigravity's log only, and the agent gets nothing | Tested (Step 0: `hookSpecificOutput`). Docs: [build plugins](https://antigravity.google/docs/build-plugins/), [hooks](https://antigravity.google/docs/hooks/). Unknown which `injectSteps` shape works |
+| Session context | `injectSteps`. The two pages differ: `[{"userMessage": "…"}]` on one, and "the same schema as PreInvocation" (`systemMessage`) on the other. Claude Code's `hookSpecificOutput` is rejected: `unknown field "hookSpecificOutput"`, in Antigravity's log only, and the agent gets nothing. All three `injectSteps` shapes reach the agent, each as a different step: `{"systemMessage": {"systemMessage": …}}` as a system message "injected by a SessionStart hook", `{"userMessage": …}` as a request from the user, and `{"ephemeralMessage": …}` as a transient message. The gate uses the system message | Tested (Step 0: `hookSpecificOutput`. 0.5.0: the three shapes). Docs: [build plugins](https://antigravity.google/docs/build-plugins/), [hooks](https://antigravity.google/docs/hooks/) |
 | Plugin hooks' folder and environment | They run in the plugin's folder, with `PLUGIN_ROOT`, `PLUGIN_DATA` and `ANTIGRAVITY_CONVERSATION_ID` set. The changelog says CLI 1.5.3 added the first two | Tested (Step 0). Docs: [build plugins](https://antigravity.google/docs/build-plugins/), [changelog](https://antigravity.google/docs/changelog/) |
 | A feature flag | None. Project hooks, skills and MCP servers need the workspace trusted | Docs: [hooks](https://antigravity.google/docs/hooks/), [changelog](https://antigravity.google/docs/changelog/) |
 | Timeout | 30 seconds by default, per hook. A hook that outlives it is killed, and that blocks the command: `command failed: signal: killed` | Docs: [hooks](https://antigravity.google/docs/hooks/). Tested (0.4.3, with a test hook) |
@@ -329,9 +339,9 @@ Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is
 
 | Question | Answer | Source |
 |---|---|---|
-| Where skills are found | `.agents/skills/` (and the older `.agent/skills/`), `~/.gemini/config/skills/`, and plugins' `skills/`. Gemini CLI's `.gemini/skills/` has to be moved | Docs: [skills](https://antigravity.google/docs/skills/), [Gemini CLI migration](https://antigravity.google/docs/cli/gcli-migration/). Unknown by test: needs a later signed-in run |
+| Where skills are found | `.agents/skills/` (and the older `.agent/skills/`), `~/.gemini/config/skills/`, and plugins' `skills/`. Gemini CLI's `.gemini/skills/` has to be moved. The plugin's skill loaded on a code change: the agent read its `SKILL.md` first | Docs: [skills](https://antigravity.google/docs/skills/), [Gemini CLI migration](https://antigravity.google/docs/cli/gcli-migration/). Tested (0.5.0: the plugin's skill) |
 | Loaded automatically | Yes: "If a skill looks relevant to your task, the agent reads the full SKILL.md" | Docs: [skills](https://antigravity.google/docs/skills/) |
-| Always-on rules | `AGENTS.md` or `GEMINI.md`, `.agents/rules/*.md` with a `trigger`, and a plugin's `rules/AGENTS.md`, "loaded automatically as an always-on rule whenever the plugin is enabled" | Docs: [rules](https://antigravity.google/docs/rules/), [build plugins](https://antigravity.google/docs/build-plugins/) |
+| Always-on rules | `AGENTS.md` or `GEMINI.md`, `.agents/rules/*.md` with a `trigger`, and a plugin's `rules/AGENTS.md`, "loaded automatically as an always-on rule whenever the plugin is enabled". A plugin's rule reached the agent, which named it as a rule | Docs: [rules](https://antigravity.google/docs/rules/), [build plugins](https://antigravity.google/docs/build-plugins/). Tested (0.5.0) |
 | MCP config | `~/.gemini/config/mcp_config.json`, the project's `.agents/mcp_config.json`, or a plugin's own `mcp_config.json`, named `<plugin>_<server>`. The converted plugin's server started, and Antigravity cached a schema for each of its 10 tools, as `comprende_comprende`. 0.4.3's own `mcp_config.json`, with `${PLUGIN_ROOT}/dist/server.mjs`, started the plugin's server, and a `gate_status` call worked | Docs: [MCP](https://antigravity.google/docs/mcp/). Tested (Step 0: the tools cached. 0.4.3: one call) |
 | Headless runs | `agy -p "<prompt>" --output-format json\|stream-json`, `--dangerously-skip-permissions`, `--add-dir`, `--print-timeout`. The workspace is the folder it starts in. An action that needs approval is soft-denied: the run goes on and exits 0. A shell command needs approval unless an allow rule matches it, such as `--settings '{"permissions":{"allow":["command(ls)"]}}'` for one run. An MCP tool's rule is `mcp(<server>/<tool>)`, such as `mcp(comprende_comprende/gate_status)` | Tested (Step 0, 0.4.3). Docs: [headless](https://antigravity.google/docs/cli/headless/) (the soft deny) |
 | A config-folder override | None: it uses `HOME` | Tested (a throwaway `HOME` worked). Docs: [CLI reference](https://antigravity.google/docs/cli/reference/) (none listed) |
@@ -485,17 +495,17 @@ The default replies live in the core, in `src/gate/hook-replies.ts`. Claude-form
 
 How each tool fills it in:
 
-| | Claude Code | Cursor | Codex | Antigravity (proposed) |
+| | Claude Code | Cursor | Codex | Antigravity |
 |---|---|---|---|---|
-| `detects` | any payload: the fallback | `cursor_version` in the payload, or the tool name `Shell`. Not the environment: Claude Code started from Cursor's terminal may inherit Cursor's variables | `turn_id` in a tool call's payload, and `--agent codex` in its hook files | `toolCall` or `workspacePaths`, and `--agent antigravity` |
+| `detects` | any payload: the fallback | `cursor_version` in the payload, or the tool name `Shell`. Not the environment: Claude Code started from Cursor's terminal may inherit Cursor's variables | `turn_id` in a tool call's payload, and `--agent codex` in its hook files | a string `conversationId` and `hookEventName`, and `--agent antigravity` in its hook file |
 | Shell tool | `Bash` | `Shell` | `Bash` | `run_command`, command in `toolCall.args.CommandLine` |
-| `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR`, else its own folder (Claude Code runs hooks from the project) | the one entry in `workspace_roots` (`cwd` is `""`), else `CURSOR_PROJECT_DIR` or `CLAUDE_PROJECT_DIR`, else step aside: Cursor runs plugin hooks from the plugin's folder. With several roots it steps aside, since it can't tell which one the command runs in | `cwd`, the command's folder | `toolCall.args.Cwd`, else the payload's `cwd`, else the one entry in `workspacePaths`, else step aside |
+| `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR`, else its own folder (Claude Code runs hooks from the project) | the one entry in `workspace_roots` (`cwd` is `""`), else `CURSOR_PROJECT_DIR` or `CLAUDE_PROJECT_DIR`, else step aside: Cursor runs plugin hooks from the plugin's folder. With several roots it steps aside, since it can't tell which one the command runs in | `cwd`, the command's folder | `toolCall.args.Cwd`, resolved against `cwd` when relative, else the payload's `cwd`. Either must be absolute, else step aside |
 | `names` | Claude, Claude Code | Cursor, Cursor | Codex, Codex | Antigravity, Antigravity |
-| `pluginUpdateHint` | `/plugin marketplace update comprende` | the same, since Cursor may be running the Claude Code plugin it imported, or `git -C ~/.cursor/plugins/local/comprende pull` for its own copy | `codex plugin marketplace upgrade comprende`, then trust the hooks again in `/hooks` | `agy plugin install` again (to confirm) |
-| `projectHookFiles` | `.claude/settings.json`, always run | `.cursor/hooks.json`, always run, then `.claude/settings.json`, run only while Third-Party Imports is on | `.codex/hooks.json`, run only once the project and the hook are trusted | `.agents/hooks.json`, run only in a trusted workspace |
+| `pluginUpdateHint` | `/plugin marketplace update comprende` | the same, since Cursor may be running the Claude Code plugin it imported, or `git -C ~/.cursor/plugins/local/comprende pull` for its own copy | `codex plugin marketplace upgrade comprende`, then trust the hooks again in `/hooks` | `agy plugin install` again (tested over a converted copy) |
+| `projectHookFiles` | `.claude/settings.json`, always run | `.cursor/hooks.json`, always run, then `.claude/settings.json`, run only while Third-Party Imports is on | `.codex/hooks.json`, run only once the project and the hook are trusted | none: a repo's `.agents/hooks.json` would run alongside the plugin's hooks |
 | `eventId` | the tool call's id; none for a session, since one session runs one plugin copy | the tool call's id, or the session's | `tool_use_id`, or `session_id` | `toolCall.id`, or `conversationId` |
-| `formatDecision` | the default | the default | the default (tested) | `{"decision": …}` on exit 0 |
-| `formatSessionContext` | the default | the default | the default (tested) | `injectSteps` |
+| `formatDecision` | the default | the default | the default (tested) | nothing to allow, `{"decision": "deny", "reason": …}` on exit 0 to block (tested) |
+| `formatSessionContext` | the default | the default | the default (tested) | `injectSteps` with a system message, or `{}` (tested) |
 
 A payload that starts with a UTF-8 BOM is read like any other: the BOM is stripped before parsing. Cursor's CLI on Windows once sent one, and without that the hook would step aside. `save --input` strips one too, since PowerShell 5.1 writes files with one.
 
@@ -685,6 +695,8 @@ So each push is checked once, and each session gets each line once. `test/agents
 
 ### Antigravity: the design
 
+Built in 0.5.0 ([recording](recordings/antigravity/#050-the-adapter)): the adapter, `src/gate/agents/antigravity.ts`, as below. What the real runs changed is said in each row.
+
 **It fits the `Agent` interface's methods as they are,** with the two optional ones, since a deny is JSON on exit 0. Two things change around them:
 - **`AgentId` gains `"antigravity"`,** as it gains `"codex"`.
 - **The rule "a hook blocks only on a deliberate exit 2"** (CLAUDE.md, SECURITY.md, the comment on `HookReply` in `types.ts`) becomes "a hook blocks only on a deliberate deny". In Antigravity, a deny is exit 0 with `{"decision": "deny"}`. A test checks that only a deny decision prints a deny.
@@ -693,19 +705,19 @@ The adapter, `src/gate/agents/antigravity.ts`:
 
 | Member | Antigravity |
 |---|---|
-| `detects` | `toolCall` or `workspacePaths` in the payload. Our own hook files pass `--agent antigravity` |
+| `detects` | a string `conversationId` and `hookEventName`, which only Antigravity sends (camelCase). Our own hook file passes `--agent antigravity`. A converted Claude Code copy of the plugin, which passes no `--agent`, is detected too, so both copies claim the same tool call |
 | `shellCommand` | `toolCall.args.CommandLine` when `toolCall.name` is `run_command` |
-| `projectDir` | `toolCall.args.Cwd` for a command, when the agent sets one. Otherwise the payload's `cwd` (Step 0 found it), then the one entry in `workspacePaths`; with several, step aside, as in Cursor. Never the process's folder: plugin hooks run in the plugin's |
+| `projectDir` | `toolCall.args.Cwd` for a command, when the agent sets one, resolved against `cwd` when it's relative. Otherwise the payload's `cwd` (Step 0 found it). Without an absolute one, step aside: a wrong repo would mean a deny that isn't a verdict on the push. Never the process's folder: plugin hooks run in the plugin's |
 | `names` | Antigravity, Antigravity |
 | `pluginUpdateHint` | `agy plugin install https://github.com/AbdulrahmanMasoud/comprende` again (the update flow isn't documented; to confirm) |
-| `projectHookFiles` | `.agents/hooks.json`, with `alwaysRuns: false`: it needs the workspace trusted |
+| `projectHookFiles` | none (see `.agents/hooks.json`, below) |
 | `eventId` | `toolCall.id`, which Step 0 found though the docs don't list it. The session's `conversationId` |
-| `formatDecision` | exit 0, with `{"decision": "allow"}` or `{"decision": "deny", "reason": "…"}` |
-| `formatSessionContext` | `{"injectSteps": [ … ]}`, in the shape a later signed-in run confirms. With no extra fields: Antigravity rejects a reply with one it doesn't know (Step 0) |
+| `formatDecision` | exit 0, with nothing to allow, and `{"decision": "deny", "reason": "…"}` to block. Nothing, not `{"decision": "allow"}`: both mean the same (tested), and nothing is what every path that can't format a reply prints |
+| `formatSessionContext` | `{"injectSteps": [{"systemMessage": {"systemMessage": "…"}}]}`, or `{}` with nothing to say. With no extra fields: Antigravity rejects a reply with one it doesn't know (Step 0). And `alwaysOnFromRule`: the plugin's `rules/AGENTS.md` brings the always-on instruction, so the session start from our own hook file only says the hooks ran |
 
-**One change in the core,** not in the interface. Today, when stdin isn't JSON, `readHookInput` returns no adapter, and the hook replies with an empty allow. For a tool that wants a JSON reply, the core should resolve `--agent` anyway and answer in that adapter's format. A crash inside `agentHook` already replies in the adapter's format, from its `catch`. A crash outside it, in `cli.ts`, exits 1 with nothing on stdout, and Antigravity blocks on any non-zero exit (Step 0). So Antigravity's hook commands must always exit 0, a crash included. A deny is JSON on exit 0.
+**One change in the core,** not in the interface (0.5.0). When stdin isn't JSON, `readHookInput` still resolves `--agent`, so Antigravity's hooks answer in its own format, never in Claude Code's, which Antigravity would reject. A crash inside `agentHook` already replies in the adapter's format, from its `catch`. A crash outside it, in `cli.ts`, exits 1 with nothing on stdout, and Antigravity blocks on any non-zero exit (Step 0). So Antigravity's hook commands must always exit 0, a crash included. A deny is JSON on exit 0.
 
-**The files:** 0.4.3 added the first three, to stop a failed hook from blocking ([Comprende 0.4.3 in Antigravity](#comprende-043-in-antigravity)). 0.5.0 changes their commands, and maybe adds a rule.
+**The files:** 0.4.3 added the first three, to stop a failed hook from blocking ([Comprende 0.4.3 in Antigravity](#comprende-043-in-antigravity)). 0.5.0 passes `--agent antigravity` in their commands, and adds a rule.
 - **`.antigravity-plugin/plugin.json`:**
   - `name`, `displayName`, `description`, `version`, `author`, `homepage`, `repository`, `license`, `keywords`. A `logo` once the icon is outside a dot-folder
   - Antigravity reads it before a root `plugin.json`, and Codex doesn't read it.
@@ -716,15 +728,14 @@ The adapter, `src/gate/agents/antigravity.ts`:
   - Relative paths, since hooks run in the plugin's folder.
   - The shell holds the gate's output and exits 0 whenever the gate fails, as 0.4.3's commands do. A deny is JSON on exit 0, so it still goes out.
 - **A root `mcp_config.json`:** `node` with `${PLUGIN_ROOT}/dist/server.mjs`.
-- **Maybe `rules/AGENTS.md`,** for the always-on line (a decision, below). Cursor's plugin would load it too, since Cursor discovers `rules/` unless the manifest sets `rules`. So `.cursor-plugin/plugin.json` would need a `rules` path of its own.
+- **`rules/AGENTS.md`,** the always-on instruction, word for word, without the words "Comprende is installed" (a test checks both). Antigravity loads it whenever the plugin is enabled, hooks or not. Cursor discovers a plugin's `rules/` too, unless its manifest sets `rules`, but it applies a rule automatically only with `alwaysApply: true` frontmatter, which this file has none of. `tools/e2e-cursor.mjs` checks that the instruction comes once in Cursor.
 - **Claude Code and Codex read none of these.** `agy plugin validate` warns about our `hooks/hooks.json` ("isn't read"), which is only an error with `--strict`.
 
-**What `install` writes for teammates on Antigravity:** maybe `.agents/hooks.json`, behind an `agents-hooks` feature. The folder project hooks run in isn't documented, so the path in the command can't be settled yet. To decide after a later signed-in run.
+**What `install` writes for teammates on Antigravity: nothing.** A repo's `.agents/hooks.json` would be read, with no trust step in a headless run, but it runs alongside the plugin's hooks on the same events, in the `.agents/` folder (tested). So every command would run the gate twice, and a teammate without the plugin would get no always-on line either, which comes from the plugin's rule. The plugin's hooks, git's `pre-push` hook and CI cover a push. Decided in 0.5.0: a repo file only if a run shows it doesn't double-run with the plugin, and this one does.
 
 **No double runs:**
-- The plugin and `.agents/hooks.json` claim `toolCall.id`, which Step 0 found in the payload.
-- Session start comes from the plugin only: `.agents/hooks.json` isn't sure to run. (Codex's repo file has its own since 0.4.1, for re-trust after plugin updates; whether Antigravity needs that is for a later signed-in run.)
-- A Claude Code plugin converted by `agy plugin install` or `agy plugin import claude` is also detected from the payload, and claims with the same key.
+- There's no repo hook file, so only plugin copies can meet. A copy converted from the Claude Code plugin by `agy plugin import claude` passes no `--agent`, is detected from the payload, and claims the same keys as the plugin's own hooks: `toolCall.id` for a push, `conversationId` for a session. So a push is checked once, and the session's lines come once (tested, with the gate alone). A known limit: when the converted copy speaks first, it sends the full always-on line, so with the plugin's rule loaded the instruction comes twice (tested). Whether the import carries the plugin's `rules/` is untested.
+- `agy plugin install` of this repo no longer converts it: it has its own manifest (0.4.3).
 - Two plugins named `comprende` can't both be installed in Antigravity's plugin folder (to confirm).
 
 **The user's install steps:**
@@ -778,12 +789,12 @@ The adapter, `src/gate/agents/antigravity.ts`:
    - `tools/e2e-codex.mjs`
 4. **`feat/antigravity-adapter`** (part of #25):
    - `src/gate/agents/antigravity.ts`, with `formatDecision` and `formatSessionContext`
-   - the core resolves `--agent` when stdin isn't JSON
+   - the core resolves `--agent` when stdin isn't JSON (done)
    - fixtures from a signed-in run, in `test/fixtures/antigravity/`
 5. **`feat/antigravity-plugin`:**
-   - 0.4.3 added `.antigravity-plugin/plugin.json`, the root `hooks.json` and `mcp_config.json`, and the version in `VERSION_FIELDS`. 0.5.0 changes the hook commands, and maybe adds `rules/AGENTS.md`
+   - 0.4.3 added `.antigravity-plugin/plugin.json`, the root `hooks.json` and `mcp_config.json`, and the version in `VERSION_FIELDS`. 0.5.0 passes `--agent antigravity`, and adds `rules/AGENTS.md`
    - `tools/e2e-antigravity.mjs`
-6. **`feat/antigravity-install`,** if decided: `install` writes `.agents/hooks.json`.
+6. **`feat/antigravity-install`:** dropped. `install` writes no `.agents/hooks.json` (decided in 0.5.0).
 7. **`chore/release-0.4.0`,** with the docs:
    - the READMEs, this page's "What works where", `docs/teams.md` and `SECURITY.md` (the new hook files, and trust in Codex)
    - the CHANGELOG
@@ -806,18 +817,18 @@ The maintainer settled the open questions on 2026-11-11:
 
 1. **Codex: should `install` write `.codex/hooks.json`?** Decided: yes, and built in 0.4.0. It survives plugin updates and works without the plugin. But each developer trusts the project and the hooks once, and the command needs `git rev-parse` to find the gate from a subfolder.
 2. **Codex: re-trusting after every update.** There's no way around it short of `--dangerously-bypass-hook-trust`, which is for automation, not users. The plugin's session start can't say so, since its hooks are the ones skipped. The skill loads without trust, so proposal: the skill and the README say "after an update, trust Comprende's hooks again in `/hooks`". Decided: yes, and the skill now says so when a gated repo's session got no session-start note. In 0.4.0 that never fired in Codex: the agent searched for `.learning/config.json` with `rg --files`, which skips hidden folders, so it didn't open the skill. With the skill loading for any code change, a rerun failed the same way: Codex listed the new description, but its agent didn't open the skill for a small edit. So the note now comes from the repo's `.codex/hooks.json`, whose session start keeps its trust across plugin updates. Found since: `codex plugin marketplace upgrade` updates the installed plugin too (tested). Still to find out: whether the MCP server needs approval again after an update.
-3. **Antigravity: plugin files at this repo's root.** A `hooks.json` and an `mcp_config.json`, maybe a `rules/` folder: Antigravity reads them only there.
-4. **Antigravity: the always-on line from a plugin rule** (`rules/AGENTS.md`) instead of `SessionStart`? A rule doesn't depend on hooks running, which is disputed in the IDE.
-5. **Antigravity: the CLI first?** We can test only the CLI, and the IDE may not run hooks.
-6. **Antigravity: should `install` write `.agents/hooks.json`?** Better decided after a later signed-in run shows which folder project hooks run in.
+3. **Antigravity: plugin files at this repo's root.** Decided: yes, with a consistency test. A `hooks.json` and an `mcp_config.json` (0.4.3), and a `rules/` folder (0.5.0): Antigravity reads them only there.
+4. **Antigravity: the always-on line from a plugin rule** (`rules/AGENTS.md`) instead of `SessionStart`? Decided: yes, with no duplication (0.5.0), except when a converted copy of the plugin speaks first (see "No double runs"). A rule doesn't depend on hooks running, which is disputed in the IDE.
+5. **Antigravity: the CLI first?** Decided: yes. The IDE gets a checklist to try by hand. We can test only the CLI, and the IDE may not run hooks.
+6. **Antigravity: should `install` write `.agents/hooks.json`?** Decided: no. It runs alongside the plugin's hooks (tested), so the gate would run twice on every command.
 7. **One release or two?** Decided: 0.4.0 is Codex, 0.5.0 Antigravity, 0.6.0 GitLab.
 
-**What a later signed-in Antigravity run must answer,** before the adapter. Step 0 and 0.4.3's runs answered three:
+**What the signed-in Antigravity runs had to answer,** for the adapter. Step 0's, 0.4.3's and 0.5.0's runs answered five:
 - **What an empty stdout does:** answered, it doesn't block (Step 0). It mattered for safety: every path that can't format a reply prints nothing, such as an unknown `--agent` passed to an older repo copy of `gate.mjs`.
 - **Whether `stepIdx` is unique per tool call:** no longer needed. Claims can key on `toolCall.id`, which the payload has (Step 0).
-- Which `injectSteps` shape reaches the agent.
+- **Which `injectSteps` shape reaches the agent:** answered, all three, as different kinds of step. The gate uses the system message (0.5.0's runs).
 - When the agent sets `toolCall.args.Cwd`, and whether it's an absolute path.
-- Which folder project hooks run in.
+- **Which folder project hooks run in:** answered, the `.agents/` folder (0.5.0's runs).
 - **Whether a hook that times out blocks:** answered, it does (0.4.3's runs).
 - Whether `--dangerously-skip-permissions` skips hooks too.
 
@@ -856,5 +867,6 @@ The maintainer settled the open questions on 2026-11-11:
 - **Signed in (Step 0, 2026-11-12):** the gated demo and a repo without the gate, with 0.4.2 installed by `agy plugin install`, headless, with the gate's runs logged. Plus test hooks in `~/.gemini/config/hooks.json` that exit 1 and 2. See the [recording](recordings/antigravity/). The preload and the driver aren't committed, so Step 0 can't be repeated as is until `tools/e2e-antigravity.mjs` exists.
 - **The Windows build** (`1.5.6`): downloaded from the manifest the install script reads, its SHA-512 checked, and only its strings read, for the shell it might run hooks in.
 - **Signed in (0.4.3, 2026-11-12):** the fix's own plugin files, with `node` missing, `gate.mjs` missing, a crash after partial output, decoy `dist/` files in the repo, a push and an MCP call. Plus test hooks for non-JSON stdout and a timeout. See the [recording](recordings/antigravity/).
-- **Still to run signed in:** hooks in `.agents/hooks.json`, each `injectSteps` shape, a JSON deny, whether `--dangerously-skip-permissions` skips hooks, and the skill loading.
+- **Signed in (0.5.0, 2026-11-12):** test hooks for each `injectSteps` shape, a JSON deny and a JSON allow, a repo's `.agents/hooks.json`, a probe plugin with a rule, and the skill on a code change. Then the adapter itself: the session context in a gated repo and a plain one, an unverified push, and `ls`. See the [recording](recordings/antigravity/#050-the-adapter).
+- **Still to run signed in:** whether `--dangerously-skip-permissions` skips hooks, and when the agent sets `toolCall.args.Cwd`.
 - **The docs:** each key quote was also checked against the page's own text.

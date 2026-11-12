@@ -38,7 +38,84 @@ import { join as join11 } from "node:path";
 
 // src/gate/commands.ts
 import { existsSync as existsSync2, unlinkSync as unlinkSync2 } from "node:fs";
-import { basename as basename2, dirname as dirname3, join as join8, resolve as resolve2 } from "node:path";
+import { basename as basename2, dirname as dirname3, join as join8, resolve as resolve3 } from "node:path";
+
+// src/gate/agents/antigravity.ts
+import { isAbsolute, resolve } from "node:path";
+
+// src/gate/hook-replies.ts
+var SILENT_ALLOW = { stdout: "", stderr: "", exitCode: 0 };
+function decisionReply(agent, decision) {
+  if (agent.formatDecision) return agent.formatDecision(decision);
+  return decision.allow ? SILENT_ALLOW : { stdout: "", stderr: `${decision.reason}
+`, exitCode: 2 };
+}
+function sessionContextReply(agent, lines) {
+  if (agent?.formatSessionContext) return agent.formatSessionContext(lines);
+  return JSON.stringify(
+    lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {}
+  );
+}
+
+// src/gate/agents/antigravity.ts
+var nonEmptyString = (value) => typeof value === "string" && value ? value : null;
+function readAntigravity(payload) {
+  const p = isRecord(payload) ? payload : {};
+  const call = isRecord(p.toolCall) ? p.toolCall : {};
+  const args = isRecord(call.args) ? call.args : {};
+  const given = nonEmptyString(p.cwd);
+  const cwd = given && isAbsolute(given) ? given : null;
+  const commandCwd = nonEmptyString(args.Cwd);
+  return {
+    toolName: nonEmptyString(call.name),
+    command: typeof args.CommandLine === "string" ? args.CommandLine : "",
+    // A relative Cwd is the command's folder seen from the workspace's: resolve it, and
+    // without an absolute cwd, don't guess (a wrong repo would mean a deny that isn't a
+    // verdict on this push).
+    commandCwd: !commandCwd ? null : isAbsolute(commandCwd) ? commandCwd : cwd && resolve(cwd, commandCwd),
+    cwd,
+    toolCallId: nonEmptyString(call.id),
+    conversationId: nonEmptyString(p.conversationId)
+  };
+}
+var antigravity = {
+  id: "antigravity",
+  // camelCase, which no other tool sends. Our own hook file passes --agent antigravity.
+  // This is for the hooks Antigravity converts from the Claude Code plugin (`agy plugin
+  // import claude`), which pass none: both copies then claim the same tool call.
+  detects: (payload) => isRecord(payload) && typeof payload.conversationId === "string" && typeof payload.hookEventName === "string",
+  shellCommand(payload) {
+    const { toolName, command } = readAntigravity(payload);
+    return toolName === "run_command" ? command : null;
+  },
+  // The command's own folder when the agent gave one, then the workspace's. Never the
+  // process's folder: Antigravity runs plugin hooks in the plugin's.
+  projectDir(payload) {
+    const { commandCwd, cwd } = readAntigravity(payload);
+    return commandCwd ?? cwd;
+  },
+  names: { assistant: "Antigravity", app: "Antigravity" },
+  pluginUpdateHint: "`agy plugin install https://github.com/AbdulrahmanMasoud/comprende` again",
+  // The plugin's rules/AGENTS.md is loaded as an always-on rule whenever the plugin is
+  // enabled, hooks or not (tested). So the session start only says the hooks ran.
+  alwaysOnFromRule: true,
+  // None: Antigravity runs a repo's .agents/hooks.json alongside the plugin's hooks, so
+  // install doesn't write one (docs/agents.md, "Antigravity: the design").
+  projectHookFiles: [],
+  eventId(payload, event) {
+    const { toolCallId, conversationId } = readAntigravity(payload);
+    return event === "shell" ? toolCallId : conversationId;
+  },
+  // Antigravity blocks on a JSON deny on exit 0, and shows the reason. An allow is
+  // nothing at all: {"decision": "allow"} means the same, and stdout that isn't
+  // JSON would block (tested).
+  formatDecision: (decision) => decision.allow ? SILENT_ALLOW : { stdout: JSON.stringify({ decision: "deny", reason: decision.reason }), stderr: "", exitCode: 0 },
+  // A system message: of the shapes Antigravity documents, the one the agent reads as
+  // instructions, "injected by a SessionStart hook". A user message would read as the
+  // user's own request (tested). No other field: a field it doesn't know fails the reply.
+  // With nothing to say, `{}`, since the reply is read as JSON.
+  formatSessionContext: (lines) => JSON.stringify(lines.length ? { injectSteps: [{ systemMessage: { systemMessage: lines.join(" ") } }] } : {})
+};
 
 // src/gate/agents/claude-format.ts
 function readClaudeFormat(payload) {
@@ -383,7 +460,7 @@ var cursor = {
 };
 
 // src/gate/agents/index.ts
-var AGENTS = [cursor, codex, claudeCode];
+var AGENTS = [cursor, codex, antigravity, claudeCode];
 function resolveAgent(payload, env, requested) {
   if (requested) return AGENTS.find((a) => a.id === requested) ?? null;
   return AGENTS.find((a) => a.detects(payload, env)) ?? null;
@@ -477,7 +554,7 @@ function samePath(a, b, platform = process.platform) {
 // src/gate/git.ts
 import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync as statSync3, utimesSync } from "node:fs";
 import { devNull, homedir, tmpdir } from "node:os";
-import { dirname as dirname2, isAbsolute, join as join2, resolve } from "node:path";
+import { dirname as dirname2, isAbsolute as isAbsolute2, join as join2, resolve as resolve2 } from "node:path";
 
 // src/gate/run.ts
 import { spawnSync } from "node:child_process";
@@ -713,7 +790,7 @@ var gitSucceeds = (root, args) => {
   }
 };
 function repoRoot(path) {
-  let start = resolve((path || process.cwd()).replace(/^~(?=$|[/\\])/, homedir()));
+  let start = resolve2((path || process.cwd()).replace(/^~(?=$|[/\\])/, homedir()));
   if (!existsSync(start)) throw new GateError(`Path does not exist: ${start}`);
   if (isFile(start)) start = dirname2(start);
   let out;
@@ -724,7 +801,7 @@ function repoRoot(path) {
   }
   const top = out.stdout.toString("utf8").trim();
   if (out.status !== 0 || !top) throw new GateError(`Not inside a git working tree: ${start}`);
-  return resolve(top);
+  return resolve2(top);
 }
 var refExists = (root, ref) => gitSucceeds(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
 var revHasFile = (root, rev, rel) => gitSucceeds(root, ["cat-file", "-e", `${rev}:${rel}`]);
@@ -790,7 +867,7 @@ function ensureRepoConfigIsInert(root) {
 }
 function withWorktreeIndex(root, fn) {
   let real = git(root, ["rev-parse", "--git-path", "index"]).trim();
-  if (!isAbsolute(real)) real = join2(root, real);
+  if (!isAbsolute2(real)) real = join2(root, real);
   const dir = mkdtempSync(join2(tmpdir(), "ownership-gate-index-"));
   const tmp = join2(dir, "index");
   try {
@@ -1585,7 +1662,7 @@ function checkForHook(root, options, versionGapIsVerdict) {
 }
 function deleteReportInputFile(input, repo) {
   try {
-    const abs = resolve2(input);
+    const abs = resolve3(input);
     const expected = join8(realPath(repoRoot(repo)), REPORT_INPUT);
     if (!samePath(join8(realPath(dirname3(abs)), basename2(abs)), expected)) return "";
     unlinkSync2(abs);
@@ -1677,22 +1754,8 @@ function readHookInput(stdinText, requested) {
     const payload = JSON.parse(withoutBom(stdinText) || "{}");
     return { payload, agent: resolveAgent(payload, process.env, requested) };
   } catch {
-    return { payload: void 0, agent: null };
+    return { payload: void 0, agent: requested ? resolveAgent(void 0, process.env, requested) : null };
   }
-}
-
-// src/gate/hook-replies.ts
-var SILENT_ALLOW = { stdout: "", stderr: "", exitCode: 0 };
-function decisionReply(agent, decision) {
-  if (agent.formatDecision) return agent.formatDecision(decision);
-  return decision.allow ? SILENT_ALLOW : { stdout: "", stderr: `${decision.reason}
-`, exitCode: 2 };
-}
-function sessionContextReply(agent, lines) {
-  if (agent?.formatSessionContext) return agent.formatSessionContext(lines);
-  return JSON.stringify(
-    lines.length ? { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join(" ") } } : {}
-  );
 }
 
 // src/gate/push-detect.ts
@@ -1912,7 +1975,7 @@ function jobSummary(root, branch, rev, base, passed, messages, mode) {
 
 // src/gate/install.ts
 import { chmodSync as chmodSync3, copyFileSync as copyFileSync2, existsSync as existsSync4, mkdirSync as mkdirSync4, readFileSync as readFileSync3 } from "node:fs";
-import { dirname as dirname5, join as join14, resolve as resolve4 } from "node:path";
+import { dirname as dirname5, join as join14, resolve as resolve5 } from "node:path";
 
 // src/gate/codeowners.ts
 import { readdirSync as readdirSync2 } from "node:fs";
@@ -1972,7 +2035,7 @@ function gateCopyDifference(repoCopy, pluginCopy) {
 import { createHash as createHash2 } from "node:crypto";
 import { chmodSync as chmodSync2, existsSync as existsSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync2, realpathSync as realpathSync2, writeFileSync as writeFileSync3 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { isAbsolute as isAbsolute2, join as join13, relative, resolve as resolve3, sep } from "node:path";
+import { isAbsolute as isAbsolute3, join as join13, relative, resolve as resolve4, sep } from "node:path";
 function prePush(stdinText, repo) {
   let root, baseBranch;
   try {
@@ -2036,12 +2099,12 @@ function installHooks(repo, auto = false) {
     return [`SKIPPED pre-push hook: ${GATE_REL} is missing or not a regular file.`];
   const pin = createHash2("sha256").update(readFileSync2(gateFile)).digest("hex");
   let hooksDir = git(root, ["rev-parse", "--git-path", "hooks"]).trim();
-  if (!isAbsolute2(hooksDir)) hooksDir = join13(root, hooksDir);
+  if (!isAbsolute3(hooksDir)) hooksDir = join13(root, hooksDir);
   const manualLine = `node "$(git rev-parse --show-toplevel)/${GATE_REL}" pre-push "$@" || exit 1`;
   const configured = git(root, ["config", "--get", "core.hooksPath"], { check: false }).trim();
   if (configured) {
     const expanded = configured.replace(/^~(?=$|[/\\])/, homedir2());
-    let custom = resolve3(isAbsolute2(expanded) ? expanded : join13(root, expanded));
+    let custom = resolve4(isAbsolute3(expanded) ? expanded : join13(root, expanded));
     try {
       custom = realpathSync2(custom);
     } catch {
@@ -2052,7 +2115,7 @@ function installHooks(repo, auto = false) {
       ];
     }
     const rel = relative(realpathSync2(root), custom);
-    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute2(rel)) {
+    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute3(rel)) {
       return [
         `SKIPPED pre-push hook: core.hooksPath (${configured}) is outside this repo and may be shared by other repos. Add this line to its pre-push hook yourself: ${manualLine}`
       ];
@@ -2088,7 +2151,7 @@ function install(repo, upgrade = false, owner) {
   const done = [];
   const target = join14(root, GATE_REL);
   if (!SELF) throw new GateError("Can't locate this gate's own file to install it.");
-  if (existsSync4(target) && resolve4(target) === resolve4(SELF)) done.push(`${GATE_REL} is this file`);
+  if (existsSync4(target) && resolve5(target) === resolve5(SELF)) done.push(`${GATE_REL} is this file`);
   else if (existsSync4(target) && !upgrade) {
     done.push(`${GATE_REL} ${EXISTING_GATE_NOTE[gateCopyDifference(readFileSync3(target), readFileSync3(SELF))]}`);
   } else {
@@ -2132,8 +2195,10 @@ import { join as join15 } from "node:path";
 var MIN_NODE = 20;
 var nodeNote = (app) => `Tell the user in one line that Comprende needs Node.js 20 or newer (install it from https://nodejs.org), then a restart of ${app}.`;
 var PLUGIN_LINE_START = "Comprende is installed";
-var ALWAYS_ON = `${PLUGIN_LINE_START}. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.`;
-var QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
+var ALWAYS_ON_RULE = "Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.";
+var ALWAYS_ON = `${PLUGIN_LINE_START}. ${ALWAYS_ON_RULE}`;
+var HOOKS_RUN_LINE = `${PLUGIN_LINE_START}, and its hooks run in this session.`;
+var QUIET_MODE = `${PLUGIN_LINE_START}, in quiet mode, which replaces any always-on Comprende instruction: use the comprende skill only when the user asks for an explanation, or for the ownership gate.`;
 var pluginNotRunningNote = (agent, hint) => `If this session didn't also get a note starting with "${PLUGIN_LINE_START}", Comprende's plugin isn't running in ${agent.names.app}: either it isn't installed, or its hooks were skipped. Tell the user once, in one line, in their language, with both options: ${hint}`;
 var untrustedGateNote = (agent) => ({
   content: `This repo's ${GATE_REL} differs from the plugin's copy, so the local pre-push hook was NOT installed automatically. If the user trusts this repo, they can run \`node ${GATE_REL} install-hooks\`; mention this in one line.`,
@@ -2151,9 +2216,13 @@ function sessionStart(stdinText, source, requested) {
     lines.push(
       `Comprende is running on Node.js ${node}, which is too old. ${nodeNote((agent?.names ?? UNKNOWN_AGENT_NAMES).app)}`
     );
-  if (source === "plugin") lines.push(process.env.COMPRENDE_QUIET === "1" ? QUIET_MODE : ALWAYS_ON);
+  if (source === "plugin") lines.push(pluginLine(agent, requested));
   if (run2) lines.push(...gatedRepoContext(run2, payload));
   return sessionContextReply(agent, lines);
+}
+function pluginLine(agent, requested) {
+  if (process.env.COMPRENDE_QUIET === "1") return QUIET_MODE;
+  return agent?.alwaysOnFromRule && requested === agent.id ? HOOKS_RUN_LINE : ALWAYS_ON;
 }
 function gatedRepoContext(run2, payload) {
   try {
@@ -2199,6 +2268,8 @@ function testCall(fn, a) {
     CHECK_NAME: REPO_PLATFORM.checkName,
     REPO_GATE: GATE_REL,
     ALWAYS_ON,
+    ALWAYS_ON_RULE,
+    HOOKS_RUN_LINE,
     QUIET_MODE,
     PLUGIN_LINE_START,
     // Every adapter, so a per-agent test can check it covers them all.
@@ -2237,6 +2308,10 @@ function testCall(fn, a) {
     case "allow_reply": {
       const agent = AGENTS.find((x) => x.id === s(0));
       return agent ? decisionReply(agent, { allow: true }) : null;
+    }
+    case "deny_reply": {
+      const agent = AGENTS.find((x) => x.id === s(0));
+      return agent ? decisionReply(agent, { allow: false, reason: String(a[1]) }) : null;
     }
     case "is_push_command":
       return isPushCommand(String(a[0]));
