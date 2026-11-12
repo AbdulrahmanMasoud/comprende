@@ -70,7 +70,9 @@ export function sessionStart(stdinText: string, source: HookSource, requested: s
     lines.push(
       `Comprende is running on Node.js ${node}, which is too old. ${nodeNote((agent?.names ?? UNKNOWN_AGENT_NAMES).app)}`,
     );
-  if (source === "plugin") lines.push(process.env.COMPRENDE_QUIET === "1" ? QUIET_MODE : ALWAYS_ON);
+  // A plugin whose tool loads the line as a rule (alwaysOnFromRule) doesn't repeat it.
+  if (source === "plugin" && !agent?.alwaysOnFromRule)
+    lines.push(process.env.COMPRENDE_QUIET === "1" ? QUIET_MODE : ALWAYS_ON);
   if (run) lines.push(...gatedRepoContext(run, payload));
   return sessionContextReply(agent, lines);
 }

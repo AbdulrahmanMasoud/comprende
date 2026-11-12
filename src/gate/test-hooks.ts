@@ -75,6 +75,11 @@ export function testCall(fn: string, a: unknown[]): unknown {
       const agent = AGENTS.find((x) => x.id === s(0));
       return agent ? decisionReply(agent, { allow: true }) : null;
     }
+    case "deny_reply": {
+      // [agent id, reason]: what that adapter prints to block a command.
+      const agent = AGENTS.find((x) => x.id === s(0));
+      return agent ? decisionReply(agent, { allow: false, reason: String(a[1]) }) : null;
+    }
     case "is_push_command":
       return isPushCommand(String(a[0]));
     case "is_plumbing":

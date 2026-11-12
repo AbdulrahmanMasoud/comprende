@@ -481,7 +481,7 @@ const antigravityFormatCommands = (file) =>
   );
 const antigravityHookCommands = () => antigravityFormatCommands(json("hooks.json"));
 
-/** The one command each Antigravity hook runs, for a gate subcommand. Antigravity blocks the tool
+/** The one command each Antigravity hook runs, for a gate entry point. Antigravity blocks the tool
  *  call on any non-zero exit, non-JSON stdout or a timeout (docs/agents.md, "Comprende 0.4.3 in
  *  Antigravity"), so the shell, not node, turns every failure into exit 0 with nothing on stdout.
  *  Which shell runs hooks on Windows isn't documented, so it's written for four:
@@ -495,8 +495,8 @@ const antigravityHookCommands = () => antigravityFormatCommands(json("hooks.json
  *  - The gate is "$PLUGIN_ROOT/dist/gate.mjs", which Antigravity sets for plugin hooks: never a
  *    path a repo can provide, whatever folder the hook runs in. Unset, no gate runs.
  *  The test below checks the rules that keep it so. */
-const antigravityCommand = (subcommand) =>
-  `set "A=$(node "$PLUGIN_ROOT/dist/gate.mjs" ${subcommand} --from-plugin; printf 'x%s' "$?")$(exit 0)"; ` +
+const antigravityCommand = (entryPoint) =>
+  `set "A=$(node "$PLUGIN_ROOT/dist/gate.mjs" ${entryPoint} --from-plugin --agent antigravity; printf 'x%s' "$?")$(exit 0)"; ` +
   `held=\${1#A=}; code=\${held##*x}; ok=\${code%%[1-9]*}; reply=\${held%x*}; printf '%s' "\${ok:+$reply}"; exit 0`;
 const antigravityPayload = (name, repo) =>
   read(`test/fixtures/antigravity/${name}`).toString("utf8").replaceAll("/work/probe-app", repo);
@@ -545,7 +545,7 @@ test("the Antigravity plugin's hooks file has Antigravity's shape, and runs the 
   assert.ok(PreToolUse.length > 0 && PreToolUse.every((g) => g.matcher === "run_command"));
   assert.ok(PreToolUse.every((g) => g.hooks.every((h) => h.type === "command")));
   for (const h of antigravityHookCommands()) {
-    assert.equal(h.command, antigravityCommand(h.event === "SessionStart" ? "session-start" : "claude-hook"), h.event);
+    assert.equal(h.command, antigravityCommand(h.event === "SessionStart" ? "session-start" : "agent-hook"), h.event);
     assert.ok(h.timeout > 0);
   }
   assert.ok(existsSync(join(REPO, "dist/gate.mjs")));
@@ -593,8 +593,10 @@ test("Antigravity's hooks let the command run when the gate fails: no node, no g
     rmSync(join(plugin, "dist"), { recursive: true, force: true });
     if (source !== null) write(plugin, "dist/gate.mjs", source);
   };
+  // Each run gets its own claims (in TMPDIR), so no run finds the session or the push
+  // already claimed by an earlier one.
   const env = (path, root) => {
-    const e = { ...ENV, PATH: path, OWNERSHIP_GATE_NO_AUTO_HOOK: "1", PLUGIN_ROOT: root };
+    const e = { ...ENV, PATH: path, OWNERSHIP_GATE_NO_AUTO_HOOK: "1", PLUGIN_ROOT: root, TMPDIR: tmp(t) };
     if (root === null) delete e.PLUGIN_ROOT;
     return e;
   };
@@ -624,7 +626,8 @@ test("Antigravity's hooks let the command run when the gate fails: no node, no g
       }
     };
 
-    // The real gate. The session start's reply goes out byte for byte, with the gate's note.
+    // The real gate. The session start's reply goes out byte for byte: the gate's note as a
+    // system message, without the always-on line, which the plugin's rule brings.
     useGate(readFileSync(GATE));
     const direct = spawnSync(NODE, [join(plugin, "dist/gate.mjs"), "session-start", "--from-plugin"], {
       cwd: plugin,
@@ -635,13 +638,16 @@ test("Antigravity's hooks let the command run when the gate fails: no node, no g
     const r = run(shell, sessionStart.command, start);
     assert.equal(r.status, 0, `${shell}: ${r.stderr}`);
     assert.equal(r.stdout, direct.stdout, shell);
-    assert.match(r.stdout, /ownership gate \(mode: required\)/, shell);
-    // A command gets an empty allow. So does the unverified push: 0.4.3's commands can't read
-    // Antigravity's payload, and git's pre-push hook and CI check the push instead.
-    for (const input of [ls, push]) {
-      const allowed = run(shell, preToolUse.command, input);
-      assert.deepEqual([allowed.status, allowed.stdout], [0, ""], `${shell}: ${allowed.stderr}`);
-    }
+    const context = JSON.parse(r.stdout).injectSteps[0].systemMessage.systemMessage;
+    assert.match(context, /ownership gate \(mode: required\)/, shell);
+    assert.doesNotMatch(context, /Comprende is installed/, shell);
+    // A command gets an empty allow, and the unverified push a JSON deny on exit 0.
+    const allowed = run(shell, preToolUse.command, ls);
+    assert.deepEqual([allowed.status, allowed.stdout], [0, ""], `${shell}: ${allowed.stderr}`);
+    const blocked = run(shell, preToolUse.command, push);
+    assert.equal(blocked.status, 0, `${shell}: ${blocked.stderr}`);
+    assert.equal(JSON.parse(blocked.stdout).decision, "deny", shell);
+    assert.match(JSON.parse(blocked.stdout).reason, /No ownership report for branch/, shell);
 
     allowsSilently("node missing from PATH", undefined, { path: tmp(t) });
     allowsSilently("PLUGIN_ROOT unset", ls, { root: null });
@@ -780,9 +786,8 @@ test("each tool picks up only its own manifest, hooks and MCP config", () => {
     Antigravity: {
       own: ".antigravity-plugin",
       manifests: [".antigravity-plugin/plugin.json", "plugin.json", ".gemini-plugin/plugin.json"],
-      // Its manifest can't name a hooks file. Until its adapter (0.5.0), its commands
-      // detect the tool from the payload, as Claude Code's do.
-      hooks: { default: "hooks.json", named: "replaces", commandsOf: antigravityFormatCommands, agent: null },
+      // Its manifest can't name a hooks file.
+      hooks: { default: "hooks.json", named: "replaces", commandsOf: antigravityFormatCommands, agent: "antigravity" },
       mcp: { default: "mcp_config.json", expands: ["${PLUGIN_ROOT}"] },
     },
   };
@@ -809,7 +814,7 @@ test("each tool picks up only its own manifest, hooks and MCP config", () => {
         .map((h) => h.command)
         .filter((c) => c.includes("gate.mjs"));
       assert.ok(commands.length > 0, `${file} runs the gate`);
-      for (const c of commands) assert.equal(/--agent (\S+)/.exec(c)?.[1] ?? null, hooks.agent, `${file}: ${c}`);
+      for (const c of commands) assert.equal(/--agent ([\w-]+)/.exec(c)?.[1] ?? null, hooks.agent, `${file}: ${c}`);
     }
     // Its MCP config names only variables this tool expands.
     const mcpFile = manifest.mcpServers ? relative(manifest.mcpServers) : mcp.default;

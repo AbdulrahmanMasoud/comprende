@@ -3,7 +3,7 @@
     "SessionStart": [
       {
         "type": "command",
-        "command": "set \"A=$(node \"$PLUGIN_ROOT/dist/gate.mjs\" session-start --from-plugin; printf 'x%s' \"$?\")$(exit 0)\"; held=${1#A=}; code=${held##*x}; ok=${code%%[1-9]*}; reply=${held%x*}; printf '%s' \"${ok:+$reply}\"; exit 0",
+        "command": "set \"A=$(node \"$PLUGIN_ROOT/dist/gate.mjs\" session-start --from-plugin --agent antigravity; printf 'x%s' \"$?\")$(exit 0)\"; held=${1#A=}; code=${held##*x}; ok=${code%%[1-9]*}; reply=${held%x*}; printf '%s' \"${ok:+$reply}\"; exit 0",
         "timeout": 30
       }
     ],
@@ -13,7 +13,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "set \"A=$(node \"$PLUGIN_ROOT/dist/gate.mjs\" claude-hook --from-plugin; printf 'x%s' \"$?\")$(exit 0)\"; held=${1#A=}; code=${held##*x}; ok=${code%%[1-9]*}; reply=${held%x*}; printf '%s' \"${ok:+$reply}\"; exit 0",
+            "command": "set \"A=$(node \"$PLUGIN_ROOT/dist/gate.mjs\" agent-hook --from-plugin --agent antigravity; printf 'x%s' \"$?\")$(exit 0)\"; held=${1#A=}; code=${held##*x}; ok=${code%%[1-9]*}; reply=${held%x*}; printf '%s' \"${ok:+$reply}\"; exit 0",
             "timeout": 60
           }
         ]
