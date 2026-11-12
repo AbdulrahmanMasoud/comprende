@@ -1,0 +1,574 @@
+[
+  {
+    "step": "1-gated-ls",
+    "folder": "/work/app",
+    "setup": "Comprende on, no allow rule",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": ["-p", "<prompt>", "--output-format", "stream-json", "--print-timeout", "300s"],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "command": "ls",
+        "state": "ERROR",
+        "error": "permission check failed for unsandboxed \"ls\": user denied permission to run command:\nls\nDo not attempt to circumvent this denial by rephrasing the command, using alternative tools/scripts (e.g. python, sh, curl), or accessing the same target resource. Proceed without performing this action."
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "",
+      "denied_actions": [
+        {
+          "action": "command",
+          "display_name": "RunCommand"
+        }
+      ]
+    },
+    "agy_stderr": "jetski: no output produced — a tool required the \"command\" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. command(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.\n",
+    "gate_runs": [
+      {
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000001",
+          "conversationId": "00000000-0000-4000-8000-000000000001",
+          "cwd": "/work/app",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000001/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.\"}}\n",
+        "stderr": "",
+        "PLUGIN_ROOT": "/home/user/.gemini/config/plugins/comprende",
+        "env_names": [
+          "ANTIGRAVITY_CONVERSATION_ID",
+          "HOME",
+          "LANG",
+          "NODE_OPTIONS",
+          "PATH",
+          "PLUGIN_DATA",
+          "PLUGIN_ROOT",
+          "PWD",
+          "SHLVL",
+          "TMPDIR",
+          "_",
+          "__CF_USER_TEXT_ENCODING"
+        ]
+      },
+      {
+        "argv": ["claude-hook", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000001",
+          "conversationId": "00000000-0000-4000-8000-000000000001",
+          "cwd": "/work/app",
+          "hookEventName": "PreToolUse",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "stepIdx": 2,
+          "toolCall": {
+            "args": {
+              "CommandLine": "ls",
+              "WaitMsBeforeAsync": 5000,
+              "toolSummary": "List directory contents"
+            },
+            "id": "call_00000000-0000-4000-8000-000000000002",
+            "name": "run_command"
+          },
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000001/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "",
+        "stderr": "",
+        "PLUGIN_ROOT": "/home/user/.gemini/config/plugins/comprende",
+        "env_names": [
+          "ANTIGRAVITY_CONVERSATION_ID",
+          "HOME",
+          "LANG",
+          "NODE_OPTIONS",
+          "PATH",
+          "PLUGIN_DATA",
+          "PLUGIN_ROOT",
+          "PWD",
+          "SHLVL",
+          "TMPDIR",
+          "__CF_USER_TEXT_ENCODING"
+        ]
+      }
+    ]
+  },
+  {
+    "step": "2-gated-ls-allowed",
+    "folder": "/work/app",
+    "setup": "Comprende on, `ls` allowed",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(ls)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "command": "ls",
+        "state": "DONE"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "math.js\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [
+      {
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000003",
+          "conversationId": "00000000-0000-4000-8000-000000000003",
+          "cwd": "/work/app",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000003/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.\"}}\n",
+        "stderr": "",
+        "PLUGIN_ROOT": "/home/user/.gemini/config/plugins/comprende",
+        "env_names": [
+          "ANTIGRAVITY_CONVERSATION_ID",
+          "HOME",
+          "LANG",
+          "NODE_OPTIONS",
+          "PATH",
+          "PLUGIN_DATA",
+          "PLUGIN_ROOT",
+          "PWD",
+          "SHLVL",
+          "TMPDIR",
+          "_",
+          "__CF_USER_TEXT_ENCODING"
+        ]
+      },
+      {
+        "argv": ["claude-hook", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000003",
+          "conversationId": "00000000-0000-4000-8000-000000000003",
+          "cwd": "/work/app",
+          "hookEventName": "PreToolUse",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "stepIdx": 2,
+          "toolCall": {
+            "args": {
+              "CommandLine": "ls",
+              "WaitMsBeforeAsync": 5000,
+              "toolSummary": "List directory contents"
+            },
+            "id": "call_00000000-0000-4000-8000-000000000004",
+            "name": "run_command"
+          },
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000003/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "",
+        "stderr": "",
+        "PLUGIN_ROOT": "/home/user/.gemini/config/plugins/comprende",
+        "env_names": [
+          "ANTIGRAVITY_CONVERSATION_ID",
+          "HOME",
+          "LANG",
+          "NODE_OPTIONS",
+          "PATH",
+          "PLUGIN_DATA",
+          "PLUGIN_ROOT",
+          "PWD",
+          "SHLVL",
+          "TMPDIR",
+          "__CF_USER_TEXT_ENCODING"
+        ]
+      }
+    ]
+  },
+  {
+    "step": "3-control-no-plugin-ls",
+    "folder": "/work/app",
+    "setup": "Comprende disabled (`agy plugin disable comprende`), no allow rule",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": ["-p", "<prompt>", "--output-format", "stream-json", "--print-timeout", "300s"],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "command": "ls",
+        "state": "ERROR",
+        "error": "permission check failed for unsandboxed \"ls\": user denied permission to run command:\nls\nDo not attempt to circumvent this denial by rephrasing the command, using alternative tools/scripts (e.g. python, sh, curl), or accessing the same target resource. Proceed without performing this action."
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "",
+      "denied_actions": [
+        {
+          "action": "command",
+          "display_name": "RunCommand"
+        }
+      ]
+    },
+    "agy_stderr": "jetski: no output produced — a tool required the \"command\" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. command(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.\n",
+    "gate_runs": []
+  },
+  {
+    "step": "4-plain-ls",
+    "folder": "/work/plain",
+    "setup": "Comprende on, `ls` allowed, a repo without the gate",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(ls)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "command": "ls",
+        "state": "DONE"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "notes.txt\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [
+      {
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000005",
+          "conversationId": "00000000-0000-4000-8000-000000000005",
+          "cwd": "/work/plain",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000005/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/plain"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect.\"}}\n",
+        "stderr": "",
+        "PLUGIN_ROOT": "/home/user/.gemini/config/plugins/comprende",
+        "env_names": [
+          "ANTIGRAVITY_CONVERSATION_ID",
+          "HOME",
+          "LANG",
+          "NODE_OPTIONS",
+          "PATH",
+          "PLUGIN_DATA",
+          "PLUGIN_ROOT",
+          "PWD",
+          "SHLVL",
+          "TMPDIR",
+          "_",
+          "__CF_USER_TEXT_ENCODING"
+        ]
+      },
+      {
+        "argv": ["claude-hook", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000005",
+          "conversationId": "00000000-0000-4000-8000-000000000005",
+          "cwd": "/work/plain",
+          "hookEventName": "PreToolUse",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "stepIdx": 2,
+          "toolCall": {
+            "args": {
+              "CommandLine": "ls",
+              "WaitMsBeforeAsync": 5000,
+              "toolSummary": "List directory contents"
+            },
+            "id": "call_00000000-0000-4000-8000-000000000006",
+            "name": "run_command"
+          },
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000005/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/plain"]
+        },
+        "stdout": "",
+        "stderr": "",
+        "PLUGIN_ROOT": "/home/user/.gemini/config/plugins/comprende",
+        "env_names": [
+          "ANTIGRAVITY_CONVERSATION_ID",
+          "HOME",
+          "LANG",
+          "NODE_OPTIONS",
+          "PATH",
+          "PLUGIN_DATA",
+          "PLUGIN_ROOT",
+          "PWD",
+          "SHLVL",
+          "TMPDIR",
+          "__CF_USER_TEXT_ENCODING"
+        ]
+      }
+    ]
+  },
+  {
+    "step": "5-gated-push",
+    "folder": "/work/app",
+    "setup": "Comprende on, the push allowed",
+    "prompt": "Run exactly one shell command: git push origin feature/sum. Then reply with its full output, word for word, and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(git push origin feature/sum)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "command": "git push origin feature/sum",
+        "state": "DONE"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "Ownership gate blocked for 'feature/sum':\n- No ownership report for branch 'feature/sum' (.learning/checks/feature%2Fsum.md). Ask your AI assistant to run the ownership check (\"check me\"), then commit the report.\n\n(Bypassing with --no-verify only delays this: CI runs the same check.)\n\nerror: failed to push some refs to '../origin.git'\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [
+      {
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000007",
+          "conversationId": "00000000-0000-4000-8000-000000000007",
+          "cwd": "/work/app",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Run exactly one shell command: git push origin feature/sum. Then reply with its full output, word for word, and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000007/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.\"}}\n",
+        "stderr": "",
+        "PLUGIN_ROOT": "/home/user/.gemini/config/plugins/comprende",
+        "env_names": [
+          "ANTIGRAVITY_CONVERSATION_ID",
+          "HOME",
+          "LANG",
+          "NODE_OPTIONS",
+          "PATH",
+          "PLUGIN_DATA",
+          "PLUGIN_ROOT",
+          "PWD",
+          "SHLVL",
+          "TMPDIR",
+          "_",
+          "__CF_USER_TEXT_ENCODING"
+        ]
+      },
+      {
+        "argv": ["claude-hook", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000007",
+          "conversationId": "00000000-0000-4000-8000-000000000007",
+          "cwd": "/work/app",
+          "hookEventName": "PreToolUse",
+          "lastUserInput": "Run exactly one shell command: git push origin feature/sum. Then reply with its full output, word for word, and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "stepIdx": 2,
+          "toolCall": {
+            "args": {
+              "CommandLine": "git push origin feature/sum",
+              "WaitMsBeforeAsync": 10000,
+              "toolSummary": "Git push"
+            },
+            "id": "call_00000000-0000-4000-8000-000000000008",
+            "name": "run_command"
+          },
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000007/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "",
+        "stderr": "",
+        "PLUGIN_ROOT": "/home/user/.gemini/config/plugins/comprende",
+        "env_names": [
+          "ANTIGRAVITY_CONVERSATION_ID",
+          "HOME",
+          "LANG",
+          "NODE_OPTIONS",
+          "PATH",
+          "PLUGIN_DATA",
+          "PLUGIN_ROOT",
+          "PWD",
+          "SHLVL",
+          "TMPDIR",
+          "__CF_USER_TEXT_ENCODING"
+        ]
+      }
+    ],
+    "checked_after": {
+      "command": "git ls-remote --heads origin",
+      "heads": ["refs/heads/main"]
+    }
+  },
+  {
+    "step": "6-exit2-ls",
+    "folder": "/work/app",
+    "setup": "Comprende on, `ls` allowed, plus a user hook in ~/.gemini/config/hooks.json that prints to stderr and exits 2",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(ls)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "command": "ls",
+        "state": "ERROR",
+        "error": "JSON hook \"jsonhook__step0-exit2_PreToolUse_0_0\" failed: command failed: exit status 2, stderr: step0: exit 2 test"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "Encountered error in tool execution: JSON hook \"jsonhook__step0-exit2_PreToolUse_0_0\" failed: command failed: exit status 2, stderr: step0: exit 2 test\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [
+      {
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000009",
+          "conversationId": "00000000-0000-4000-8000-000000000009",
+          "cwd": "/work/app",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000009/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.\"}}\n",
+        "stderr": "",
+        "PLUGIN_ROOT": "/home/user/.gemini/config/plugins/comprende",
+        "env_names": [
+          "ANTIGRAVITY_CONVERSATION_ID",
+          "HOME",
+          "LANG",
+          "NODE_OPTIONS",
+          "PATH",
+          "PLUGIN_DATA",
+          "PLUGIN_ROOT",
+          "PWD",
+          "SHLVL",
+          "TMPDIR",
+          "_",
+          "__CF_USER_TEXT_ENCODING"
+        ]
+      }
+    ]
+  },
+  {
+    "step": "7-exit1-ls",
+    "folder": "/work/app",
+    "setup": "Comprende on, `ls` allowed, plus a user hook in ~/.gemini/config/hooks.json that prints to stderr and exits 1",
+    "prompt": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+    "agy_flags": [
+      "-p",
+      "<prompt>",
+      "--output-format",
+      "stream-json",
+      "--print-timeout",
+      "300s",
+      "--settings",
+      "{\"permissions\":{\"allow\":[\"command(ls)\"]}}"
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_command",
+        "command": "ls",
+        "state": "ERROR",
+        "error": "JSON hook \"jsonhook__step0-exit1_PreToolUse_0_0\" failed: command failed: exit status 1, stderr: step0: exit 1 test"
+      }
+    ],
+    "result": {
+      "status": "SUCCESS",
+      "reply": "Encountered error in tool execution: JSON hook \"jsonhook__step0-exit1_PreToolUse_0_0\" failed: command failed: exit status 1, stderr: step0: exit 1 test\n",
+      "denied_actions": []
+    },
+    "agy_stderr": "",
+    "gate_runs": [
+      {
+        "argv": ["session-start", "--from-plugin"],
+        "cwd": "/home/user/.gemini/config/plugins/comprende",
+        "exit": 0,
+        "stdin": {
+          "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000010",
+          "conversationId": "00000000-0000-4000-8000-000000000010",
+          "cwd": "/work/app",
+          "hookEventName": "SessionStart",
+          "lastUserInput": "Run exactly one shell command: ls. Then reply with its output and nothing else. Do not run any other command.",
+          "modelName": "gemini-3.8-flash-high",
+          "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/00000000-0000-4000-8000-000000000010/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": ["/work/app"]
+        },
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Comprende is installed. Whenever you write or change code in this session, follow the comprende skill: explain only what's new, non-obvious, risky or a real decision, briefly, in the user's language and dialect. This repository uses the ownership gate (mode: required). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.\"}}\n",
+        "stderr": "",
+        "PLUGIN_ROOT": "/home/user/.gemini/config/plugins/comprende",
+        "env_names": [
+          "ANTIGRAVITY_CONVERSATION_ID",
+          "HOME",
+          "LANG",
+          "NODE_OPTIONS",
+          "PATH",
+          "PLUGIN_DATA",
+          "PLUGIN_ROOT",
+          "PWD",
+          "SHLVL",
+          "TMPDIR",
+          "_",
+          "__CF_USER_TEXT_ENCODING"
+        ]
+      }
+    ]
+  }
+]

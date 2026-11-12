@@ -4,7 +4,7 @@ Comprende runs in Claude Code, in Cursor from 0.3.0 ([#2](https://github.com/Abd
 
 - **Cursor:** tested on 2026-11-11 with the Cursor CLI (`cursor-agent`) `2026.11.10-731fb78` on macOS, plus the official docs.
 - **Codex:** tested on 2026-11-11 with the Codex CLI `0.167.1` on macOS, plus the official docs and its source. See [Codex: what we found](#codex-what-we-found).
-- **Antigravity:** from the official docs, plus the Antigravity CLI (`agy`) `1.5.5` without a sign-in. What needs the model is still Unknown. See [Antigravity: what we found](#antigravity-what-we-found).
+- **Antigravity:** from the official docs, plus the Antigravity CLI (`agy`) `1.5.5` on macOS: first without a sign-in, then signed in, for Step 0 on 2026-11-12 ([recording](recordings/antigravity/)). See [Antigravity: what we found](#antigravity-what-we-found).
 
 Each answer is marked with its source:
 - **Tested:** confirmed by our own run of the tool (see [How we tested](#how-we-tested)).
@@ -258,18 +258,19 @@ Nothing is broken for users: no command is blocked by mistake, and CI still chec
 
 ## Antigravity: what we found
 
-From the official docs (read on 2026-11-11), and the Antigravity CLI (`agy`) `1.5.5` on macOS, in a throwaway `HOME`. Everything that needs the model needs a Google sign-in. Those rows say so, and stay Unknown until a signed-in run. The claims from the outside PR ([#16](https://github.com/AbdulrahmanMasoud/comprende/pull/16), listed in [#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)) are checked at the end.
+From the official docs (read on 2026-11-11), and the Antigravity CLI (`agy`) `1.5.5` on macOS, in a throwaway `HOME`. Everything that needs the model needs a Google sign-in. Step 0 was the first signed-in run, on 2026-11-12: Comprende 0.4.2 as `agy plugin install` converts it, before any Antigravity support ([recording](recordings/antigravity/)). What it didn't cover stays Unknown, for a later signed-in run. The claims from the outside PR ([#16](https://github.com/AbdulrahmanMasoud/comprende/pull/16), listed in [#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)) are checked at the end.
 
 Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is the only one we can drive from a script.
 
-### Comprende 0.3.0 in Antigravity
+### Comprende 0.4.2 in Antigravity (Step 0)
 
-`agy plugin install <this repo>` converts today's Comprende by itself, since it's a Claude Code plugin: "1 skill, 1 MCP server, 2 hooks" (tested). We ran the converted hooks the way Antigravity does, from the plugin's folder, on payloads built from the docs' fields. The real payloads need a signed-in run.
+`agy plugin install <this repo>` converts Comprende by itself, since it's a Claude Code plugin: "1 skill, 1 MCP server, 2 hooks" (tested). In the converted `hooks.json`, `matcher: "Bash"` became `run_command`, and `${CLAUDE_PLUGIN_ROOT}` became `./`, since plugin hooks run in the plugin's folder. Step 0 ran 0.4.2 that way, signed in and headless ([recording](recordings/antigravity/)):
 
-- **The shell hook would run on every command.** In the converted file, `matcher: "Bash"` became `run_command`, and `${CLAUDE_PLUGIN_ROOT}` became `./`, since plugin hooks run in the plugin's folder (tested: the file).
-- **It can't check a push.** It calls the gate with no `--agent`, so the gate takes the payload for Claude Code's, finds no `tool_name` or `tool_input`, and allows: exit 0, nothing on stdout (tested, for an unverified `git push`). Antigravity asks for a JSON `decision`, and what it does with an empty reply isn't documented: allow, ask, or block every command. Unknown: needs a signed-in run.
-- **The session start gives only the always-on line,** with no gate message, and installs no git hook (tested). It can't find the repo: the payload has no `cwd`, and the hook runs in the plugin's folder. The line is in Claude Code's shape (`hookSpecificOutput`), not Antigravity's `injectSteps`, so it's probably ignored. Unknown: needs a signed-in run.
-- **The memory server** was converted with an absolute path to the installed copy's `dist/server.mjs`, so it may start. Unknown: needs a signed-in run.
+- **The shell hook runs on every command and replies with nothing, and Antigravity doesn't block on that.** The hook calls the gate with no `--agent`, so the gate reads the payload as Claude Code's, finds no `tool_name`, and allows: exit 0, nothing on stdout. The command then goes on to Antigravity's own permission check, as it does without Comprende (tested).
+- **It can't check a push,** for the same reason. In a gated repo, git's `pre-push` hook still blocks it (tested), and CI still checks.
+- **Any non-zero exit blocks the command** (tested, with exit 1 and exit 2, from test hooks in `~/.gemini/config/hooks.json`). The plugin's hooks go through the same runner (Antigravity names both `jsonhook__<group>_<event>_…`), so they're taken to behave the same. The gate's hook commands exit 1 when they fail (`FAIL_OPEN_EXIT` in `cli.ts`), which is "skip this hook" in Claude Code. So in Antigravity, a crash, or a Node.js that can't load `gate.mjs`, would block every command. No step hit it: on this payload, the gate allows before it does any work.
+- **The session start finds the repo, and its reply is rejected.** The payload has `cwd`, so the gate printed the always-on line and the ownership-gate note (`mode: required`). The reply is in Claude Code's shape, and Antigravity rejects it: `unknown field "hookSpecificOutput"`, in its own log only. The agent gets nothing (tested).
+- **The memory server starts:** Antigravity cached a schema for each of its 10 tools (tested). No step called one.
 
 ### Hooks
 
@@ -278,12 +279,12 @@ Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is
 | Events | `SessionStart`, `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop` | Docs: [hooks](https://antigravity.google/docs/hooks/) |
 | Where | The project's `.agents/hooks.json`, the user's `~/.gemini/config/hooks.json`, and a plugin's `hooks.json` at its root. Not `hooks/hooks.json`. Project hooks need the workspace trusted | Docs: [hooks](https://antigravity.google/docs/hooks/), [changelog](https://antigravity.google/docs/changelog/) ("a hooks/hooks.json file (which isn't read)") |
 | The file's shape | Named groups: `{"<group>": {"PreToolUse": [{"matcher": "run_command", "hooks": [{"type": "command", "command": "…", "timeout": 30}]}]}}`. `SessionStart` takes a flat list. Each hook has an `enabled` key | Docs: [build plugins](https://antigravity.google/docs/build-plugins/). Tested (the converted plugin's `hooks.json`) |
-| Input on stdin | camelCase: `conversationId`, `workspacePaths` (a list), `transcriptPath`, `artifactDirectoryPath`, `modelName`, `lastUserInput`. `PreToolUse` adds `toolCall: { name, args }` and `stepIdx`. For `run_command`, `args` holds `CommandLine`, `Cwd`, `WaitMsBeforeAsync`. No tool-call id is documented | Docs: [hooks](https://antigravity.google/docs/hooks/). Unknown by test: needs a signed-in run |
+| Input on stdin | camelCase. Both events we saw (`SessionStart`, `PreToolUse`) have `hookEventName`, `conversationId`, `cwd`, `workspacePaths` (a list), `transcriptPath`, `artifactDirectoryPath`, `modelName` and `lastUserInput`. `PreToolUse` adds `stepIdx` and `toolCall: {id, name, args}`. For `run_command`, `args` held `CommandLine`, `WaitMsBeforeAsync` and `toolSummary`. The docs also list `Cwd`, which the agent didn't set in our runs. The docs don't list `cwd`, `hookEventName` or `toolCall.id` | Tested (Step 0). Docs: [hooks](https://antigravity.google/docs/hooks/) |
 | The reply | Exit 0, and a JSON object on stdout with `decision`: `allow`, `auto_approve`, `deny`, `ask`, `force_ask` or `deny_unless_prior_grant`, plus an optional `reason` | Docs: [hooks](https://antigravity.google/docs/hooks/), [build plugins](https://antigravity.google/docs/build-plugins/) |
-| Exit codes | Any non-zero exit, 2 included, is "logged as a hook execution error and ignored (failing open)". So the gate's default block, exit 2, doesn't block here | Docs: [build plugins](https://antigravity.google/docs/build-plugins/) |
-| Empty or non-JSON stdout | Not documented. The changelog only mentions "safely handling empty decision strings" | Unknown: needs a signed-in run |
-| Session context | `injectSteps`. The two pages differ: `[{"userMessage": "…"}]` on one, and "the same schema as PreInvocation" (`systemMessage`) on the other | Docs: [build plugins](https://antigravity.google/docs/build-plugins/), [hooks](https://antigravity.google/docs/hooks/). Unknown which works: needs a signed-in run |
-| Plugin hooks' folder and environment | They run in the plugin's folder. CLI 1.5.3 added `PLUGIN_ROOT` and `PLUGIN_DATA` | Docs: [build plugins](https://antigravity.google/docs/build-plugins/), [changelog](https://antigravity.google/docs/changelog/) |
+| Exit codes | Any non-zero exit blocks the tool call: exit 1 and exit 2 both ended it with "JSON hook … failed: command failed: exit status N", and the command didn't run. The docs say a non-zero exit is "logged as a hook execution error and ignored (failing open)". It isn't, in `agy` 1.5.5 | Tested (Step 0, with test hooks in `~/.gemini/config/hooks.json`). Docs: [build plugins](https://antigravity.google/docs/build-plugins/) |
+| Empty or non-JSON stdout | Empty stdout on exit 0 doesn't block: the command goes on to the permission check. A `SessionStart` reply with a field Antigravity doesn't know is rejected whole (strict parsing), logged as failed, and ignored. So a reply must carry no extra fields. Non-JSON stdout from `PreToolUse` is Unknown. Not documented: the changelog only mentions "safely handling empty decision strings" | Tested (Step 0: empty, and the session start) |
+| Session context | `injectSteps`. The two pages differ: `[{"userMessage": "…"}]` on one, and "the same schema as PreInvocation" (`systemMessage`) on the other. Claude Code's `hookSpecificOutput` is rejected: `unknown field "hookSpecificOutput"`, in Antigravity's log only, and the agent gets nothing | Tested (Step 0: `hookSpecificOutput`). Docs: [build plugins](https://antigravity.google/docs/build-plugins/), [hooks](https://antigravity.google/docs/hooks/). Unknown which `injectSteps` shape works |
+| Plugin hooks' folder and environment | They run in the plugin's folder, with `PLUGIN_ROOT`, `PLUGIN_DATA` and `ANTIGRAVITY_CONVERSATION_ID` set. The changelog says CLI 1.5.3 added the first two | Tested (Step 0). Docs: [build plugins](https://antigravity.google/docs/build-plugins/), [changelog](https://antigravity.google/docs/changelog/) |
 | A feature flag | None. Project hooks, skills and MCP servers need the workspace trusted | Docs: [hooks](https://antigravity.google/docs/hooks/), [changelog](https://antigravity.google/docs/changelog/) |
 | Timeout | 30 seconds by default, per hook | Docs: [hooks](https://antigravity.google/docs/hooks/) |
 | In the IDE | Disputed. A forum user says hooks run only in the CLI (IDE 2.1.1, App 2.5.0, August 2026). Later App releases fix hooks. The IDE's changelog never mentions hooks | Third party: [forum](https://discuss.ai.google.dev/t/do-antigravity-ide-2-0-actually-execute-plugin-hooks-pretooluse-posttooluse-or-is-that-cli-only-right-now/176814). Docs: [changelog](https://antigravity.google/docs/changelog/). Unknown: we can't drive the IDE |
@@ -306,20 +307,20 @@ Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is
 
 | Question | Answer | Source |
 |---|---|---|
-| Where skills are found | `.agents/skills/` (and the older `.agent/skills/`), `~/.gemini/config/skills/`, and plugins' `skills/`. Gemini CLI's `.gemini/skills/` has to be moved | Docs: [skills](https://antigravity.google/docs/skills/), [Gemini CLI migration](https://antigravity.google/docs/cli/gcli-migration/). Unknown by test: needs a signed-in run |
+| Where skills are found | `.agents/skills/` (and the older `.agent/skills/`), `~/.gemini/config/skills/`, and plugins' `skills/`. Gemini CLI's `.gemini/skills/` has to be moved | Docs: [skills](https://antigravity.google/docs/skills/), [Gemini CLI migration](https://antigravity.google/docs/cli/gcli-migration/). Unknown by test: needs a later signed-in run |
 | Loaded automatically | Yes: "If a skill looks relevant to your task, the agent reads the full SKILL.md" | Docs: [skills](https://antigravity.google/docs/skills/) |
 | Always-on rules | `AGENTS.md` or `GEMINI.md`, `.agents/rules/*.md` with a `trigger`, and a plugin's `rules/AGENTS.md`, "loaded automatically as an always-on rule whenever the plugin is enabled" | Docs: [rules](https://antigravity.google/docs/rules/), [build plugins](https://antigravity.google/docs/build-plugins/) |
-| MCP config | `~/.gemini/config/mcp_config.json`, the project's `.agents/mcp_config.json`, or a plugin's own `mcp_config.json`, named `<plugin>_<server>` | Docs: [MCP](https://antigravity.google/docs/mcp/) |
-| Headless runs | `agy -p "<prompt>" --output-format json\|stream-json`, `--dangerously-skip-permissions`, `--add-dir`, `--print-timeout`. The workspace is the folder it starts in. An action that needs approval is soft-denied: the run goes on and exits 0 | Tested: the flags exist (`agy --help`). Docs: [headless](https://antigravity.google/docs/cli/headless/) (the soft deny) |
+| MCP config | `~/.gemini/config/mcp_config.json`, the project's `.agents/mcp_config.json`, or a plugin's own `mcp_config.json`, named `<plugin>_<server>`. The converted plugin's server started, and Antigravity cached a schema for each of its 10 tools, as `comprende_comprende` | Docs: [MCP](https://antigravity.google/docs/mcp/). Tested (Step 0: the tools cached, none called) |
+| Headless runs | `agy -p "<prompt>" --output-format json\|stream-json`, `--dangerously-skip-permissions`, `--add-dir`, `--print-timeout`. The workspace is the folder it starts in. An action that needs approval is soft-denied: the run goes on and exits 0. A shell command needs approval unless an allow rule matches it, such as `--settings '{"permissions":{"allow":["command(ls)"]}}'` for one run | Tested (Step 0). Docs: [headless](https://antigravity.google/docs/cli/headless/) (the soft deny) |
 | A config-folder override | None: it uses `HOME` | Tested (a throwaway `HOME` worked). Docs: [CLI reference](https://antigravity.google/docs/cli/reference/) (none listed) |
-| Sign-in | Google OAuth in the browser. The CLI prints the link, waits 60 seconds, or takes the code pasted in. The token goes to the OS keyring. A Gemini API key works only with `modelProvider: "gemini"` | Tested (the flow, up to the browser). Docs: [install](https://antigravity.google/docs/install/) |
+| Sign-in | Google OAuth in the browser. The CLI prints the link and waits 60 seconds, for the browser to hand the sign-in back or for the code to be pasted in. It takes a pasted code only on a terminal: with stdin from a pipe, it stops with "authentication required". A code works only in the run that asked for it (PKCE). The token goes to the OS keyring: on macOS, the login keychain, so a throwaway `HOME` needs its own. A Gemini API key works only with `modelProvider: "gemini"` | Tested (Step 0). Docs: [install](https://antigravity.google/docs/install/) |
 | Install | The App and IDE: a `.dmg`. The CLI: `curl -fsSL https://antigravity.google/cli/install.sh \| bash` (to `~/.local/bin/agy`, or `--dir <folder>`). It checks the download's SHA-512 and updates itself | Tested (the script read, then run with a throwaway `HOME` and `--dir`). Docs: [getting started](https://antigravity.google/docs/getting-started/) |
 
 ### Windows and commits
 
 | Question | Answer | Source |
 |---|---|---|
-| The shell for hooks | Not documented. The CLI's status-line command runs through `sh -c`, or `cmd /c` on Windows | Unknown. Docs: [settings](https://antigravity.google/docs/settings/) (the status line only) |
+| The shell for hooks | Not documented. The CLI's status-line command runs through `sh -c`, or `cmd /c` on Windows. On macOS, the converted commands' `sh` syntax ran (`command -v node … || exit 0; exec node …`). The Windows build's binary (`1.5.6`) contains both `cmd.exe`, through `COMSPEC`, and `powershell -NoProfile -Command`, so which one runs hooks there is still Unknown | Tested on macOS: a POSIX shell. Windows: Unknown. Docs: [settings](https://antigravity.google/docs/settings/) (the status line only). The Windows build's strings |
 | A trailer on the agent's commits | Not documented. One forum user saw commits authored by "antigravity", through a Zed extension | Unknown. Third party: [forum](https://discuss.ai.google.dev/t/gemini-antigravity-git-commits-with-random-author-via-zed-extension/185955) |
 
 ### The outside PR's claims (#16)
@@ -328,8 +329,8 @@ Antigravity is three products: the App, the IDE, and the CLI (`agy`). The CLI is
 |---|---|
 | The plugin folder: `plugin.json`, `mcp_config.json`, `hooks.json`, `rules/`, `skills/` | Confirmed by the docs, with two corrections. In a repo that also has `.claude-plugin/`, the manifest goes in `.antigravity-plugin/`. And the MCP server's path should use `${PLUGIN_ROOT}`: a relative `args` with `cwd: "."` isn't documented |
 | Named groups in `hooks.json`, with commands relative to the plugin (`node ./dist/gate.mjs …`) | Confirmed by the docs, and by the converted plugin (tested) |
-| The shell tool is `run_command`, the command is `toolCall.args.CommandLine`, the workspace is `workspacePaths[0]` | The first two confirmed by the docs. The third is an assumption: `workspacePaths` can hold several folders, and `toolCall.args.Cwd` says where the command runs |
-| Replies are JSON decisions, not exit codes | Confirmed by the docs: a non-zero exit fails open |
+| The shell tool is `run_command`, the command is `toolCall.args.CommandLine`, the workspace is `workspacePaths[0]` | The first two confirmed by the docs and by Step 0. The third is an assumption: `workspacePaths` can hold several folders. The payload also has `cwd` (Step 0) |
+| Replies are JSON decisions, not exit codes | Half right. A decision is JSON on exit 0, but a non-zero exit blocks the command (Step 0), though the docs say it fails open |
 | Session context through `injectSteps` with `systemMessage.systemMessage` | Documented on the hooks page. The build-plugins page shows `userMessage` instead. Unknown which works |
 
 ## Design proposal
@@ -456,7 +457,7 @@ The default replies live in the core, in `src/gate/hook-replies.ts`. Claude-form
 2. Otherwise, detection runs in registry order: Cursor first, then Claude Code, which accepts any payload.
 3. An unknown `--agent` resolves to no adapter, and the hook steps aside silently. At session start, the always-on line is still printed, in the default format.
 
-**The two optional methods** are there for tools that reply in JSON. Antigravity wants `{"decision": "deny", "reason": …}` and `injectSteps`, and ignores exit codes. Such a tool fits without touching the interface.
+**The two optional methods** are there for tools that reply in JSON. Antigravity wants `{"decision": "deny", "reason": …}` and `injectSteps`, and blocks on any non-zero exit. Such a tool fits without touching the interface.
 
 **One command, two names.** The hook command is `agent-hook`, and `claude-hook` stays its alias, because existing `.claude/settings.json` files and the plugin's `hooks/hooks.json` call it.
 
@@ -466,11 +467,11 @@ How each tool fills it in:
 |---|---|---|---|---|
 | `detects` | any payload: the fallback | `cursor_version` in the payload, or the tool name `Shell`. Not the environment: Claude Code started from Cursor's terminal may inherit Cursor's variables | `turn_id` in a tool call's payload, and `--agent codex` in its hook files | `toolCall` or `workspacePaths`, and `--agent antigravity` |
 | Shell tool | `Bash` | `Shell` | `Bash` | `run_command`, command in `toolCall.args.CommandLine` |
-| `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR`, else its own folder (Claude Code runs hooks from the project) | the one entry in `workspace_roots` (`cwd` is `""`), else `CURSOR_PROJECT_DIR` or `CLAUDE_PROJECT_DIR`, else step aside: Cursor runs plugin hooks from the plugin's folder. With several roots it steps aside, since it can't tell which one the command runs in | `cwd`, the command's folder | `toolCall.args.Cwd`, else the one entry in `workspacePaths`, else step aside |
+| `projectDir` | `cwd`, else `CLAUDE_PROJECT_DIR`, else its own folder (Claude Code runs hooks from the project) | the one entry in `workspace_roots` (`cwd` is `""`), else `CURSOR_PROJECT_DIR` or `CLAUDE_PROJECT_DIR`, else step aside: Cursor runs plugin hooks from the plugin's folder. With several roots it steps aside, since it can't tell which one the command runs in | `cwd`, the command's folder | `toolCall.args.Cwd`, else the payload's `cwd`, else the one entry in `workspacePaths`, else step aside |
 | `names` | Claude, Claude Code | Cursor, Cursor | Codex, Codex | Antigravity, Antigravity |
 | `pluginUpdateHint` | `/plugin marketplace update comprende` | the same, since Cursor may be running the Claude Code plugin it imported, or `git -C ~/.cursor/plugins/local/comprende pull` for its own copy | `codex plugin marketplace upgrade comprende`, then trust the hooks again in `/hooks` | `agy plugin install` again (to confirm) |
 | `projectHookFiles` | `.claude/settings.json`, always run | `.cursor/hooks.json`, always run, then `.claude/settings.json`, run only while Third-Party Imports is on | `.codex/hooks.json`, run only once the project and the hook are trusted | `.agents/hooks.json`, run only in a trusted workspace |
-| `eventId` | the tool call's id; none for a session, since one session runs one plugin copy | the tool call's id, or the session's | `tool_use_id`, or `session_id` | `conversationId` with `stepIdx`, or `conversationId` |
+| `eventId` | the tool call's id; none for a session, since one session runs one plugin copy | the tool call's id, or the session's | `tool_use_id`, or `session_id` | `toolCall.id`, or `conversationId` |
 | `formatDecision` | the default | the default | the default (tested) | `{"decision": …}` on exit 0 |
 | `formatSessionContext` | the default | the default | the default (tested) | `injectSteps` |
 
@@ -662,7 +663,7 @@ So each push is checked once, and each session gets each line once. `test/agents
 
 ### Antigravity: the design
 
-**It fits the `Agent` interface's methods as they are,** with the two optional ones, since it ignores exit codes. Two things change around them:
+**It fits the `Agent` interface's methods as they are,** with the two optional ones, since a deny is JSON on exit 0. Two things change around them:
 - **`AgentId` gains `"antigravity"`,** as it gains `"codex"`.
 - **The rule "a hook blocks only on a deliberate exit 2"** (CLAUDE.md, SECURITY.md, the comment on `HookReply` in `types.ts`) becomes "a hook blocks only on a deliberate deny". In Antigravity, a deny is exit 0 with `{"decision": "deny"}`. A test checks that only a deny decision prints a deny.
 
@@ -672,15 +673,15 @@ The adapter, `src/gate/agents/antigravity.ts`:
 |---|---|
 | `detects` | `toolCall` or `workspacePaths` in the payload. Our own hook files pass `--agent antigravity` |
 | `shellCommand` | `toolCall.args.CommandLine` when `toolCall.name` is `run_command` |
-| `projectDir` | `toolCall.args.Cwd` for a command. Otherwise the one entry in `workspacePaths`; with several, step aside, as in Cursor. Never the process's folder: plugin hooks run in the plugin's |
+| `projectDir` | `toolCall.args.Cwd` for a command, when the agent sets one. Otherwise the payload's `cwd` (Step 0 found it), then the one entry in `workspacePaths`; with several, step aside, as in Cursor. Never the process's folder: plugin hooks run in the plugin's |
 | `names` | Antigravity, Antigravity |
 | `pluginUpdateHint` | `agy plugin install https://github.com/AbdulrahmanMasoud/comprende` again (the update flow isn't documented; to confirm) |
 | `projectHookFiles` | `.agents/hooks.json`, with `alwaysRuns: false`: it needs the workspace trusted |
-| `eventId` | `conversationId` and `stepIdx` together, since no tool-call id is documented. The session's `conversationId` |
+| `eventId` | `toolCall.id`, which Step 0 found though the docs don't list it. The session's `conversationId` |
 | `formatDecision` | exit 0, with `{"decision": "allow"}` or `{"decision": "deny", "reason": "…"}` |
-| `formatSessionContext` | `{"injectSteps": [ … ]}`, in the shape a signed-in run confirms |
+| `formatSessionContext` | `{"injectSteps": [ … ]}`, in the shape a later signed-in run confirms. With no extra fields: Antigravity rejects a reply with one it doesn't know (Step 0) |
 
-**One change in the core,** not in the interface. Today, when stdin isn't JSON, `readHookInput` returns no adapter, and the hook replies with an empty allow. For a tool that wants a JSON reply, the core should resolve `--agent` anyway and answer in that adapter's format. A crash inside `agentHook` already replies in the adapter's format, from its `catch`. A crash outside it, in `cli.ts`, exits 1 with nothing on stdout, and Antigravity fails open on a non-zero exit.
+**One change in the core,** not in the interface. Today, when stdin isn't JSON, `readHookInput` returns no adapter, and the hook replies with an empty allow. For a tool that wants a JSON reply, the core should resolve `--agent` anyway and answer in that adapter's format. A crash inside `agentHook` already replies in the adapter's format, from its `catch`. A crash outside it, in `cli.ts`, exits 1 with nothing on stdout, and Antigravity blocks on any non-zero exit (Step 0). So Antigravity's hook commands must always exit 0, a crash included. A deny is JSON on exit 0.
 
 **The files to add:**
 - **`.antigravity-plugin/plugin.json`:**
@@ -690,16 +691,17 @@ The adapter, `src/gate/agents/antigravity.ts`:
 - **A root `hooks.json`:** Antigravity reads a plugin's hooks only there.
   - `SessionStart`: `node ./dist/gate.mjs session-start --from-plugin --agent antigravity`
   - `PreToolUse`, `matcher: "run_command"`: `node ./dist/gate.mjs agent-hook --from-plugin --agent antigravity`
-  - Relative paths, since hooks run in the plugin's folder. Without `node`, the command fails, and Antigravity fails open.
+  - Relative paths, since hooks run in the plugin's folder.
+  - Without `node`, a plain `node` line fails, and Antigravity would block the command: Step 0 didn't remove `node`, but it showed that a failed hook blocks. So these commands need a fallback that doesn't depend on `node`, and plain lines were chosen for Windows shells. An open question.
 - **A root `mcp_config.json`:** `node` with `${PLUGIN_ROOT}/dist/server.mjs`.
 - **Maybe `rules/AGENTS.md`,** for the always-on line (a decision, below). Cursor's plugin would load it too, since Cursor discovers `rules/` unless the manifest sets `rules`. So `.cursor-plugin/plugin.json` would need a `rules` path of its own.
 - **Claude Code and Codex read none of these.** `agy plugin validate` warns about our `hooks/hooks.json` ("isn't read"), which is only an error with `--strict`.
 
-**What `install` writes for teammates on Antigravity:** maybe `.agents/hooks.json`, behind an `agents-hooks` feature. The folder project hooks run in isn't documented, so the path in the command can't be settled yet. To decide after a signed-in run.
+**What `install` writes for teammates on Antigravity:** maybe `.agents/hooks.json`, behind an `agents-hooks` feature. The folder project hooks run in isn't documented, so the path in the command can't be settled yet. To decide after a later signed-in run.
 
 **No double runs:**
-- The plugin and `.agents/hooks.json` claim `conversationId` with `stepIdx`.
-- Session start comes from the plugin only: `.agents/hooks.json` isn't sure to run. (Codex's repo file has its own since 0.4.1, for re-trust after plugin updates; whether Antigravity needs that is for the signed-in run.)
+- The plugin and `.agents/hooks.json` claim `toolCall.id`, which Step 0 found in the payload.
+- Session start comes from the plugin only: `.agents/hooks.json` isn't sure to run. (Codex's repo file has its own since 0.4.1, for re-trust after plugin updates; whether Antigravity needs that is for a later signed-in run.)
 - A Claude Code plugin converted by `agy plugin install` or `agy plugin import claude` is also detected from the payload, and claims with the same key.
 - Two plugins named `comprende` can't both be installed in Antigravity's plugin folder (to confirm).
 
@@ -709,16 +711,16 @@ The adapter, `src/gate/agents/antigravity.ts`:
 3. Open a gated repo, and trust the workspace.
 
 **What's weaker than in Claude Code:**
-- **Exit codes don't block.** Every reply must be JSON, so the adapter can't lean on the core's default.
+- **Any non-zero exit blocks, and a deny must be JSON.** So the adapter can't lean on the core's default, and a failure must still exit 0.
 - **Hooks may not run in the IDE** (disputed). The git hook and CI still check.
 - **The plugin's files sit at the repo's root.**
-- **There's no tool-call id,** so claims key on `stepIdx`.
+- **The tool-call id isn't documented,** though the payload has one (`toolCall.id`, Step 0).
 - **There's no config-folder override,** so tests need a throwaway `HOME`.
 - **The shell on Windows isn't documented.**
 - **An update replaces the installed folder,** and how it's triggered isn't documented.
 
 **The end-to-end script, `tools/e2e-antigravity.mjs`:**
-- A throwaway `HOME`, with the sign-in already in the keyring.
+- A throwaway `HOME`, signed in first, with its own keychain on macOS: the token goes to the login keychain, and a pasted code works only on a terminal (Step 0).
 - `agy plugin install <this repo>`.
 - Each turn is `agy -p "<prompt>" --output-format stream-json --dangerously-skip-permissions` in the demo.
 - The same steps as for Codex.
@@ -785,15 +787,17 @@ The maintainer settled the open questions on 2026-11-11:
 3. **Antigravity: plugin files at this repo's root.** A `hooks.json` and an `mcp_config.json`, maybe a `rules/` folder: Antigravity reads them only there.
 4. **Antigravity: the always-on line from a plugin rule** (`rules/AGENTS.md`) instead of `SessionStart`? A rule doesn't depend on hooks running, which is disputed in the IDE.
 5. **Antigravity: the CLI first?** We can test only the CLI, and the IDE may not run hooks.
-6. **Antigravity: should `install` write `.agents/hooks.json`?** Better decided after a signed-in run shows which folder project hooks run in.
+6. **Antigravity: should `install` write `.agents/hooks.json`?** Better decided after a later signed-in run shows which folder project hooks run in.
 7. **One release or two?** Decided: 0.4.0 is Codex, 0.5.0 Antigravity, 0.6.0 GitLab.
 
-**What a signed-in Antigravity run must answer first,** before the adapter:
-- **What an empty stdout does.** It matters for safety: every path that can't format a reply prints nothing, such as an unknown `--agent` passed to an older repo copy of `gate.mjs`. If an empty reply blocks, every command would be blocked.
+**What a later signed-in Antigravity run must answer,** before the adapter. Step 0 answered two:
+- **What an empty stdout does:** answered, it doesn't block (Step 0). It mattered for safety: every path that can't format a reply prints nothing, such as an unknown `--agent` passed to an older repo copy of `gate.mjs`.
+- **Whether `stepIdx` is unique per tool call:** no longer needed. Claims can key on `toolCall.id`, which the payload has (Step 0).
 - Which `injectSteps` shape reaches the agent.
-- Whether `toolCall.args.Cwd` is an absolute path.
-- Whether `stepIdx` is unique per tool call, for the claims.
+- When the agent sets `toolCall.args.Cwd`, and whether it's an absolute path.
 - Which folder project hooks run in.
+- Whether a hook that times out blocks, now that a failed one does.
+- Whether `--dangerously-skip-permissions` skips hooks too.
 
 ## How we tested
 
@@ -827,5 +831,7 @@ The maintainer settled the open questions on 2026-11-11:
   - `agy --help` and `agy plugin validate` on this repo
   - `agy plugin install` of a local copy of this repo, which converts it
   - the converted hooks run the way Antigravity runs them, on payloads built from the docs' fields
-- **Waiting for a sign-in:** the same probe repo as for Codex, with hooks in `.agents/hooks.json` and `~/.gemini/config/hooks.json` and each `injectSteps` shape, and the gated demo with today's Comprende.
+- **Signed in (Step 0, 2026-11-12):** the gated demo and a repo without the gate, with 0.4.2 installed by `agy plugin install`, headless, with the gate's runs logged. Plus test hooks in `~/.gemini/config/hooks.json` that exit 1 and 2. See the [recording](recordings/antigravity/). The preload and the driver aren't committed, so Step 0 can't be repeated as is until `tools/e2e-antigravity.mjs` exists.
+- **The Windows build** (`1.5.6`): downloaded from the manifest the install script reads, its SHA-512 checked, and only its strings read, for the shell it might run hooks in.
+- **Still to run signed in:** hooks in `.agents/hooks.json`, each `injectSteps` shape, a JSON deny, a hook that times out, whether `--dangerously-skip-permissions` skips hooks, the skill loading, and an MCP tool call.
 - **The docs:** each key quote was also checked against the page's own text.
