@@ -1,5 +1,9 @@
 [
   {
+    "plugin": "this repo at dc8e731, installed with agy plugin install",
+    "hook_command_PreToolUse": "set \"A=$(node \"$PLUGIN_ROOT/dist/gate.mjs\" claude-hook --from-plugin; printf 'x%s' \"$?\")$(exit 0)\"; held=${1#A=}; code=${held##*x}; ok=${code%%[1-9]*}; reply=${held%x*}; printf '%s' \"${ok:+$reply}\"; exit 0"
+  },
+  {
     "step": "1-normal-ls",
     "folder": "/work/app",
     "setup": "Comprende 0.4.3 on, `ls` allowed",
@@ -68,8 +72,9 @@
           "toolCall": {
             "args": {
               "CommandLine": "ls",
+              "IsDaemon": false,
               "WaitMsBeforeAsync": 5000,
-              "toolSummary": "Run directory listing"
+              "toolSummary": "Directory listing"
             },
             "id": "call_00000000-0000-4000-8000-000000000002",
             "name": "run_command"
@@ -301,9 +306,8 @@
           "toolCall": {
             "args": {
               "CommandLine": "git push origin feature/sum",
-              "IsDaemon": false,
               "WaitMsBeforeAsync": 10000,
-              "toolSummary": "Git push feature sum"
+              "toolSummary": "Git push"
             },
             "id": "call_00000000-0000-4000-8000-000000000004",
             "name": "run_command"
@@ -423,7 +427,7 @@
     ],
     "result": {
       "status": "SUCCESS",
-      "reply": "`gate_status` reported that branch `feature/sum` vs `origin/main` (mode: required) has an unsaved report with 1 changed file (`math.js [new]`, 1 changed line) qualifying as a small change requiring one question.\n",
+      "reply": "The `gate_status` tool returned that the ownership check for branch `feature/sum` vs `origin/main` (mode: required) is not yet saved, showing one new file (`math.js`) and classifying it as a small change (1 changed line) requiring one question.\n",
       "denied_actions": []
     },
     "agy_stderr": "",

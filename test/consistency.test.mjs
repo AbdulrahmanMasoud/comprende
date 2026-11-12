@@ -490,8 +490,8 @@ const antigravityHookCommands = () => antigravityFormatCommands(json("hooks.json
  *    `-` from being read as an option of `set`. `ok` is "0" when the code is 0 and empty otherwise,
  *    so `reply`, the gate's output, goes out only then.
  *  - cmd.exe: the whole line is one `set "A=…"`, which succeeds: exit 0, and the gate never runs.
- *  - PowerShell 5.1 and 7: `$(exit 0)`, evaluated inside the string, ends the script with 0 after
- *    the gate, and nothing is printed.
+ *  - PowerShell 5.1 and 7: `$(exit 0)`, evaluated inside the string, ends the script with 0, and
+ *    nothing is printed. `$PLUGIN_ROOT` is an unset PowerShell variable there, so no gate runs.
  *  - The gate is "$PLUGIN_ROOT/dist/gate.mjs", which Antigravity sets for plugin hooks: never a
  *    path a repo can provide, whatever folder the hook runs in. Unset, no gate runs.
  *  The test below checks the rules that keep it so. */

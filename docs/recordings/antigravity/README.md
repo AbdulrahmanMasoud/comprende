@@ -74,12 +74,12 @@ The shell keeps the gate's output, prints it only when the gate exits 0, and oth
 
 The same way as Step 0, with these changes:
 
-- **The plugin:** the fix's branch at COMMIT_TBD, installed with `agy plugin install` into a fresh throwaway `HOME`: "1 skill, 1 MCP server, 1 hook", `Source: antigravity`. For a plugin's own `hooks.json`, the install message counts hook groups ("1 installed (comprende)"); for a converted one, it counts events ("2 installed (PreToolUse, SessionStart)").
+- **The plugin:** the fix's branch at dc8e731, installed with `agy plugin install` into a fresh throwaway `HOME`: "1 skill, 1 MCP server, 1 hook", `Source: antigravity`. For a plugin's own `hooks.json`, the install message counts hook groups ("1 installed (comprende)"); for a converted one, it counts events ("2 installed (PreToolUse, SessionStart)").
 - **The gated demo** also has its own `dist/gate.mjs` and `dist/server.mjs`, committed. Each writes a marker file in `/work/markers` if it ever runs. After every step, that folder was empty.
 - **The gate's runs** log the script's own path, and the MCP server's start.
 - **Steps 3 and 4** changed the installed plugin's `dist/gate.mjs`, and put it back after the step (the same SHA-256).
 - **Steps 1 to 6** ran with the final command. Step 6a, and steps 7 to 9, ran with an earlier draft (`out=$(…) && printf … || exit 0`): 6a only to learn the MCP permission's name, and 7 to 9 test Antigravity, not Comprende, with a user hook in `~/.gemini/config/hooks.json` that ran first and was removed after the step.
-- **The files:** `0.4.3/runs.json`, with the same replacements as Step 0 (paths, home folder, IDs).
+- **The files:** `0.4.3/runs.json`, with the same replacements as Step 0 (paths, home folder, IDs). Its first entry names the commit and the hook command.
 
 ### The runs
 
