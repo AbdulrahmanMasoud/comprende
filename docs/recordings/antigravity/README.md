@@ -103,3 +103,33 @@ The same way as Step 0, with these changes:
 - **The shell has to hold the output back.** Non-JSON stdout on exit 0 blocks the command too (step 7). So `node … || exit 0` alone would have let a crash's partial output through, and blocked.
 - **A timeout blocks, and no wrapper can help with it** (step 8): the shell itself is killed. In 0.4.3 the gate allows Antigravity's payload before doing any work.
 - **On macOS, Antigravity runs hooks with `sh`,** not the user's `$SHELL` (steps 2 and 9).
+
+## 0.5.0: the adapter
+
+First, what Antigravity does with each reply the adapter could send, with test hooks; then the adapter itself, from the `feat/antigravity-adapter` branch at e12b7fa.
+
+### How it was recorded
+
+The same way as 0.4.3, in the same signed-in throwaway `HOME`. Steps `e1` to `e5` use test hooks in `~/.gemini/config/hooks.json`, a scratch repo with its own `.agents/hooks.json`, or a throwaway probe plugin, each removed after its step. Steps `a1` to `b2` use the branch's plugin: "1 skill, 1 rule, 1 MCP server, 1 hook". The files: `0.5.0/runs.json`, with the same replacements as before, plus the local time Antigravity adds to a prompt.
+
+### The runs
+
+| Step | Setup | Result |
+|---|---|---|
+| `e1-session-context-shapes` | three SessionStart hooks, one per `injectSteps` shape | the agent named all three code words. The transcript has `userMessage` as a `USER_INPUT` step, `ephemeralMessage` as an `EPHEMERAL_MESSAGE`, and `systemMessage` as a `SYSTEM_MESSAGE` that says "The following system message was injected by a SessionStart hook" |
+| `e2a-json-deny-ls` | a PreToolUse hook that prints a JSON deny on exit 0 | `ls` blocked: `tool call denied by pre-tool hook: PROBE-DENY: …` |
+| `e2b-json-allow-no-rule-ls` | a PreToolUse hook that prints `{"decision": "allow"}`, no allow rule | `ls` still denied by Antigravity's own permission check |
+| `e3-agents-hooks-ls` | a repo with its own `.agents/hooks.json`, and the plugin | both ran on each event. The repo's hooks ran in `<repo>/.agents`, with no trust step |
+| `e4-skill-code-change` | "Add a function mul(a, b) … to math.js" | the agent's first step read the plugin's `skills/comprende/SKILL.md` |
+| `e5-plugin-rule` | a probe plugin with `rules/AGENTS.md` | the agent quoted the rule's code word |
+| `a1-gated-session-context` | the adapter, in the gated repo | the agent quoted the always-on line once, "a rule", and the gate's note, "a system message". It also said the repo's `gate.mjs` differs from the plugin's: the demo was set up with 0.4.3's gate |
+| `a2-plain-session-context` | the adapter, in a repo without the gate | the always-on line once, from the rule. The session start replied `{}`, and Antigravity's log has no hook error |
+| `b1-gated-push` | the adapter, an unverified push allowed | blocked by Comprende's own hook: `tool call denied by pre-tool hook: Blocked by the ownership gate: - No ownership report for branch 'feature/sum' … Ask Antigravity to run the ownership check ("check me")`. The push never started: `origin` still had only `main` |
+| `b2-gated-ls` | the adapter, `ls` allowed | `ls` ran. The hook replied with nothing |
+
+### What they show
+
+- **The adapter's two replies work as designed.** A JSON deny on exit 0 blocks, with the reason shown, and nothing allows. `{"decision": "allow"}` would mean the same, so the gate never sends it.
+- **The system message is the shape for the gate's note:** the agent reads it as instructions, not as the user's request.
+- **The always-on line comes once,** from the plugin's rule, and the session start leaves it out.
+- **A repo's `.agents/hooks.json` would run the gate a second time,** so `install` doesn't write one.

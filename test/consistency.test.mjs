@@ -527,6 +527,15 @@ test("the Antigravity plugin has its own manifest, with only the fields Antigrav
     assert.ok(documented.includes(key), `${key} isn't an Antigravity manifest field`);
 });
 
+test("the Antigravity plugin's rule is the always-on line, word for word", () => {
+  // Antigravity loads rules/AGENTS.md whenever the plugin is enabled, and the plugin's session
+  // start leaves the line out there, so the rule must say exactly what the others' session starts say.
+  assert.equal(read("rules/AGENTS.md").toString("utf8"), `${gate.const("ALWAYS_ON")}\n`);
+  // No frontmatter: Cursor, which also discovers a plugin's rules/, applies a rule by itself only
+  // with alwaysApply: true, so it doesn't add the line a second time.
+  assert.ok(!read("rules/AGENTS.md").toString("utf8").startsWith("---"));
+});
+
 test("the Antigravity plugin's MCP config starts the plugin's own server", () => {
   // Antigravity expands ${PLUGIN_ROOT} in MCP args. A relative path could resolve in the user's repo.
   assert.deepEqual(json("mcp_config.json"), {
