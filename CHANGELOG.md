@@ -2,11 +2,20 @@
 
 ## Unreleased
 
+## 0.5.0
+
 - **Antigravity checks a push** (part of [#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)). An Antigravity adapter reads Antigravity's own hook payload, so an unverified `git push` from the agent is blocked with a JSON deny, and the agent sees why. The gate's note in a gated repo now reaches the agent, as a system message. The always-on instruction comes from a plugin rule, `rules/AGENTS.md`, once, and the session start says the hooks ran. Tested in the Antigravity CLI ([recording](docs/recordings/antigravity/#050-the-adapter)).
   - `install` writes no repo hook file for Antigravity: a repo's `.agents/hooks.json` would run alongside the plugin's hooks, and check each command twice.
   - With `COMPRENDE_QUIET=1`, Antigravity's session start sends the quiet line, but the plugin's rule still loads. Which one the agent follows isn't tested.
-  - Install: `agy plugin install https://github.com/AbdulrahmanMasoud/comprende`, in both READMEs. What works where, what's weaker in Antigravity, and a checklist for the IDE and the App, which aren't tested yet: [docs/agents.md](docs/agents.md#whats-weaker-in-antigravity-than-in-claude-code). Mixed teams: [docs/teams.md](docs/teams.md#mixed-teams-claude-code-cursor-codex-and-antigravity).
-- **`tools/e2e-antigravity.mjs`:** the end-to-end run in the real Antigravity CLI, by hand, in a throwaway `HOME` where `agy` is signed in (CONTRIBUTING.md, "Testing in Antigravity"). It passed every step in real runs, the skill's loading and a memory-server call included, after two fixes to the script. Its replies are kept in `docs/recordings/antigravity/0.5.0-e2e/`.
+  - **Install or update:** `agy plugin install https://github.com/AbdulrahmanMasoud/comprende`, with `agy` 1.5.3 or later, then start a new `agy` session (both READMEs). Brought Comprende over with `agy plugin import claude`? Run it anyway, then check that `agy plugin list` shows one `comprende`, with `Source: antigravity`. Whether it replaces the converted copy isn't tested.
+  - What works where, and what's weaker in Antigravity: [docs/agents.md](docs/agents.md#whats-weaker-in-antigravity-than-in-claude-code). Mixed teams: [docs/teams.md](docs/teams.md#mixed-teams-claude-code-cursor-codex-and-antigravity).
+- **Not tested: the Antigravity IDE and the Antigravity App.** All of the above was tested in the Antigravity CLI (`agy`) only, and on macOS only. A checklist to try the IDE and the App by hand: [docs/agents.md](docs/agents.md#checking-it-in-antigravity). Also not tested in Antigravity: Linux, and the git hook that the session start installs.
+- **On Windows, the hooks do nothing in Antigravity:** no push check, no session-start note, no git hook installed for you. CI still checks, and so does the git hook once you run `node .learning/gate.mjs install-hooks` in the clone.
+- **Cursor: not checked in a real run for this release.** Cursor also reads a plugin's `rules/` folder. `rules/AGENTS.md` has no frontmatter, so Cursor shouldn't apply it by itself and add the always-on line a second time. The tests check the file, but the end-to-end run in the real Cursor CLI hasn't run on 0.5.0.
+- **`tools/e2e-antigravity.mjs`:** the end-to-end run in the real Antigravity CLI, by hand, in a throwaway `HOME` where `agy` is signed in (CONTRIBUTING.md, "Testing in Antigravity"). It passed every step in a real run, the skill's loading and a memory-server call included ([recording](docs/recordings/antigravity/#050-the-end-to-end-script)).
+- **Claude Code, Cursor and Codex:** one change: with `COMPRENDE_QUIET=1`, the session-start line now also says that quiet mode replaces any always-on Comprende instruction. In Codex, trust Comprende's hooks again in `/hooks` after updating, as after every update.
+- **Upgrading a gated repo:** update the plugin, then upgrade the repo's copy of the gate in its own PR, with `node <plugin>/dist/gate.mjs install --upgrade --repo .` (see [Upgrading the gate](docs/teams.md#upgrading-the-gate)). The upgrade PR needs no report. Until it's merged, each session start says the repo's copy differs from the plugin's, and a new clone doesn't get the git hook by itself. `GATE_VERSION` stays 3, since the report format is unchanged.
+- **CI:** `claude plugin validate` now runs on Claude Code 2.1.326 ([#70](https://github.com/AbdulrahmanMasoud/comprende/pull/70)).
 
 ## 0.4.3
 
