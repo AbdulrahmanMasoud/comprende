@@ -109,11 +109,7 @@ function gatedRepoContext(run: HookRun, payload: unknown): string[] {
     // Step aside before claiming: a copy that stepped aside but took the claim
     // would leave the copy it stepped aside for without the gate's context.
     const givesGateContext = !stepsAside(run, root) && claimedGateContext(run, payload, dir);
-    const lines = givesGateContext
-      ? [
-          `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`,
-        ]
-      : [];
+    const lines = givesGateContext ? [gateContextLine(cfg.mode, run.source)] : [];
     const hint = run.agent.pluginNotRunningHint;
     if (run.source === "repo" && hint) lines.push(pluginNotRunningNote(run.agent, hint));
     // A run from the repo's hook file is the repo's own gate.mjs: it can't vouch
@@ -123,6 +119,13 @@ function gatedRepoContext(run: HookRun, payload: unknown): string[] {
   } catch {
     return [];
   }
+}
+
+/** The gate's note. Only the plugin installs the skill, so only a plugin's copy names a
+ *  file in it: the repo's hook files also run where the plugin isn't installed (#59). */
+function gateContextLine(mode: string, source: HookSource): string {
+  const reference = source === "plugin" ? " (read references/ownership-check.md)" : "";
+  return `This repository uses the ownership gate (mode: ${mode}). For any code change, follow the comprende skill's ownership check${reference}: brief in-flight questions, a final check before commit/PR, and a saved report.`;
 }
 
 /** Install the pre-push hook, which runs the repo's gate on every push, but only

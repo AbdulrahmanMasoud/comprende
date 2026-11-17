@@ -2233,9 +2233,7 @@ function gatedRepoContext(run2, payload) {
     const cfg = loadConfig(root);
     if (cfg.mode === "off") return [];
     const givesGateContext = !stepsAside(run2, root) && claimedGateContext(run2, payload, dir);
-    const lines = givesGateContext ? [
-      `This repository uses the ownership gate (mode: ${cfg.mode}). For any code change, follow the comprende skill's ownership check (read references/ownership-check.md): brief in-flight questions, a final check before commit/PR, and a saved report.`
-    ] : [];
+    const lines = givesGateContext ? [gateContextLine(cfg.mode, run2.source)] : [];
     const hint = run2.agent.pluginNotRunningHint;
     if (run2.source === "repo" && hint) lines.push(pluginNotRunningNote(run2.agent, hint));
     if (run2.source === "plugin") lines.push(...autoInstallGitHook(run2.agent, root));
@@ -2243,6 +2241,10 @@ function gatedRepoContext(run2, payload) {
   } catch {
     return [];
   }
+}
+function gateContextLine(mode, source) {
+  const reference = source === "plugin" ? " (read references/ownership-check.md)" : "";
+  return `This repository uses the ownership gate (mode: ${mode}). For any code change, follow the comprende skill's ownership check${reference}: brief in-flight questions, a final check before commit/PR, and a saved report.`;
 }
 function autoInstallGitHook(agent, root) {
   const repoGate = join15(root, GATE_REL);

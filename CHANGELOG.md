@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **The gate's session-start note no longer sends the agent to a file that may not be there** ([#59](https://github.com/AbdulrahmanMasoud/comprende/issues/59)). The note from a repo's own hook file (Cursor's `.cursor/hooks.json`, Codex's `.codex/hooks.json`) named the skill's `references/ownership-check.md`, which only the plugin installs. Without the plugin, an agent searched the disk for a copy. Now only the plugin's note names that file. The repo's note changes once the repo's copy of the gate is upgraded ([Upgrading the gate](docs/teams.md#upgrading-the-gate)).
+
 ## 0.5.0
 
 - **Antigravity checks a push** (part of [#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)). An Antigravity adapter reads Antigravity's own hook payload, so an unverified `git push` from the agent is blocked with a JSON deny, and the agent sees why. The gate's note in a gated repo now reaches the agent, as a system message. The always-on instruction comes from a plugin rule, `rules/AGENTS.md`, once, and the session start says the hooks ran. Tested in the Antigravity CLI ([recording](docs/recordings/antigravity/#050-the-adapter)).

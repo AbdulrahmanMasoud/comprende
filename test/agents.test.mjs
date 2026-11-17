@@ -617,6 +617,39 @@ test("in Claude Code, a session that starts again under the same id gets the alw
   }
 });
 
+// #59: the repo's hook files run without the plugin too, where the skill and its references/
+// aren't installed. An agent sent to a missing file searched the disk for a copy.
+test("the gate's note names the skill's reference file only from the plugin, which installs it", (t) => {
+  const { dev } = setup(t);
+  const reference = /references\/ownership-check\.md/;
+  // Payloads are set field by field: a Windows path pasted into the JSON's text would break it.
+  const cursor = runGate(dev, ["session-start", "--from-repo", "--agent", "cursor"], {
+    input: cursorSession(dev, "session-note-cursor"),
+    env: CURSOR_ENV,
+  });
+  const codex = runGate(dev, ["session-start", "--from-repo", "--agent", "codex"], {
+    input: JSON.stringify({
+      ...JSON.parse(fixture("codex", "session-start.json")),
+      cwd: dev,
+      session_id: "session-note-codex",
+    }),
+    env: { ...ENV, ...envOf("codex"), OWNERSHIP_GATE_NO_AUTO_HOOK: "1" },
+  });
+  for (const [tool, r] of [
+    ["cursor", cursor],
+    ["codex", codex],
+  ]) {
+    const context = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+    assert.match(context, /This repository uses the ownership gate \(mode: required\)/, tool);
+    assert.doesNotMatch(context, reference, tool);
+  }
+  const fromPlugin = plugin(REPO, ["session-start", "--from-plugin"], {
+    input: JSON.stringify({ ...JSON.parse(fixture("claude-code", "session-start.json")), cwd: dev }),
+    env: { ...ENV, OWNERSHIP_GATE_NO_AUTO_HOOK: "1" },
+  });
+  assert.match(JSON.parse(fromPlugin.stdout).hookSpecificOutput.additionalContext, reference);
+});
+
 test("a session start in .cursor/hooks.json without --from-repo doesn't make the plugin drop the gate's context", (t) => {
   const { dev } = setup(t);
   const path = join(dev, ".cursor/hooks.json");
