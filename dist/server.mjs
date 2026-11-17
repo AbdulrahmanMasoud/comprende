@@ -7257,10 +7257,6 @@ var require_dist = __commonJS({
   }
 });
 
-// src/server.ts
-import { spawn } from "node:child_process";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
-
 // node_modules/zod/v3/helpers/util.js
 var util;
 (function(util2) {
@@ -23587,10 +23583,96 @@ var StdioServerTransport = class {
   }
 };
 
-// src/gate/git.ts
-import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync as statSync2, utimesSync } from "node:fs";
-import { devNull, homedir, tmpdir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+// src/mcp/tool-definition.ts
+var ToolError = class extends Error {
+  name = "ToolError";
+};
+var READ_ONLY = { readOnlyHint: true, openWorldHint: false };
+var WRITES = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
+var title = (name) => name.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+var str = (field, description) => string2().describe(description).meta({ title: title(field) });
+function tool(def) {
+  const schema = object2(def.shape);
+  return { ...def, run: (args) => def.run(schema.parse(args)) };
+}
+
+// src/store/common.ts
+import { randomUUID } from "node:crypto";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+var NOTE_MAX_CHARS = 200;
+var SLUG_MAX_CHARS = 60;
+var StoreError = class extends Error {
+  name = "StoreError";
+};
+var truncate = (s, n) => s.length <= n ? s : Array.from(s).slice(0, n).join("");
+var lines = (s) => s.split(/\r\n|\r|\n/);
+function isoDate(year, month, day) {
+  const d = new Date(year, month, day);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function slug(text) {
+  const s = text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return truncate(s, SLUG_MAX_CHARS);
+}
+var expandHome = (p) => p === "~" || p.startsWith("~/") ? os.homedir() + p.slice(1) : p;
+function resolveUserPath(p) {
+  const abs = resolve(expandHome(p));
+  try {
+    return fs.realpathSync(abs);
+  } catch {
+    return abs;
+  }
+}
+var START = "(?<![\\p{L}\\p{N}_])";
+var END = "(?![\\p{L}\\p{N}_])";
+var SECRET_PATTERNS = [
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----/u,
+  new RegExp(`${START}AKIA[0-9A-Z]{16}${END}`, "u"),
+  // AWS access key
+  new RegExp(`${START}(sk|pk|rk)[-_](live|test|proj|ant)?[-_]?[A-Za-z0-9]{16,}`, "u"),
+  // API keys
+  new RegExp(`${START}gh[pousr]_[A-Za-z0-9]{30,}${END}`, "u"),
+  // GitHub tokens
+  new RegExp(`${START}xox[abprs]-[A-Za-z0-9-]{10,}`, "u"),
+  // Slack tokens
+  new RegExp(`${START}(password|passwd|secret|api[_-]?key|token)\\s*[:=]\\s*\\S{6,}`, "iu"),
+  new RegExp(`${START}[a-z]+://[^/\\s:]+:[^@\\s]+@`, "iu")
+  // user:pass@host URLs
+];
+function checkNoSecrets(...texts) {
+  for (const text of texts) {
+    if (SECRET_PATTERNS.some((pattern) => pattern.test(text))) {
+      throw new StoreError(
+        "Refused: this looks like it contains a credential. Memory files must never hold secrets \u2014 rephrase without it."
+      );
+    }
+  }
+}
+function atomicWrite(path, content) {
+  const dir = dirname(path);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmp = join(dir, `.${basename(path)}.${randomUUID()}.tmp`);
+  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW;
+  let fd = fs.openSync(tmp, flags, 384);
+  try {
+    const buf = Buffer.from(content);
+    for (let off = 0; off < buf.length; ) off += fs.writeSync(fd, buf, off);
+    fs.closeSync(fd);
+    fd = null;
+    fs.renameSync(tmp, path);
+  } catch (e) {
+    if (fd !== null) fs.closeSync(fd);
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
+// src/store/profile.ts
+import * as fs2 from "node:fs";
+import * as os2 from "node:os";
+import { dirname as dirname2, join as join2, resolve as resolve2 } from "node:path";
 
 // src/util.ts
 import { lstatSync, statSync } from "node:fs";
@@ -23624,198 +23706,7 @@ var isDirectory = (p) => {
   }
 };
 
-// src/gate/run.ts
-import { spawnSync } from "node:child_process";
-function run(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, {
-    cwd: opts.cwd,
-    env: opts.env,
-    input: opts.input,
-    maxBuffer: 1 << 30,
-    timeout: opts.timeout,
-    windowsHide: true
-  });
-  if (r.error) {
-    const err = r.error;
-    if (err.code === "ENOENT") throw Object.assign(new Error(`${cmd}: not found`), { code: "ENOENT" });
-    throw err;
-  }
-  return { status: r.status ?? 1, stdout: r.stdout ?? Buffer.alloc(0), stderr: r.stderr ?? Buffer.alloc(0) };
-}
-
-// src/gate/shared.ts
-import { fileURLToPath } from "node:url";
-var LEARNING = ".learning";
-var CHECKS_DIR = `${LEARNING}/checks`;
-var CONFIG_PATH = `${LEARNING}/config.json`;
-var GATE_REL = `${LEARNING}/gate.mjs`;
-var REPORT_INPUT = `${LEARNING}/report.local.json`;
-var GATE_ATTRIBUTES_LINE = `${GATE_REL} -text`;
-var ZERO_SHA = "0".repeat(40);
-var GateError = class extends Error {
-};
-var SELF = (() => {
-  try {
-    return fileURLToPath(import.meta.url);
-  } catch {
-    return "";
-  }
-})();
-
-// src/gate/platforms/github.ts
-var WORKFLOW = `name: Ownership check
-
-on:
-  pull_request:
-    # 'edited' re-runs the check when a PR is retargeted to another base branch.
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
-
-permissions:
-  contents: read
-
-jobs:
-  ownership:
-    name: Ownership check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          # Check the PR's own commit (not GitHub's merge commit) with full history,
-          # so fingerprints match what the developer verified.
-          ref: \${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          # The gate needs no dependencies; a restored cache is only a way in.
-          package-manager-cache: false
-
-      - name: Verify ownership report
-        env:
-          BASE_REF: \${{ github.base_ref }}
-          HEAD_REF: \${{ github.head_ref }}
-          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
-          NODE_OPTIONS: ""
-        run: |
-          # Run the gate as it exists on the base branch, so a PR can't weaken it
-          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
-          # doesn't have the gate yet (the PR that installs it); the rules then
-          # are the strict defaults, not the PR's own config.
-          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
-            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
-          else
-            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
-          fi
-          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
-            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
-`;
-
-// src/gate/git.ts
-function gitEnv(extra) {
-  const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
-  delete env.GIT_DIFF_OPTS;
-  let n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
-  if (!Number.isFinite(n) || n < 0) n = 0;
-  env.GIT_CONFIG_COUNT = String(n + 1);
-  env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
-  env[`GIT_CONFIG_VALUE_${n}`] = "false";
-  return { ...env, ...extra ?? {} };
-}
-function repoRoot(path) {
-  let start = resolve((path || process.cwd()).replace(/^~(?=$|[/\\])/, homedir()));
-  if (!existsSync(start)) throw new GateError(`Path does not exist: ${start}`);
-  if (isFile(start)) start = dirname(start);
-  let out;
-  try {
-    out = run("git", ["rev-parse", "--show-toplevel"], { cwd: start, env: gitEnv() });
-  } catch (e) {
-    throw new GateError(`Could not run git: ${e.message}`);
-  }
-  const top = out.stdout.toString("utf8").trim();
-  if (out.status !== 0 || !top) throw new GateError(`Not inside a git working tree: ${start}`);
-  return resolve(top);
-}
-var WORKTREE_SAFE = ["-c", "core.fsmonitor=false", "-c", `core.hooksPath=${devNull}`];
-var UTF8 = new TextDecoder("utf-8", { fatal: true });
-
-// src/store/common.ts
-import { randomUUID } from "node:crypto";
-import * as fs from "node:fs";
-import * as os from "node:os";
-import { basename, dirname as dirname2, join as join2, resolve as resolve2 } from "node:path";
-var NOTE_MAX_CHARS = 200;
-var SLUG_MAX_CHARS = 60;
-var StoreError = class extends Error {
-  name = "StoreError";
-};
-var truncate = (s, n) => s.length <= n ? s : Array.from(s).slice(0, n).join("");
-var lines = (s) => s.split(/\r\n|\r|\n/);
-function isoDate(year, month, day) {
-  const d = new Date(year, month, day);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function slug(text) {
-  const s = text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return truncate(s, SLUG_MAX_CHARS);
-}
-var expandHome = (p) => p === "~" || p.startsWith("~/") ? os.homedir() + p.slice(1) : p;
-function resolveUserPath(p) {
-  const abs = resolve2(expandHome(p));
-  try {
-    return fs.realpathSync(abs);
-  } catch {
-    return abs;
-  }
-}
-var START = "(?<![\\p{L}\\p{N}_])";
-var END = "(?![\\p{L}\\p{N}_])";
-var SECRET_PATTERNS = [
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/u,
-  new RegExp(`${START}AKIA[0-9A-Z]{16}${END}`, "u"),
-  // AWS access key
-  new RegExp(`${START}(sk|pk|rk)[-_](live|test|proj|ant)?[-_]?[A-Za-z0-9]{16,}`, "u"),
-  // API keys
-  new RegExp(`${START}gh[pousr]_[A-Za-z0-9]{30,}${END}`, "u"),
-  // GitHub tokens
-  new RegExp(`${START}xox[abprs]-[A-Za-z0-9-]{10,}`, "u"),
-  // Slack tokens
-  new RegExp(`${START}(password|passwd|secret|api[_-]?key|token)\\s*[:=]\\s*\\S{6,}`, "iu"),
-  new RegExp(`${START}[a-z]+://[^/\\s:]+:[^@\\s]+@`, "iu")
-  // user:pass@host URLs
-];
-function checkNoSecrets(...texts) {
-  for (const text of texts) {
-    if (SECRET_PATTERNS.some((pattern) => pattern.test(text))) {
-      throw new StoreError(
-        "Refused: this looks like it contains a credential. Memory files must never hold secrets \u2014 rephrase without it."
-      );
-    }
-  }
-}
-function atomicWrite(path, content) {
-  const dir = dirname2(path);
-  fs.mkdirSync(dir, { recursive: true });
-  const tmp = join2(dir, `.${basename(path)}.${randomUUID()}.tmp`);
-  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW;
-  let fd = fs.openSync(tmp, flags, 384);
-  try {
-    const buf = Buffer.from(content);
-    for (let off = 0; off < buf.length; ) off += fs.writeSync(fd, buf, off);
-    fs.closeSync(fd);
-    fd = null;
-    fs.renameSync(tmp, path);
-  } catch (e) {
-    if (fd !== null) fs.closeSync(fd);
-    fs.rmSync(tmp, { force: true });
-    throw e;
-  }
-}
-
 // src/store/profile.ts
-import * as fs2 from "node:fs";
-import * as os2 from "node:os";
-import { dirname as dirname3, join as join3, resolve as resolve3 } from "node:path";
 var PROFILE_VERSION = 1;
 var MAX_EVIDENCE = 3;
 var MAX_LISTED = 40;
@@ -23823,7 +23714,7 @@ var EVENTS = ["knows", "learning", "explained"];
 var LEVELS = ["comfortable", "learning"];
 function profilePath() {
   const home = process.env.COMPRENDE_HOME;
-  return join3(home ? resolve3(expandHome(home)) : join3(os2.homedir(), ".comprende"), "profile.json");
+  return join2(home ? resolve2(expandHome(home)) : join2(os2.homedir(), ".comprende"), "profile.json");
 }
 var emptyProfile = () => ({ version: PROFILE_VERSION, preferences: dict(), topics: dict() });
 function freshTopic() {
@@ -23864,20 +23755,20 @@ function parseProfile(text) {
   }
   return profile;
 }
-var UTF82 = new TextDecoder("utf-8", { fatal: true });
+var UTF8 = new TextDecoder("utf-8", { fatal: true });
 function loadProfile() {
   const path = profilePath();
   if (!fs2.existsSync(path)) return emptyProfile();
   let text;
   try {
-    text = UTF82.decode(fs2.readFileSync(path));
+    text = UTF8.decode(fs2.readFileSync(path));
   } catch (e) {
     if (!(e instanceof TypeError)) throw e;
     text = null;
   }
   const profile = text === null ? null : parseProfile(text);
   if (profile) return profile;
-  fs2.renameSync(path, join3(dirname3(path), `profile.broken-${today()}.json`));
+  fs2.renameSync(path, join2(dirname2(path), `profile.broken-${today()}.json`));
   return emptyProfile();
 }
 function saveProfile(profile) {
@@ -23999,7 +23890,7 @@ function progressReport() {
 
 // src/store/project.ts
 import * as fs3 from "node:fs";
-import { basename as basename2, dirname as dirname4, join as join4, sep } from "node:path";
+import { basename as basename2, dirname as dirname3, join as join3, sep } from "node:path";
 var MAP_MAX_LINES = 40;
 var DECISION_MAX_CHARS = 2e3;
 var NOTE_MAX_BYTES = 2e4;
@@ -24011,8 +23902,8 @@ function learningDir(repoRoot2, create = false) {
   if (!repoRoot2.trim()) throw new StoreError("repo_root is required \u2014 pass the project's absolute path.");
   const root = resolveUserPath(repoRoot2);
   if (!isDirectory(root)) throw new StoreError(`Not a directory: ${root}`);
-  const base = join4(root, ".learning");
-  const decisions = join4(base, "decisions");
+  const base = join3(root, ".learning");
+  const decisions = join3(base, "decisions");
   if (isSymlink(base)) throw new UnsafeLearningDir(".learning/ is a symlink; refusing to use it.");
   if (fs3.existsSync(base) && !isInside(root, fs3.realpathSync(base))) {
     throw new UnsafeLearningDir(".learning/ resolves outside the project; refusing to use it.");
@@ -24049,9 +23940,9 @@ function readNote(path) {
 }
 var DECISION_FILE = /^[0-9]{4}-.*\.md$/;
 function decisionFiles(base) {
-  const folder = join4(base, "decisions");
+  const folder = join3(base, "decisions");
   if (!isDirectory(folder)) return [];
-  return fs3.readdirSync(folder).filter((name) => DECISION_FILE.test(name)).map((name) => join4(folder, name)).filter((p) => !isSymlink(p) && isFile(p)).sort();
+  return fs3.readdirSync(folder).filter((name) => DECISION_FILE.test(name)).map((name) => join3(folder, name)).filter((p) => !isSymlink(p) && isFile(p)).sort();
 }
 function decisionHeader(path) {
   const text = readNote(path) ?? "";
@@ -24063,12 +23954,12 @@ function decisionHeader(path) {
 }
 function projectSummary(repoRoot2) {
   const base = learningDir(repoRoot2);
-  const name = basename2(dirname4(base));
+  const name = basename2(dirname3(base));
   if (!isDirectory(base)) {
     return [`Project \`${name}\`: no .learning/ folder yet. Offer once to keep a map and decision records here.`];
   }
   const out = [`Project \`${name}\`:`];
-  const mapFile = join4(base, "map.md");
+  const mapFile = join3(base, "map.md");
   if (isSymlink(mapFile)) {
     out.push("### Map", "(map.md is a symlink \u2014 not read. Ask the user to replace it with a plain file.)");
   } else if (fs3.existsSync(mapFile)) {
@@ -24080,7 +23971,7 @@ function projectSummary(repoRoot2) {
   out.push(`### Decisions (open with search_decisions) ${NOTES_LABEL}`);
   if (decisions.length) out.push(...decisions.map((p) => `- ${decisionHeader(p)}`));
   else out.push("- none yet");
-  if (fs3.existsSync(join4(base, "me.local.md"))) {
+  if (fs3.existsSync(join3(base, "me.local.md"))) {
     out.push(
       "Note: .learning/me.local.md exists from file mode. Move its entries into the global profile with record_topic, then tell the user it can be deleted."
     );
@@ -24111,7 +24002,7 @@ function updateMap(repoRoot2, content) {
     );
   }
   const base = learningDir(repoRoot2, true);
-  atomicWrite(join4(base, "map.md"), `${["# Project map", `Verified: ${today()}`, "", ...body].join("\n")}
+  atomicWrite(join3(base, "map.md"), `${["# Project map", `Verified: ${today()}`, "", ...body].join("\n")}
 `);
   return `Map saved (${body.length} lines).`;
 }
@@ -24136,7 +24027,7 @@ Consequences: ${consequences.trim()}
     throw new StoreError("Decision record is too long \u2014 keep it to ~15 lines a teammate will actually read.");
   }
   const name = `${n4}-${slug(t) || "decision"}.md`;
-  atomicWrite(join4(base, "decisions", name), text);
+  atomicWrite(join3(base, "decisions", name), text);
   return `Saved decision ${n4}: .learning/decisions/${name}`;
 }
 var wordsOf = (s) => s.toLowerCase().match(/[a-z0-9]+/g) ?? [];
@@ -24166,28 +24057,131 @@ ${files.map((p) => `- ${decisionHeader(p)}`).join("\n")}`;
 ${shown.map((s) => s.text).join("\n\n---\n\n")}`;
 }
 
-// src/server.ts
-var INSTRUCTIONS = `Memory for explaining code while building it. It remembers what the user
-already knows (across all their projects) and, per project, a short map and
-the reasons behind lasting decisions.
+// src/mcp/run-gate.ts
+import { spawn } from "node:child_process";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
-- Call learning_context once at the start of a coding session, with the
-  project's absolute path, before deciding how much to explain.
-- Record evidence as you notice it (record_topic), not verdicts about ability.
-- Record a decision only when a new teammate would ask "why is it like this?".
-- Never store secrets; the tools refuse anything that looks like one.
-`;
-var ToolError = class extends Error {
-  name = "ToolError";
-};
-async function call(fn) {
-  try {
-    return fn();
-  } catch (e) {
-    if (e instanceof StoreError) throw new ToolError(e.message);
-    throw e;
+// src/gate/git.ts
+import { copyFileSync, existsSync as existsSync3, mkdtempSync, rmSync as rmSync2, statSync as statSync2, utimesSync } from "node:fs";
+import { devNull, homedir as homedir3, tmpdir } from "node:os";
+import { dirname as dirname4, isAbsolute, join as join4, resolve as resolve3 } from "node:path";
+
+// src/gate/run.ts
+import { spawnSync } from "node:child_process";
+function run(cmd, args, opts = {}) {
+  const r = spawnSync(cmd, args, {
+    cwd: opts.cwd,
+    env: opts.env,
+    input: opts.input,
+    maxBuffer: 1 << 30,
+    timeout: opts.timeout,
+    windowsHide: true
+  });
+  if (r.error) {
+    const err = r.error;
+    if (err.code === "ENOENT") throw Object.assign(new Error(`${cmd}: not found`), { code: "ENOENT" });
+    throw err;
   }
+  return { status: r.status ?? 1, stdout: r.stdout ?? Buffer.alloc(0), stderr: r.stderr ?? Buffer.alloc(0) };
 }
+
+// src/gate/shared.ts
+import { fileURLToPath } from "node:url";
+var LEARNING = ".learning";
+var CHECKS_DIR = `${LEARNING}/checks`;
+var CONFIG_PATH = `${LEARNING}/config.json`;
+var GATE_REL = `${LEARNING}/gate.mjs`;
+var REPORT_INPUT = `${LEARNING}/report.local.json`;
+var GATE_ATTRIBUTES_LINE = `${GATE_REL} -text`;
+var ZERO_SHA = "0".repeat(40);
+var GateError = class extends Error {
+};
+var SELF = (() => {
+  try {
+    return fileURLToPath(import.meta.url);
+  } catch {
+    return "";
+  }
+})();
+
+// src/gate/platforms/github.ts
+var WORKFLOW = `name: Ownership check
+
+on:
+  pull_request:
+    # 'edited' re-runs the check when a PR is retargeted to another base branch.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    name: Ownership check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Check the PR's own commit (not GitHub's merge commit) with full history,
+          # so fingerprints match what the developer verified.
+          ref: \${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          # The gate needs no dependencies; a restored cache is only a way in.
+          package-manager-cache: false
+
+      - name: Verify ownership report
+        env:
+          BASE_REF: \${{ github.base_ref }}
+          HEAD_REF: \${{ github.head_ref }}
+          PR_LABELS: \${{ toJSON(github.event.pull_request.labels.*.name) }}
+          NODE_OPTIONS: ""
+        run: |
+          # Run the gate as it exists on the base branch, so a PR can't weaken it
+          # by editing ${GATE_REL}. Falls back to the PR's copy only when the base
+          # doesn't have the gate yet (the PR that installs it); the rules then
+          # are the strict defaults, not the PR's own config.
+          if git cat-file -e "origin/$BASE_REF:${GATE_REL}" 2>/dev/null; then
+            git show "origin/$BASE_REF:${GATE_REL}" > "$RUNNER_TEMP/gate.mjs"
+          else
+            cp ${GATE_REL} "$RUNNER_TEMP/gate.mjs"
+          fi
+          node "$RUNNER_TEMP/gate.mjs" verify --repo . --base "origin/$BASE_REF" \\
+            --branch "$HEAD_REF" --labels-json "$PR_LABELS"
+`;
+
+// src/gate/git.ts
+function gitEnv(extra) {
+  const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1", LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
+  delete env.GIT_DIFF_OPTS;
+  let n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  env.GIT_CONFIG_COUNT = String(n + 1);
+  env[`GIT_CONFIG_KEY_${n}`] = "core.fsmonitor";
+  env[`GIT_CONFIG_VALUE_${n}`] = "false";
+  return { ...env, ...extra ?? {} };
+}
+function repoRoot(path) {
+  let start = resolve3((path || process.cwd()).replace(/^~(?=$|[/\\])/, homedir3()));
+  if (!existsSync3(start)) throw new GateError(`Path does not exist: ${start}`);
+  if (isFile(start)) start = dirname4(start);
+  let out;
+  try {
+    out = run("git", ["rev-parse", "--show-toplevel"], { cwd: start, env: gitEnv() });
+  } catch (e) {
+    throw new GateError(`Could not run git: ${e.message}`);
+  }
+  const top = out.stdout.toString("utf8").trim();
+  if (out.status !== 0 || !top) throw new GateError(`Not inside a git working tree: ${start}`);
+  return resolve3(top);
+}
+var WORKTREE_SAFE = ["-c", "core.fsmonitor=false", "-c", `core.hooksPath=${devNull}`];
+var UTF82 = new TextDecoder("utf-8", { fatal: true });
+
+// src/mcp/run-gate.ts
 var GATE_FILE = fileURLToPath2(new URL("./gate.mjs", import.meta.url));
 var GATE_TIMEOUT_MS = 3e5;
 function runProcess(argv, input, timeoutMs) {
@@ -24252,10 +24246,16 @@ async function gateCli(path, args, stdin) {
   return text(proc.stdout);
 }
 var option = (name, value) => value.trim() ? [`--${name}`, value] : [];
-var READ_ONLY = { readOnlyHint: true, openWorldHint: false };
-var WRITES = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
-var title = (name) => name.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
-var str = (field, description) => string2().describe(description).meta({ title: title(field) });
+
+// src/mcp/tools.ts
+async function call(fn) {
+  try {
+    return fn();
+  } catch (e) {
+    if (e instanceof StoreError) throw new ToolError(e.message);
+    throw e;
+  }
+}
 var RepoRoot = str("repo_root", "Absolute path to the project's root folder.");
 var Topic = str("topic", "Short concept name, e.g. 'react hooks', 'sql indexes', 'asyncio cancellation'.");
 var Note = str("note", "Neutral evidence, e.g. 'asked what an image layer is'. Not a judgment.");
@@ -24267,10 +24267,6 @@ var Base = (field) => str(
   field,
   "Base ref the PR targets, e.g. 'origin/develop' or 'upstream/main' for a fork. Empty = from config / auto-detect."
 );
-function tool(def) {
-  const schema = object2(def.shape);
-  return { ...def, run: (args) => def.run(schema.parse(args)) };
-}
 var TOOLS = {
   learning_context: tool({
     description: "Everything needed to calibrate explanations, in one call: the learner's\nknown/learning/already-explained topics and preferences, plus this project's\nmap and decision index. Call once at the start of a session.",
@@ -24378,6 +24374,18 @@ var TOOLS = {
     }
   })
 };
+
+// src/server.ts
+var INSTRUCTIONS = `Memory for explaining code while building it. It remembers what the user
+already knows (across all their projects) and, per project, a short map and
+the reasons behind lasting decisions.
+
+- Call learning_context once at the start of a coding session, with the
+  project's absolute path, before deciding how much to explain.
+- Record evidence as you notice it (record_topic), not verdicts about ability.
+- Record a decision only when a new teammate would ask "why is it like this?".
+- Never store secrets; the tools refuse anything that looks like one.
+`;
 function buildServer() {
   const server = new McpServer({ name: "comprende", version: "0.5.0" }, { instructions: INSTRUCTIONS });
   for (const [name, t] of Object.entries(TOOLS)) {

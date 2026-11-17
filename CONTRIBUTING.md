@@ -265,7 +265,8 @@ hooks/codex-hooks.json   the Codex plugin's hooks, in Codex's format (Claude Cod
 .mcp.json             the memory server
 src/gate/             the ownership gate, one module per concern (bundled into dist/gate.mjs)
 src/store/            the memory store: learner profile and project notes
-src/server.ts         the MCP server; src/learning.ts, the skill's file-only helper
+src/server.ts         the MCP server; its tools, and how it runs the gate, are in src/mcp/
+src/learning.ts       the skill's file-only helper
 dist/                 the built, dependency-free files the plugin runs (committed)
 test/                 node:test suites against real git repos, one file per topic
 tools/release.mjs     the version check and the release notes, for CI and releases
