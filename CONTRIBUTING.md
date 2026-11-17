@@ -197,13 +197,26 @@ Branch protection requires every one of these jobs, by name. If you rename one, 
 
 ### Windows
 
-Windows isn't supported yet. A separate workflow, "Windows (experimental)" ([`.github/workflows/windows.yml`](.github/workflows/windows.yml)), runs `npm test` on `windows-latest` with Node 22, in Git Bash. It runs:
+Windows isn't supported yet. A separate workflow, "Windows (experimental)" ([`.github/workflows/windows.yml`](.github/workflows/windows.yml)), runs the tests on `windows-latest` with Node 22, in Git Bash. It runs:
 
 - on every push to `main`
 - every Monday at 06:00 UTC
 - by hand: `gh workflow run windows.yml`, or "Run workflow" on the Actions tab
 
-It never runs on PRs and isn't required, so a failure there blocks nothing. Until Windows is supported, expect it to fail, and so to show a red X on `main`'s commits. [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10) lists what fails and why.
+It never runs on PRs and isn't required, so a failure there blocks nothing. [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10) lists what fails and why.
+
+The tests that still fail there are listed in [`test/windows-known-failures.mjs`](test/windows-known-failures.mjs): each with its file, its name, a part of the error it fails with, why, and its issue. The workflow runs `node tools/windows-tests.mjs`, which runs the suite as `npm test` does and compares the results with that list. On Windows, the run is green only while:
+
+- every listed test fails, with the error the list gives
+- nothing else fails
+
+So a red run means one of these:
+
+- **A new failure.** Fix it, or, if it's one more case of #10, add it to the list with its cause.
+- **A listed test passed.** It's fixed: take its entry off the list in the same PR.
+- **A listed test didn't run, or was skipped.** It was renamed or removed: update the list.
+
+Off Windows, the list doesn't apply, and every failure fails the run, as in `npm test`. To try the workflow on a branch: `gh workflow run windows.yml --ref <branch>`.
 
 ### Dependabot
 
@@ -257,6 +270,7 @@ tools/e2e-cursor.mjs  the end-to-end run in the real Cursor CLI (by hand, not in
 tools/e2e-codex.mjs   the same in the real Codex CLI
 tools/e2e-antigravity.mjs  the same in the real Antigravity CLI
 tools/e2e-common.mjs  what the end-to-end runs share: the demo repo, the gate's run log, the results
+tools/windows-tests.mjs  the tests on Windows, with the known failures in test/windows-known-failures.mjs
 docs/                 the longer docs, the terminal demo (demo.tape, demo.gif), and recordings/cursor/:
                       real Cursor replies, which the READMEs quote
 .github/              CI and release workflows, Dependabot, PR and issue templates
@@ -275,6 +289,7 @@ The tests run against real git repos and are grouped by topic, one file each in 
 - `consistency`: manifests, built copies, docs and the demo agree
 - `release`: the version check and the release notes
 - `e2e-tools`: the end-to-end tools' shared parts that need no AI tool: the gate's run log, the demo repo, the scenario runner
+- `windows-known-failures`: the Windows run's check against its known failures
 
 They include real pushes through the hooks, a fresh CI-style clone at the PR head, the workflow's actual shell step, and a regression test for every bug found so far.
 
