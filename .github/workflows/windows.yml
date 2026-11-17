@@ -2,8 +2,10 @@ name: Windows (experimental)
 
 # Windows isn't supported yet: issue #10 lists what fails and why.
 # This workflow tracks it outside the PR checks, so a red result here never
-# shows up on a contributor's PR. Branch protection doesn't require it. Until
-# Windows is supported, expect it to fail, and so to put a red X on main's commits.
+# shows up on a contributor's PR. Branch protection doesn't require it.
+# The tests that still fail are listed in test/windows-known-failures.mjs, and the
+# run is green while each fails as listed and nothing else fails. What a red run
+# means: CONTRIBUTING.md, "Windows".
 on:
   push:
     branches: [main]
@@ -20,6 +22,8 @@ jobs:
   test:
     name: Tests
     runs-on: windows-latest
+    # A run takes about 5 minutes. A hanging test shouldn't hold a runner for 6 hours.
+    timeout-minutes: 30
     defaults:
       run:
         # Git Bash.
@@ -34,4 +38,5 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - run: npm test
+      # npm test, with the known failures expected (tools/windows-tests.mjs).
+      - run: node tools/windows-tests.mjs
