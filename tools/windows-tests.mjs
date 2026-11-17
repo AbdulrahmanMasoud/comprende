@@ -18,6 +18,8 @@ import { pathToFileURL } from "node:url";
 import { WHOLE_FILE, WINDOWS_KNOWN_FAILURES } from "../test/windows-known-failures.mjs";
 
 const LIST_FILE = "test/windows-known-failures.mjs";
+// Where a failure comes without its file. No list entry can match it, so it fails the run.
+const NO_FILE = "(no file)";
 
 /** @typedef {{ file: string, test: string, outcome: "pass" | "fail" | "skip", error: string }} Result */
 /** @typedef {typeof WINDOWS_KNOWN_FAILURES[number]} KnownFailure */
@@ -105,8 +107,7 @@ async function runTests(files) {
   stream.on("test:fail", (test) => {
     if (test.nesting !== 0) return;
     const error = errorText(test.details.error);
-    // Not a file's test: no list entry can match it, so it fails the run.
-    const file = test.file ? listPath(test.file) : "(no file)";
+    const file = test.file ? listPath(test.file) : NO_FILE;
     if (test.file && listPath(test.name) === file) failedFiles.push({ file, error });
     else results.push({ file, test: test.name, outcome: "fail", error });
   });
@@ -115,8 +116,11 @@ async function runTests(files) {
     stderr.set(file, (stderr.get(file) ?? "") + output.message);
   });
   stream.on("test:diagnostic", (diagnostic) => {
-    if (diagnostic.file && diagnostic.message.startsWith("Error: "))
-      results.push({ file: listPath(diagnostic.file), test: WHOLE_FILE, outcome: "fail", error: diagnostic.message });
+    // A crash after a file's tests ran. Node 22 names the file; Node 20 doesn't.
+    if (diagnostic.message.startsWith("Error: ")) {
+      const file = diagnostic.file ? listPath(diagnostic.file) : NO_FILE;
+      results.push({ file, test: WHOLE_FILE, outcome: "fail", error: diagnostic.message });
+    }
   });
   for await (const chunk of stream.compose(new spec())) process.stdout.write(chunk);
   for (const { file, error } of failedFiles)

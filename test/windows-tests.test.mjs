@@ -114,8 +114,15 @@ test("off Windows, the tool fails on a failing test and on a file that crashes, 
   const found = (start, text) => problems.some((p) => p.startsWith(start) && p.includes(text));
   for (const file of ["a", "c"])
     assert.ok(found(`test/${file}.test.mjs: "fails" failed, and isn't a known Windows failure:\n    boom`, ""), file);
-  for (const file of ["b", "c"])
-    assert.ok(found(`test/${file}.test.mjs failed, and isn't a known Windows failure:`, "reading 'trim'"), file);
+  assert.ok(found("test/b.test.mjs failed, and isn't a known Windows failure:", "reading 'trim'"), "b");
+  // Node 20 reports the crash after the tests ran without its file: still a failure.
+  const lateCrash = ["test/c.test.mjs", "(no file)"].map(
+    (file) => `${file} failed, and isn't a known Windows failure:`,
+  );
+  assert.ok(
+    lateCrash.some((start) => found(start, "reading 'trim'")),
+    "c",
+  );
 
   const green = tmp(t);
   write(
