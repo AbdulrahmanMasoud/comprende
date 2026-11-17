@@ -864,7 +864,14 @@ test("the repo's .codex/hooks.json blocks an unverified push from a subfolder, a
       ...JSON.parse(codexPayload("pre-tool-use.bash.git-push.json", sub)),
       tool_use_id: `call-${++call}`,
     });
-  const run = (env) => sh(sub, "/bin/sh", ["-c", command], { check: false, input: input(), env });
+  const run = (env) => {
+    // The push a gate would block, so a run that fails open does so because git or node is
+    // missing. Then the command exits without reading it, and the write can fail (EPIPE):
+    // sh() would throw on that, but the exit status is still the command's.
+    const r = spawnSync("/bin/sh", ["-c", command], { cwd: sub, input: input(), encoding: "utf8", env });
+    assert.ok(!r.error || r.error.code === "EPIPE", String(r.error));
+    return r;
+  };
   const push = run(ENV);
   assert.equal(push.status, 2, push.stderr);
   assert.match(push.stderr, /Ask Codex to run the ownership check/);
