@@ -2,21 +2,10 @@
 // the error a model can read and fix, and the helpers that describe its arguments.
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
-import { StoreError } from "../store/common.js";
 
 /** A failure the model can read and fix; becomes an `isError` tool result. */
 export class ToolError extends Error {
   override name = "ToolError";
-}
-
-/** Run a store call, turning its refusals into tool errors the model can read and fix. */
-export async function call(fn: () => string): Promise<string> {
-  try {
-    return fn();
-  } catch (e) {
-    if (e instanceof StoreError) throw new ToolError(e.message);
-    throw e;
-  }
 }
 
 export const READ_ONLY: ToolAnnotations = { readOnlyHint: true, openWorldHint: false };

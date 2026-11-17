@@ -1,10 +1,11 @@
 // The ownership gate, run from the MCP server: always the plugin's own gate.mjs, in a
-// child process with a timeout, and its failures turned into tool errors.
+// child process with a timeout, and its failures turned into tool errors. Also the
+// `--name value` options the tools pass it.
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { repoRoot } from "../gate/git.js";
 import { GateError } from "../gate/shared.js";
-import { ToolError } from "./tool.js";
+import { ToolError } from "./tool-definition.js";
 
 // The gate bundled next to the server: once built, import.meta.url is dist/server.mjs.
 // Never a repo's own copy.

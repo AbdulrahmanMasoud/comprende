@@ -23583,6 +23583,19 @@ var StdioServerTransport = class {
   }
 };
 
+// src/mcp/tool-definition.ts
+var ToolError = class extends Error {
+  name = "ToolError";
+};
+var READ_ONLY = { readOnlyHint: true, openWorldHint: false };
+var WRITES = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
+var title = (name) => name.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+var str = (field, description) => string2().describe(description).meta({ title: title(field) });
+function tool(def) {
+  const schema = object2(def.shape);
+  return { ...def, run: (args) => def.run(schema.parse(args)) };
+}
+
 // src/store/common.ts
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
@@ -23654,27 +23667,6 @@ function atomicWrite(path, content) {
     fs.rmSync(tmp, { force: true });
     throw e;
   }
-}
-
-// src/mcp/tool.ts
-var ToolError = class extends Error {
-  name = "ToolError";
-};
-async function call(fn) {
-  try {
-    return fn();
-  } catch (e) {
-    if (e instanceof StoreError) throw new ToolError(e.message);
-    throw e;
-  }
-}
-var READ_ONLY = { readOnlyHint: true, openWorldHint: false };
-var WRITES = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
-var title = (name) => name.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
-var str = (field, description) => string2().describe(description).meta({ title: title(field) });
-function tool(def) {
-  const schema = object2(def.shape);
-  return { ...def, run: (args) => def.run(schema.parse(args)) };
 }
 
 // src/store/profile.ts
@@ -24065,7 +24057,7 @@ ${files.map((p) => `- ${decisionHeader(p)}`).join("\n")}`;
 ${shown.map((s) => s.text).join("\n\n---\n\n")}`;
 }
 
-// src/mcp/gate.ts
+// src/mcp/run-gate.ts
 import { spawn } from "node:child_process";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
@@ -24189,7 +24181,7 @@ function repoRoot(path) {
 var WORKTREE_SAFE = ["-c", "core.fsmonitor=false", "-c", `core.hooksPath=${devNull}`];
 var UTF82 = new TextDecoder("utf-8", { fatal: true });
 
-// src/mcp/gate.ts
+// src/mcp/run-gate.ts
 var GATE_FILE = fileURLToPath2(new URL("./gate.mjs", import.meta.url));
 var GATE_TIMEOUT_MS = 3e5;
 function runProcess(argv, input, timeoutMs) {
@@ -24256,6 +24248,14 @@ async function gateCli(path, args, stdin) {
 var option = (name, value) => value.trim() ? [`--${name}`, value] : [];
 
 // src/mcp/tools.ts
+async function call(fn) {
+  try {
+    return fn();
+  } catch (e) {
+    if (e instanceof StoreError) throw new ToolError(e.message);
+    throw e;
+  }
+}
 var RepoRoot = str("repo_root", "Absolute path to the project's root folder.");
 var Topic = str("topic", "Short concept name, e.g. 'react hooks', 'sql indexes', 'asyncio cancellation'.");
 var Note = str("note", "Neutral evidence, e.g. 'asked what an image layer is'. Not a judgment.");

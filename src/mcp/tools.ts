@@ -1,10 +1,21 @@
 // The MCP server's tools: what each one tells the model, and the store call or gate
-// command it runs.
+// command it runs. A store's refusals become tool errors here, the gate's in run-gate.ts.
 import * as z from "zod";
+import { StoreError } from "../store/common.js";
 import { EVENTS, progressReport, recordCheckpoint, recordTopic, setPreference } from "../store/profile.js";
 import { addDecision, learningContext, searchDecisions, updateMap } from "../store/project.js";
-import { gateCli, option } from "./gate.js";
-import { call, READ_ONLY, str, type Tool, tool, WRITES } from "./tool.js";
+import { gateCli, option } from "./run-gate.js";
+import { READ_ONLY, str, type Tool, ToolError, tool, WRITES } from "./tool-definition.js";
+
+/** Run a store call, turning its refusals into tool errors the model can read and fix. */
+async function call(fn: () => string): Promise<string> {
+  try {
+    return fn();
+  } catch (e) {
+    if (e instanceof StoreError) throw new ToolError(e.message);
+    throw e;
+  }
+}
 
 const RepoRoot = str("repo_root", "Absolute path to the project's root folder.");
 const Topic = str("topic", "Short concept name, e.g. 'react hooks', 'sql indexes', 'asyncio cancellation'.");

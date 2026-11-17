@@ -3,12 +3,12 @@
 //
 // The server is deliberately thin: its tools describe themselves to the model and
 // forward calls to src/store/ (memory) or to the bundled gate.mjs (ownership check,
-// src/mcp/gate.ts). The real logic lives there, which keeps it testable without a server.
+// src/mcp/run-gate.ts). The real logic lives there, which keeps it testable without a server.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
-import { ToolError } from "./mcp/tool.js";
+import { ToolError } from "./mcp/tool-definition.js";
 import { TOOLS } from "./mcp/tools.js";
 
 // package.json's version, set by build.mjs, so the server can't report a stale one.
