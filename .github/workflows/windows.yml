@@ -2,8 +2,10 @@ name: Windows (experimental)
 
 # Windows isn't supported yet: issue #10 lists what fails and why.
 # This workflow tracks it outside the PR checks, so a red result here never
-# shows up on a contributor's PR. Branch protection doesn't require it. Until
-# Windows is supported, expect it to fail, and so to put a red X on main's commits.
+# shows up on a contributor's PR. Branch protection doesn't require it.
+# The tests that still fail are listed in test/windows-known-failures.mjs, so the
+# run is green while each fails as listed. It turns red on any other failure, and
+# when a listed test passes: then it's fixed, and its entry comes off the list.
 on:
   push:
     branches: [main]
@@ -34,4 +36,5 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - run: npm test
+      # npm test, with the known failures expected (tools/windows-tests.mjs).
+      - run: node tools/windows-tests.mjs
