@@ -205,16 +205,19 @@ Windows isn't supported yet. A separate workflow, "Windows (experimental)" ([`.g
 
 It never runs on PRs and isn't required, so a failure there blocks nothing. [#10](https://github.com/AbdulrahmanMasoud/comprende/issues/10) lists what fails and why.
 
-The tests that still fail there are listed in [`test/windows-known-failures.mjs`](test/windows-known-failures.mjs): each with its file, its name, a part of the error it fails with, why, and its issue. The workflow runs `node tools/windows-tests.mjs`, which runs the suite as `npm test` does and compares the results with that list. On Windows, the run is green only while:
+The tests that still fail there are listed in [`test/windows-known-failures.mjs`](test/windows-known-failures.mjs): each with its file, its name, a part of the error it fails with (`failsWith`), why, and its issue. The workflow runs `node tools/windows-tests.mjs`, which runs the suite as `npm test` does and checks the results against that list. On Windows, the run is green only while:
 
-- every listed test fails, with the error the list gives
+- every listed test fails, with its `failsWith` in the error
 - nothing else fails
 
 So a red run means one of these:
 
 - **A new failure.** Fix it, or, if it's one more case of #10, add it to the list with its cause.
-- **A listed test passed.** It's fixed: take its entry off the list in the same PR.
+- **A listed test failed with another error.** Most likely after a Node or runner update. Check that the cause is still the listed one, then update `failsWith`. If it isn't, it's a new failure.
+- **A listed test passed, or a listed file no longer crashes.** It's fixed: take its entry off the list in the same PR.
 - **A listed test didn't run, or was skipped.** It was renamed or removed: update the list.
+
+For `failsWith`, pick the most specific part of the error that's the same on every run: no temp paths or timings.
 
 Off Windows, the list doesn't apply, and every failure fails the run, as in `npm test`. To try the workflow on a branch: `gh workflow run windows.yml --ref <branch>`.
 
@@ -289,7 +292,7 @@ The tests run against real git repos and are grouped by topic, one file each in 
 - `consistency`: manifests, built copies, docs and the demo agree
 - `release`: the version check and the release notes
 - `e2e-tools`: the end-to-end tools' shared parts that need no AI tool: the gate's run log, the demo repo, the scenario runner
-- `windows-known-failures`: the Windows run's check against its known failures
+- `windows-tests`: the Windows run's check against its known failures
 
 They include real pushes through the hooks, a fresh CI-style clone at the PR head, the workflow's actual shell step, and a regression test for every bug found so far.
 

@@ -1,8 +1,7 @@
-// The tests that still fail on Windows, and why. The Windows workflow runs the suite
-// through tools/windows-tests.mjs, which expects each of these to fail on win32 with
-// the error in `fails`. It turns the run red when a test that isn't here fails, when
-// one of these fails with another error, passes or doesn't run. So a fix shows up as a
-// red run, and its entry comes off this list in the same PR.
+// The tests that still fail on Windows, and why. tools/windows-tests.mjs, which the
+// Windows workflow runs, expects each of these to fail on win32 with its `failsWith`,
+// and turns red on any other failure, or when one of these passes, doesn't run, or
+// fails differently. What to do then: CONTRIBUTING.md, "Windows".
 //
 // Each cause is part of Windows support, #10, which says more about each one. None is
 // a bug in the gate: they're tests that assume Linux or macOS.
@@ -48,15 +47,15 @@ const GIT_EXE = issue10("Looks for git on PATH by the name git, not git.exe (sec
 const MSYS_FIFO = issue10("Git Bash's mkfifo makes an MSYS emulation, not a real FIFO (section 5).");
 
 /**
- * `fails` is a part of the error the test fails with on Windows: for a whole file, of
- * the crash it prints.
- * @type {readonly { file: string, test: string, fails: string, issue: number, cause: string }[]}
+ * `failsWith` is a part of the error the test fails with on Windows (for a whole file, of
+ * the crash it prints): the most specific part that's the same on every run.
+ * @type {readonly { file: string, test: string, failsWith: string, issue: number, cause: string }[]}
  */
 export const WINDOWS_KNOWN_FAILURES = [
   {
     file: "test/agents.test.mjs",
     test: WHOLE_FILE,
-    fails: "Cannot read properties of undefined (reading 'trim')",
+    failsWith: "Cannot read properties of undefined (reading 'trim')",
     ...issue10(
       "Looks pwsh up through /bin/sh while the file loads (const PWSH), which Node on Windows can't find, so the file stops there and its tests after that line never run (section 1).",
     ),
@@ -64,145 +63,145 @@ export const WINDOWS_KNOWN_FAILURES = [
   {
     file: "test/agents.test.mjs",
     test: "in Codex, the plugin's hook checks a push even though the repo has .claude/settings.json",
-    fails: "0 !== 2",
+    failsWith: "0 !== 2",
     ...RAW_PATH_IN_JSON,
   },
   {
     file: "test/agents.test.mjs",
     test: "each tool's messages name that tool, and CI's name none",
-    fails: "did not match the regular expression /Ask Cursor to run the ownership check/",
+    failsWith: "did not match the regular expression /Ask Cursor to run the ownership check/",
     ...RAW_PATH_IN_JSON,
   },
   {
     file: "test/agents.test.mjs",
     test: "from Claude Code, a real payload's unverified push is blocked, and ls passes silently",
-    fails: "spawnSync /bin/sh ENOENT",
+    failsWith: "spawnSync /bin/sh ENOENT",
     ...POSIX_SHELL,
   },
   {
     file: "test/agents.test.mjs",
     test: "agent-hook and claude-hook are the same command",
-    fails: "Bad escaped character in JSON",
+    failsWith: "Bad escaped character in JSON",
     ...RAW_PATH_IN_JSON,
   },
   {
     file: "test/agents.test.mjs",
     test: "from Claude Code, session start finds the repo through the payload's cwd",
-    fails: "did not match the regular expression /This repository uses the ownership gate",
+    failsWith: "did not match the regular expression /This repository uses the ownership gate",
     ...RAW_PATH_IN_JSON,
   },
   {
     file: "test/agents.test.mjs",
     test: "agent-hook --agent cursor blocks an unverified push from a Cursor payload",
-    fails: "0 !== 2",
+    failsWith: "0 !== 2",
     ...RAW_PATH_IN_JSON,
   },
   {
     file: "test/agents.test.mjs",
     test: "the Cursor plugin's hooks, run as Cursor runs them, block an unverified push and stay silent otherwise",
-    fails: "spawnSync /bin/sh ENOENT",
+    failsWith: "spawnSync /bin/sh ENOENT",
     ...POSIX_SHELL,
   },
   {
     file: "test/agents.test.mjs",
     test: "exactly one copy of the gate checks each push, whatever hook files and plugins are present",
-    fails: "spawnSync /bin/sh ENOENT",
+    failsWith: "spawnSync /bin/sh ENOENT",
     ...POSIX_SHELL,
   },
   {
     file: "test/agents.test.mjs",
     test: "each session gets the always-on line, the gate's context and Codex's plugin-not-running note once each",
-    fails: "spawnSync /bin/sh ENOENT",
+    failsWith: "spawnSync /bin/sh ENOENT",
     ...POSIX_SHELL,
   },
   {
     file: "test/agents.test.mjs",
     test: "in Cursor, an old repo gate in .claude/settings.json doesn't stop the plugin's check",
-    fails: "spawnSync /bin/sh ENOENT",
+    failsWith: "spawnSync /bin/sh ENOENT",
     ...POSIX_SHELL,
   },
   {
     file: "test/agents.test.mjs",
     test: "a claim goes stale after two minutes: a session that starts again later under the same id gets the always-on line",
-    fails: 'The "path" argument must be of type string. Received undefined',
+    failsWith: 'The "path" argument must be of type string. Received undefined',
     ...TMPDIR_ONLY,
   },
   {
     file: "test/ci.test.mjs",
     test: "the workflow runs the base branch's gate, not the PR's",
-    fails: "0 !== 1",
+    failsWith: "0 !== 1",
     ...MSYS_PATHS,
   },
   {
     file: "test/consistency.test.mjs",
     test: "the README's 'try it' script makes a gated repo where an unchecked push is blocked",
-    fails: "Cannot read properties of undefined (reading 'trim')",
+    failsWith: "Cannot read properties of undefined (reading 'trim')",
     ...CRLF_CHECKOUT,
   },
   {
     file: "test/consistency.test.mjs",
     test: "without node, the Cursor plugin's hooks fail open",
-    fails: "undefined !== ''",
+    failsWith: "undefined !== ''",
     ...POSIX_SHELL,
   },
   {
     file: "test/consistency.test.mjs",
     test: "without node, the Codex plugin's hooks fail open",
-    fails: "undefined !== ''",
+    failsWith: "undefined !== ''",
     ...POSIX_SHELL,
   },
   {
     file: "test/consistency.test.mjs",
     test: "the Antigravity plugin's rule is the always-on instruction, without the words that say the hooks ran",
-    fails: 'dialect.\\r\\n"',
+    failsWith: 'dialect.\\r\\n"',
     ...CRLF_CHECKOUT,
   },
   {
     file: "test/e2e-tools.test.mjs",
     test: "the gate log records a gate.mjs run: which copy, its arguments, folder, exit code and output",
-    fails: "RUNNER~1",
+    failsWith: "RUNNER~1",
     ...SHORT_PATH,
   },
   {
     file: "test/fingerprints.test.mjs",
     test: "thousands of files and a name starting with a colon are handled",
-    fails: ":weird.js",
+    failsWith: ":weird.js",
     ...NTFS_NAME,
   },
   {
     file: "test/fingerprints.test.mjs",
     test: "only plain markdown at the reserved .learning/ paths is exempt",
-    fails: "'.learning/checks/run.md'",
+    failsWith: "'.learning/checks/run.md'",
     ...FILE_MODE,
   },
   {
     file: "test/fingerprints.test.mjs",
     test: "report.local.json is never part of the change; nothing else is exempt",
-    fails: "'.learning/report.local.json'",
+    failsWith: "'.learning/report.local.json'",
     ...FILE_MODE,
   },
   {
     file: "test/fingerprints.test.mjs",
     test: "user git config and env don't change fingerprints",
-    fails: "Not inside a git working tree",
+    failsWith: "Not inside a git working tree",
     ...NUL_CONFIG,
   },
   {
     file: "test/fingerprints.test.mjs",
     test: "a file mode change is compared three-way",
-    fails: "nothing to commit",
+    failsWith: "nothing to commit",
     ...FILE_MODE,
   },
   {
     file: "test/fingerprints.test.mjs",
     test: "a merge from main can't smuggle in extra edits",
-    fails: "[]",
+    failsWith: "[]",
     ...CRLF_EDIT,
   },
   {
     file: "test/hooks.test.mjs",
     test: WHOLE_FILE,
-    fails: "Cannot read properties of undefined (reading 'trim')",
+    failsWith: "Cannot read properties of undefined (reading 'trim')",
     ...issue10(
       "Looks git up through /bin/sh while the file loads (const GIT), which Node on Windows can't find, so none of its tests run (section 1).",
     ),
@@ -213,17 +212,17 @@ export const WINDOWS_KNOWN_FAILURES = [
     "protect says why it couldn't create the ruleset [exists-already exists]",
     "protect says why it couldn't create the ruleset [forbidden-admin]",
     "protect says why it couldn't create the ruleset [free-private-free plan]",
-  ].map((test) => ({ file: "test/install.test.mjs", test, fails: "gh repo view failed", ...FAKE_GH })),
+  ].map((test) => ({ file: "test/install.test.mjs", test, failsWith: "gh repo view failed", ...FAKE_GH })),
   {
     file: "test/install.test.mjs",
     test: "protect without the GitHub CLI says it's needed",
-    fails: "git not found on PATH",
+    failsWith: "git not found on PATH",
     ...GIT_EXE,
   },
   {
     file: "test/security.test.mjs",
     test: "a hostile config can't hang session start [fifo]",
-    fails: "expected a GateError",
+    failsWith: "expected a GateError",
     ...MSYS_FIFO,
   },
 ];

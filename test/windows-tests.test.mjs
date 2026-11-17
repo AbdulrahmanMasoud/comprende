@@ -13,20 +13,21 @@ import { WHOLE_FILE, WINDOWS_KNOWN_FAILURES } from "./windows-known-failures.mjs
 const KNOWN = {
   file: "test/a.test.mjs",
   test: "needs /bin/sh",
-  fails: "spawnSync /bin/sh ENOENT",
+  failsWith: "spawnSync /bin/sh ENOENT",
   issue: 10,
   cause: "x",
 };
-const CRASH = { file: "test/b.test.mjs", test: WHOLE_FILE, fails: "reading 'trim'", issue: 10, cause: "x" };
+const CRASH = { file: "test/b.test.mjs", test: WHOLE_FILE, failsWith: "reading 'trim'", issue: 10, cause: "x" };
 
 /** @param {string} test @param {"pass" | "fail" | "skip"} outcome */
 const result = (test, outcome, error = "", file = "test/a.test.mjs") => ({ file, test, outcome, error });
+const crash = (error) => result(WHOLE_FILE, "fail", error, "test/b.test.mjs");
 
 test("known Windows failures that fail as listed keep the run green", () => {
   const results = [
     result("needs /bin/sh", "fail", "spawnSync /bin/sh ENOENT"),
     result("passes", "pass"),
-    result(WHOLE_FILE, "fail", "TypeError: Cannot read properties of undefined (reading 'trim')", "test/b.test.mjs"),
+    crash("TypeError: Cannot read properties of undefined (reading 'trim')"),
   ];
   assert.deepEqual(checkResults(results, [KNOWN, CRASH]), []);
 });
@@ -44,6 +45,16 @@ test("a listed test that fails with another error than the list says turns the r
   const [problem, ...rest] = checkResults([result("needs /bin/sh", "fail", "0 !== 2")], [KNOWN]);
   assert.deepEqual(rest, []);
   assert.match(problem, /"needs \/bin\/sh" failed, but not with the error .* expects \("spawnSync \/bin\/sh ENOENT"\)/);
+});
+
+test("a listed crash can't hide another one in the same file: each must fail as listed", () => {
+  const results = [crash("TypeError: … (reading 'trim')"), crash("Error: A resource generated … RangeError: new")];
+  const [problem, ...rest] = checkResults(results, [CRASH]);
+  assert.deepEqual(rest, []);
+  assert.match(
+    problem,
+    /^test\/b\.test\.mjs failed, but not with the error .*\n {4}Error: A resource generated … RangeError: new$/,
+  );
 });
 
 test("a listed test that passes turns the run red, so a fix gets its entry off the list", () => {
@@ -70,41 +81,48 @@ test("a run where no test ran is red", () => {
   assert.deepEqual(checkResults([], []), ["No tests ran."]);
 });
 
-test("each known Windows failure names a test file that exists, what it fails with, and why, under #10, once", () => {
+test("each known Windows failure names a test file that exists, what it fails with, why, and its issue, once", () => {
   const keys = new Set();
   for (const entry of WINDOWS_KNOWN_FAILURES) {
     const label = `${entry.file}: ${entry.test}`;
     assert.match(entry.file, /^test\/[\w-]+\.test\.mjs$/, label);
     assert.ok(existsSync(join(REPO, entry.file)), label);
-    assert.ok(entry.test && entry.fails && entry.cause, label);
-    assert.equal(entry.issue, 10, label);
+    assert.ok(entry.test && entry.failsWith && entry.cause, label);
+    assert.ok(Number.isInteger(entry.issue) && entry.issue > 0, label);
     assert.ok(!keys.has(label), `listed twice: ${label}`);
     keys.add(label);
   }
 });
 
 // On Windows the list applies, and its tests aren't in these folders.
-test("off Windows, the tool fails on a failing test and on a file that crashes while it loads, and passes otherwise", {
+test("off Windows, the tool fails on a failing test and on a file that crashes, before or after its tests ran", {
   skip: process.platform === "win32" && "the list applies on Windows",
 }, (t) => {
   const tool = join(REPO, "tools/windows-tests.mjs");
   // As the workflow runs it: not inside another node --test, where run() runs nothing.
   const { NODE_TEST_CONTEXT: _, ...env } = ENV;
   const red = tmp(t);
-  write(
-    red,
-    "test/a.test.mjs",
-    'import { test } from "node:test";\ntest("passes", () => {});\ntest("fails", () => { throw new Error("boom"); });\n',
-  );
+  const passesAndFails = 'test("passes", () => {});\ntest("fails", () => { throw new Error("boom"); });\n';
+  write(red, "test/a.test.mjs", `import { test } from "node:test";\n${passesAndFails}`);
   write(red, "test/b.test.mjs", "undefined.trim();\n");
+  // After its tests ran: Node 22 on Windows reports such a crash only as a diagnostic.
+  const late = "await new Promise((done) => setTimeout(done, 20));\nundefined.trim();\n";
+  write(red, "test/c.test.mjs", `import { test } from "node:test";\n${passesAndFails}${late}`);
   const failed = sh(red, NODE, [tool], { check: false, env });
   assert.equal(failed.status, 1, failed.stdout);
-  assert.match(failed.stdout, /test\/a\.test\.mjs: "fails" failed, and isn't a known Windows failure:\n {4}boom/);
-  assert.match(failed.stdout, /- test\/b\.test\.mjs failed, and isn't a known Windows failure:\n[\s\S]*TypeError/);
-  assert.match(failed.stdout, /2 problem\(s\)/);
+  const problems = failed.stdout.split("\n- ").slice(1);
+  const found = (start, text) => problems.some((p) => p.startsWith(start) && p.includes(text));
+  for (const file of ["a", "c"])
+    assert.ok(found(`test/${file}.test.mjs: "fails" failed, and isn't a known Windows failure:\n    boom`, ""), file);
+  for (const file of ["b", "c"])
+    assert.ok(found(`test/${file}.test.mjs failed, and isn't a known Windows failure:`, "reading 'trim'"), file);
 
   const green = tmp(t);
-  write(green, "test/a.test.mjs", 'import { test } from "node:test";\ntest("passes", () => {});\n');
+  write(
+    green,
+    "test/a.test.mjs",
+    'import { test } from "node:test";\ntest("passes", () => {});\ntest.skip("skipped", () => {});\n',
+  );
   const passed = sh(green, NODE, [tool], { check: false, env });
   assert.equal(passed.status, 0, passed.stdout);
   assert.match(passed.stdout, /Every test passed\.\n$/);

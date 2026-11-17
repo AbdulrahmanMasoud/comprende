@@ -3,12 +3,10 @@
 //
 //   node tools/windows-tests.mjs
 //
-// It runs test/*.test.mjs as `npm test` does, then compares the results with the list
-// in test/windows-known-failures.mjs. The run fails when:
-//   - a test fails that isn't on the list, or fails with another error than it says
-//   - a test on the list passes: it's fixed, so its entry comes off the list
-//   - a test on the list doesn't run, or is skipped: renamed or removed, so the list is out of date
-// The list applies on Windows only. Elsewhere every failure fails the run, as in `npm test`.
+// It runs test/*.test.mjs as `npm test` does, then checks the results against the list
+// in test/windows-known-failures.mjs: green only while each listed test fails as listed
+// and nothing else fails. What a red run means: CONTRIBUTING.md, "Windows". The list
+// applies on Windows only. Elsewhere every failure fails the run, as in `npm test`.
 //
 // Plain JavaScript with node: built-ins only. tsconfig.json type-checks it from the JSDoc.
 
@@ -19,15 +17,15 @@ import { spec } from "node:test/reporters";
 import { pathToFileURL } from "node:url";
 import { WHOLE_FILE, WINDOWS_KNOWN_FAILURES } from "../test/windows-known-failures.mjs";
 
-const LIST = "test/windows-known-failures.mjs";
+const LIST_FILE = "test/windows-known-failures.mjs";
 
 /** @typedef {{ file: string, test: string, outcome: "pass" | "fail" | "skip", error: string }} Result */
-/** @typedef {{ file: string, test: string, fails: string, issue: number, cause: string }} KnownFailure */
+/** @typedef {typeof WINDOWS_KNOWN_FAILURES[number]} KnownFailure */
 
 /**
  * What's wrong with a run, given the failures it may have: one line each. Empty means
  * the run is green.
- * @param {readonly Result[]} results one per top-level test, and one per file that crashed
+ * @param {readonly Result[]} results one per top-level test, and one per crash of a file
  * @param {readonly KnownFailure[]} known
  * @returns {string[]}
  */
@@ -43,18 +41,20 @@ export function checkResults(results, known) {
     if (result.outcome !== "fail") continue;
     const entry = listed.get(key(result));
     if (!entry) problems.push(`${name(result)} failed, and isn't a known Windows failure:\n${indent(result.error)}`);
-    else if (!result.error.includes(entry.fails))
+    else if (!result.error.includes(entry.failsWith))
       problems.push(
-        `${name(result)} failed, but not with the error ${LIST} expects (${JSON.stringify(entry.fails)}):\n${indent(result.error)}`,
+        `${name(result)} failed, but not with the error ${LIST_FILE} expects (${JSON.stringify(entry.failsWith)}):\n${indent(result.error)}`,
       );
   }
   for (const entry of known) {
     const result = seen.get(key(entry));
     if (entry.test === WHOLE_FILE && !result)
-      problems.push(`${entry.file} no longer crashes: take it off ${LIST} (#${entry.issue}).`);
-    else if (!result) problems.push(`${name(entry)} didn't run. Renamed or removed? Update ${LIST}.`);
-    else if (result.outcome === "pass") problems.push(`${name(entry)} passed: take it off ${LIST} (#${entry.issue}).`);
-    else if (result.outcome === "skip") problems.push(`${name(entry)} was skipped. A known failure must run: ${LIST}.`);
+      problems.push(`${entry.file} no longer crashes: take it off ${LIST_FILE} (#${entry.issue}).`);
+    else if (!result) problems.push(`${name(entry)} didn't run. Renamed or removed? Update ${LIST_FILE}.`);
+    else if (result.outcome === "pass")
+      problems.push(`${name(entry)} passed: take it off ${LIST_FILE} (#${entry.issue}).`);
+    else if (result.outcome === "skip")
+      problems.push(`${name(entry)} was skipped. A known failure must run: ${LIST_FILE}.`);
   }
   return problems;
 }
@@ -83,22 +83,17 @@ function errorText(error) {
 
 /**
  * Runs `files` as `npm test` does, with its usual output, and returns one result per
- * top-level test. A file that crashes gets one more, for WHOLE_FILE: a crash while it
- * loads fails the file, and one after its first tests ran comes only as a diagnostic.
+ * top-level test, plus one for WHOLE_FILE per crash of a file. A crash while a file
+ * loads fails the file, and its error is in the file's stderr. One after its first
+ * tests ran may come only as a diagnostic, which is then that crash's error.
  * @param {string[]} files
  * @returns {Promise<Result[]>}
  */
 async function runTests(files) {
   /** @type {Result[]} */
   const results = [];
-  /** @type {Map<string, { failed: boolean, text: string[] }>} */
-  const crashes = new Map();
-  /** @param {string} file */
-  const crashOf = (file) => {
-    const crash = crashes.get(file) ?? { failed: false, text: [] };
-    crashes.set(file, crash);
-    return crash;
-  };
+  /** @type {{ file: string, error: string }[]} */
+  const failedFiles = [];
   /** @type {Map<string, string>} */
   const stderr = new Map();
   const stream = run({ files, concurrency: 4 });
@@ -108,31 +103,24 @@ async function runTests(files) {
     results.push({ file: listPath(test.file), test: test.name, outcome: skipped ? "skip" : "pass", error: "" });
   });
   stream.on("test:fail", (test) => {
-    if (test.nesting !== 0 || !test.file) return;
-    const file = listPath(test.file);
-    if (listPath(test.name) === file) crashOf(file).failed = true;
-    else results.push({ file, test: test.name, outcome: "fail", error: errorText(test.details.error) });
+    if (test.nesting !== 0) return;
+    const error = errorText(test.details.error);
+    // Not a file's test: no list entry can match it, so it fails the run.
+    const file = test.file ? listPath(test.file) : "(no file)";
+    if (test.file && listPath(test.name) === file) failedFiles.push({ file, error });
+    else results.push({ file, test: test.name, outcome: "fail", error });
   });
   stream.on("test:stderr", (output) => {
     const file = listPath(output.file);
     stderr.set(file, (stderr.get(file) ?? "") + output.message);
   });
   stream.on("test:diagnostic", (diagnostic) => {
-    if (diagnostic.file && diagnostic.message.startsWith("Error: ")) {
-      const crash = crashOf(listPath(diagnostic.file));
-      crash.failed = true;
-      crash.text.push(diagnostic.message);
-    }
+    if (diagnostic.file && diagnostic.message.startsWith("Error: "))
+      results.push({ file: listPath(diagnostic.file), test: WHOLE_FILE, outcome: "fail", error: diagnostic.message });
   });
   for await (const chunk of stream.compose(new spec())) process.stdout.write(chunk);
-  for (const [file, crash] of crashes)
-    if (crash.failed)
-      results.push({
-        file,
-        test: WHOLE_FILE,
-        outcome: "fail",
-        error: [...crash.text, stderr.get(file) ?? ""].join("\n"),
-      });
+  for (const { file, error } of failedFiles)
+    results.push({ file, test: WHOLE_FILE, outcome: "fail", error: `${error}\n${stderr.get(file) ?? ""}` });
   return results;
 }
 
@@ -145,7 +133,7 @@ async function main() {
   const known = process.platform === "win32" ? WINDOWS_KNOWN_FAILURES : [];
   const problems = checkResults(results, known);
   if (known.length > 0) {
-    console.log(`\nKnown Windows failures (${LIST}): ${known.length}`);
+    console.log(`\nKnown Windows failures (${LIST_FILE}): ${known.length}`);
     for (const entry of known) console.log(`  #${entry.issue} ${entry.file}: ${entry.test}`);
   }
   if (problems.length === 0) {
