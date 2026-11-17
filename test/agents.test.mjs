@@ -864,10 +864,12 @@ test("the repo's .codex/hooks.json blocks an unverified push from a subfolder, a
       ...JSON.parse(codexPayload("pre-tool-use.bash.git-push.json", sub)),
       tool_use_id: `call-${++call}`,
     });
-  const run = (env) => sh(sub, "/bin/sh", ["-c", command], { check: false, input: input(), env });
-  const push = run(ENV);
+  const run = (env, payload) => sh(sub, "/bin/sh", ["-c", command], { check: false, input: payload, env });
+  const push = run(ENV, input());
   assert.equal(push.status, 2, push.stderr);
   assert.match(push.stderr, /Ask Codex to run the ownership check/);
+  // No input from here: without git or node the shell exits before reading it, and
+  // writing it would race (EPIPE).
   // Only node on PATH, no git: the command can't find the gate, and fails open.
   const nodeOnly = join(tmpDir(t), "node-only");
   mkdirSync(nodeOnly);
