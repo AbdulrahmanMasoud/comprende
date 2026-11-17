@@ -2,11 +2,18 @@
 
 ## Unreleased
 
+## 0.5.0
+
 - **Antigravity checks a push** (part of [#25](https://github.com/AbdulrahmanMasoud/comprende/issues/25)). An Antigravity adapter reads Antigravity's own hook payload, so an unverified `git push` from the agent is blocked with a JSON deny, and the agent sees why. The gate's note in a gated repo now reaches the agent, as a system message. The always-on instruction comes from a plugin rule, `rules/AGENTS.md`, once, and the session start says the hooks ran. Tested in the Antigravity CLI ([recording](docs/recordings/antigravity/#050-the-adapter)).
   - `install` writes no repo hook file for Antigravity: a repo's `.agents/hooks.json` would run alongside the plugin's hooks, and check each command twice.
   - With `COMPRENDE_QUIET=1`, Antigravity's session start sends the quiet line, but the plugin's rule still loads. Which one the agent follows isn't tested.
-  - Install: `agy plugin install https://github.com/AbdulrahmanMasoud/comprende`, in both READMEs. What works where, what's weaker in Antigravity, and a checklist for the IDE and the App, which aren't tested yet: [docs/agents.md](docs/agents.md#whats-weaker-in-antigravity-than-in-claude-code). Mixed teams: [docs/teams.md](docs/teams.md#mixed-teams-claude-code-cursor-codex-and-antigravity).
+  - Install: `agy plugin install https://github.com/AbdulrahmanMasoud/comprende`, in both READMEs. What works where, and what's weaker in Antigravity: [docs/agents.md](docs/agents.md#whats-weaker-in-antigravity-than-in-claude-code). Mixed teams: [docs/teams.md](docs/teams.md#mixed-teams-claude-code-cursor-codex-and-antigravity).
+- **Not tested: the Antigravity IDE and the Antigravity App.** All of the above was tested in the Antigravity CLI (`agy`) only, and on macOS only. Linux and Windows weren't tested in Antigravity either. A checklist to try the IDE and the App by hand: [docs/agents.md](docs/agents.md#checking-it-in-antigravity).
+- **Cursor: not checked in a real run for this release.** Cursor also reads a plugin's `rules/` folder. `rules/AGENTS.md` has no frontmatter, so Cursor shouldn't apply it by itself and add the always-on line a second time. The tests check the file, but the end-to-end run in the real Cursor CLI hasn't run on 0.5.0.
 - **`tools/e2e-antigravity.mjs`:** the end-to-end run in the real Antigravity CLI, by hand, in a throwaway `HOME` where `agy` is signed in (CONTRIBUTING.md, "Testing in Antigravity"). It passed every step in real runs, the skill's loading and a memory-server call included, after two fixes to the script. Its replies are kept in `docs/recordings/antigravity/0.5.0-e2e/`.
+- **To update in Antigravity:** run `agy plugin install https://github.com/AbdulrahmanMasoud/comprende` again, then start a new `agy` session.
+- **Claude Code, Cursor and Codex:** nothing new. With `COMPRENDE_QUIET=1`, the session-start line now also says that quiet mode replaces any always-on Comprende instruction. In Codex, trust Comprende's hooks again in `/hooks` after updating, as after every update.
+- **CI:** `claude plugin validate` now runs on Claude Code 2.1.326 ([#70](https://github.com/AbdulrahmanMasoud/comprende/pull/70)).
 
 ## 0.4.3
 
