@@ -17,7 +17,7 @@
     "format": "biome check --write ."
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.4",
+    "@biomejs/biome": "2.6.6",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@types/node": "^20.19.43",
     "esbuild": "0.28.2",
