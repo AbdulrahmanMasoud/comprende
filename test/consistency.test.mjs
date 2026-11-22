@@ -12,6 +12,9 @@ const read = (rel) => readFileSync(join(REPO, rel));
 
 const json = (rel) => JSON.parse(read(rel).toString("utf8"));
 
+/** A text file with LF line endings: Git for Windows checks text out with CRLF (core.autocrlf). */
+const text = (rel) => read(rel).toString("utf8").replaceAll("\r\n", "\n");
+
 /** The commands the tape types, in order (each `Type` line up to its `Enter`). */
 function tapeCommands(tape) {
   const out = [];
@@ -140,11 +143,11 @@ test("both READMEs open with the install commands, then cover both parts", () =>
 
 // site/ is one hand-written page that Biome skips (see CONTRIBUTING.md, Layout), so
 // these tests keep what it tells users in step with the README and the docs.
-const site = () => read("site/index.html").toString("utf8").replaceAll("&amp;", "&");
+const site = () => text("site/index.html").replaceAll("&amp;", "&");
 
 test("the website gives the README's install commands", () => {
   const page = site();
-  const en = read("README.md").toString("utf8");
+  const en = text("README.md");
   const start = en.indexOf("\n## Install\n");
   const install = en.slice(start, en.indexOf("\n## ", start + 1));
   const commands = bashBlocks(install)
@@ -156,7 +159,7 @@ test("the website gives the README's install commands", () => {
 
 test("the website's setup steps use the gate's real commands, files and settings", () => {
   const page = site();
-  const docs = read("docs/teams.md").toString("utf8");
+  const docs = text("docs/teams.md");
   const shared = [
     "Enable the ownership gate in this repo.",
     "install --repo . --owner",
@@ -179,7 +182,7 @@ test("the website's setup steps use the gate's real commands, files and settings
 });
 
 test("the website's config builder starts from the documented defaults", () => {
-  const docs = read("docs/teams.md").toString("utf8");
+  const docs = text("docs/teams.md");
   const block = /## Settings[\s\S]*?```json\n([\s\S]*?)```/.exec(docs);
   assert.ok(block, "docs/teams.md has a Settings section with a JSON block");
   const defaults = JSON.parse(block[1]).ownership_check;
