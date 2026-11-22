@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comprende for you and your team</title>
+<meta name="description" content="Push code you can explain. Hana guards your push until you can. A plugin for Claude Code, Cursor, Codex and Antigravity.">
+<link rel="canonical" href="https://abdulrahmanmasoud.github.io/comprende/">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Comprende">
+<meta property="og:title" content="Comprende: push code you can explain">
+<meta property="og:description" content="The agent explains what it writes. Before you push, it asks you about it. For Claude Code, Cursor, Codex and Antigravity.">
+<meta property="og:url" content="https://abdulrahmanmasoud.github.io/comprende/">
+<meta property="og:image" content="https://abdulrahmanmasoud.github.io/comprende/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hana, the reviewer, next to a push key, above the line: Push code you can explain.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Comprende: push code you can explain">
+<meta name="twitter:description" content="The agent explains what it writes. Before you push, it asks you about it.">
+<meta name="twitter:image" content="https://abdulrahmanmasoud.github.io/comprende/og.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Cairo:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE  playful but exact; a dark desk with one key and one small reviewer, almost no words on the page itself
+   IDEA   Hana, the reviewer, guards a physical "push" key and explains the product by reacting to you
+   PICTURE Hana and the key on a stage; she moves, blocks, points, laughs, sleeps and speaks your language
+   COLOUR near-black desk, soft white lines, the brand amber for "pushed", coral for "blocked"; one palette in every theme
+   TYPE   Inter 600 tight for the one line, JetBrains Mono for commands, Cairo when Hana speaks Arabic
+   STORY  the problem first (one bad night, four real studies), then what changes for you or your team, chosen with one switch
+   LAYOUT one centred column: Hana's bubble, the stage, tricks to try, title, install table, three one-liners; a small Hana follows you down */
+:root{color-scheme:dark;--bg:#070707;--ink:#f2f2f2;--muted:#8a8a8a;--line:#1f1f1f;--panel:#0e0e0e;--amber:#f2ae42;--coral:#ff6b55}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 Inter,system-ui,sans-serif;overflow-x:clip;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;left:50%;top:-20vh;width:900px;height:700px;transform:translateX(-50%);background:radial-gradient(closest-side,#ffffff0d,transparent);pointer-events:none}
+a{color:inherit}
+p{margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+code,pre{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-ligatures:none}
+.wrap{max-width:760px;margin:0 auto;padding-inline:max(24px,16px);position:relative}
+header.top{display:flex;align-items:center;gap:16px;max-width:1180px;margin:0 auto;padding:22px max(24px,16px);font-size:14px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;text-decoration:none;margin-right:auto}
+.gh{display:flex;align-items:center;gap:7px;color:var(--muted);text-decoration:none;min-height:40px}
+.gh:hover{color:var(--ink)}
+.lang{display:inline-flex;border:1px solid #262626;border-radius:10px;padding:3px;background:#0d0d0d}
+.lang button{border:0;background:none;border-radius:7px;min-height:32px;padding:0 10px;font-size:13px;color:var(--muted)}
+.lang button[aria-pressed=true]{background:#1d1d1d;color:var(--ink)}
+.lang button:last-child{font-family:Cairo,sans-serif}
+.slot{height:132px;display:flex;align-items:flex-end;justify-content:center;margin-top:18px}
+.bubble{position:relative;max-width:360px;background:#151515;border:1px solid #2c2c2c;border-radius:16px;padding:11px 15px;font-size:14.5px;line-height:1.45;text-align:center;animation:pop .25s both}
+.bubble::after{content:"";position:absolute;bottom:-7px;left:var(--tail,50%);width:12px;height:12px;margin-left:-6px;background:#151515;border-right:1px solid #2c2c2c;border-bottom:1px solid #2c2c2c;transform:rotate(45deg)}
+.bubble[dir=rtl]{font-family:Cairo,Inter,sans-serif;font-size:15.5px}
+.bubble code{font-size:13px;color:#fff}
+.answers{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:9px}
+.answers button{background:#0d0d0d;border:1px solid #333;border-radius:10px;min-height:38px;padding:0 12px;font-size:13.5px}
+.answers button:hover{border-color:#666}
+.answers button.no{border-color:var(--coral);color:var(--coral)}
+.stage{position:relative;width:min(440px,100%);height:196px;margin:6px auto 0}
+.hana{position:absolute;left:0;bottom:0;width:150px;z-index:3;transition:transform .55s cubic-bezier(.5,0,.2,1);cursor:pointer}
+.hana .jump{transform-origin:50% 90%}
+.bob{animation:bob 3.4s ease-in-out infinite}
+.hana.walk .bob{animation-duration:.28s}
+.hana svg{display:block;width:100%;height:auto;overflow:visible}
+.zzz{position:absolute;right:8px;top:4px;font:600 15px Inter,sans-serif;color:#bbb;display:none}
+.zzz span{display:inline-block;animation:zz 2.4s infinite;opacity:0}
+.zzz span:nth-child(2){animation-delay:.6s;font-size:12px}
+.zzz span:nth-child(3){animation-delay:1.2s;font-size:10px}
+.sleeping .zzz{display:block}
+.ln{fill:#0d0d0d;stroke:#e8e8e8;stroke-width:2.4}
+.arm{fill:none;stroke:#e8e8e8;stroke-width:3.4;stroke-linecap:round}
+.feet{fill:none;stroke:#e8e8e8;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.st{fill:none;stroke:#e8e8e8;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.mouth.fillm{fill:#3a1712}
+.key{position:absolute;bottom:22px;width:128px;height:120px;border-radius:20px;border:1px solid #2c2c2c;background:linear-gradient(180deg,#262626,#141414);box-shadow:0 1px 0 #ffffff1a inset,0 -6px 0 #0a0a0a inset,0 14px 0 -2px #0b0b0b,0 22px 40px #000;transition:transform .12s,box-shadow .12s,border-color .3s;padding:0;z-index:2}
+.key::after{content:"";position:absolute;inset:10px 10px 18px;border-radius:12px;background:linear-gradient(180deg,#1e1e1e,#171717);box-shadow:0 1px 0 #ffffff12 inset}
+.key .lbl{position:absolute;left:20px;bottom:26px;z-index:1;font-size:14px;font-weight:500;color:#d8d8d8}
+.key .glyph{position:absolute;right:20px;top:18px;z-index:1;color:#bdbdbd}
+.key.down{transform:translateY(8px);box-shadow:0 1px 0 #ffffff1a inset,0 -6px 0 #0a0a0a inset,0 6px 0 -2px #0b0b0b,0 10px 20px #000}
+.key.blocked{border-color:var(--coral);box-shadow:0 1px 0 #ffffff1a inset,0 -6px 0 #0a0a0a inset,0 14px 0 -2px #0b0b0b,0 0 40px -6px #ff6b5566}
+.key.ok{border-color:var(--amber);box-shadow:0 1px 0 #ffffff1a inset,0 -6px 0 #0a0a0a inset,0 14px 0 -2px #0b0b0b,0 0 48px -4px #f2ae4277}
+.key.ok .glyph{color:var(--amber)}
+.shake{animation:shake .38s}
+.spark{position:absolute;width:6px;height:6px;border-radius:50%;background:var(--amber);pointer-events:none;z-index:4}
+.hint{margin-top:14px;font-size:13px;color:var(--muted);min-height:21px;text-align:center}
+.hint.ok{color:var(--amber)}
+.hint.no{color:var(--coral)}
+kbd{font:500 12px "JetBrains Mono",monospace;border:1px solid #333;border-bottom-width:2px;border-radius:5px;padding:0 5px;color:#ccc}
+.tricks{margin-top:30px;text-align:center}
+.tricks h2{font-size:13px;font-weight:500;color:var(--muted);margin:0 0 10px}
+.tbtns{display:flex;justify-content:center;flex-wrap:wrap;gap:6px}
+.tbtns button{background:#0d0d0d;border:1px solid #262626;border-radius:999px;min-height:38px;padding:0 14px;font-size:13px}
+.tbtns button:hover{border-color:#555}
+.tbtns code{font-size:12.5px}
+.layers{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:14px}
+.layer{border:1px dashed #2a2a2a;border-radius:8px;padding:3px 10px;font-size:12.5px;color:var(--muted);transition:border-color .3s,color .3s,background .3s}
+.layer.caught{border-style:solid;border-color:var(--coral);color:var(--coral);background:#ff6b5512}
+h1{margin:72px 0 0;text-align:center;font-weight:600;font-size:clamp(42px,8vw,76px);letter-spacing:-.05em;line-height:1}
+.sub{text-align:center;color:var(--muted);font-size:17px;max-width:40ch;margin:18px auto 0}
+.table{margin-top:36px;border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden}
+.trow{display:grid;grid-template-columns:118px minmax(0,1fr) 40px;align-items:center;gap:12px;padding:10px 10px 10px 16px;border-top:1px solid var(--line)}
+.trow:first-child{border-top:0}
+.trow b{font-weight:500;font-size:14px}
+.trow pre{margin:0;font-size:12.5px;color:#cfcfcf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.copy{width:38px;height:38px;border-radius:9px;border:1px solid #2a2a2a;background:#141414;display:grid;place-items:center;color:#bbb}
+.copy:hover{color:#fff;border-color:#444}
+.note{margin-top:12px;text-align:center;font-size:13px;color:var(--muted)}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;margin-top:88px;padding-top:40px;border-top:1px solid var(--line)}
+.three h3{margin:12px 0 4px;font-size:15px;font-weight:600}
+.three p{color:var(--muted);font-size:14px}
+.ico{width:34px;height:34px;border-radius:9px;border:1px solid #2a2a2a;background:#111;display:grid;place-items:center;color:#ddd}
+.team{margin-top:64px;text-align:center;color:var(--muted);font-size:15px}
+.team q{color:var(--ink)}
+footer{margin-top:88px;padding:28px 0 110px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 20px;font-size:13px;color:var(--muted)}
+footer nav{display:flex;flex-wrap:wrap;gap:16px}
+footer a{text-decoration:none}
+footer a:hover{color:var(--ink)}
+.dock{position:fixed;right:16px;bottom:16px;display:flex;align-items:flex-end;gap:8px;z-index:20;opacity:0;transform:translateY(16px);pointer-events:none;transition:opacity .35s,transform .35s}
+.dock.on{opacity:1;transform:none;pointer-events:auto}
+.dock .head{width:58px;flex:none;cursor:pointer;background:none;border:0;padding:0}
+.dock .head svg{width:100%;height:auto;display:block}
+.dock .say{max-width:230px;background:#151515;border:1px solid #2c2c2c;border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:13.5px;line-height:1.4;margin-bottom:22px;transition:opacity .3s}
+.dock .say[dir=rtl]{font-family:Cairo,Inter,sans-serif;font-size:14.5px}
+.dock .say.hide{opacity:0}
+.playgame{margin-top:22px;background:var(--ink);color:var(--bg);border:0;border-radius:10px;min-height:42px;padding:0 18px;font-weight:600;font-size:14px}
+.playgame:hover{background:#fff}
+.game{position:fixed;inset:0;background:#000c;display:grid;place-items:center;z-index:50;padding:16px}
+.game[hidden]{display:none}
+.gpanel{position:relative;width:min(540px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:#0e0e0e;border:1px solid #262626;border-radius:18px;padding:22px;animation:pop .25s both}
+.gclose{position:absolute;right:10px;top:10px;width:40px;height:40px;border-radius:10px;border:1px solid #262626;background:#121212;font-size:20px;line-height:1;color:#aaa}
+.ghead{display:flex;align-items:center;gap:12px;padding-right:44px}
+.gface{width:56px;flex:none}
+.gface svg{width:100%;height:auto;display:block}
+.gsay{background:#151515;border:1px solid #2c2c2c;border-radius:14px 14px 14px 4px;padding:9px 13px;font-size:14.5px;line-height:1.45}
+.gsay[dir=rtl]{font-family:Cairo,Inter,sans-serif;font-size:15.5px;border-radius:14px 14px 4px 14px}
+.gstep{margin-top:18px;font-size:12.5px;color:var(--muted)}
+.gcode{margin-top:6px;background:#070707;border:1px solid #1f1f1f;border-radius:12px;padding:14px 16px;font-size:13px;line-height:1.7;color:#e6e6e6}
+.gq{margin-top:14px;font-weight:600;font-size:15.5px;line-height:1.4}
+.gq[dir=rtl]{font-family:Cairo,Inter,sans-serif}
+.gopts{display:grid;gap:8px;margin-top:12px}
+.gopts button{text-align:start;background:#101010;border:1px solid #2a2a2a;border-radius:10px;min-height:44px;padding:8px 14px;font-size:14px;line-height:1.35}
+.gopts button:hover:not(:disabled){border-color:#666}
+.gopts button:disabled{cursor:default;opacity:.5}
+.gopts button.right{border-color:var(--amber);color:var(--amber);opacity:1}
+.gopts button.no{border-color:var(--coral);color:var(--coral);opacity:1}
+.gnext{margin-top:14px;background:var(--ink);color:var(--bg);border:0;border-radius:10px;min-height:42px;padding:0 18px;font-weight:600}
+.gnext[hidden]{display:none}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.mode{display:inline-flex;border:1px solid #2a2a2a;border-radius:12px;padding:4px;background:#0d0d0d;gap:2px}
+.mode button{border:0;background:none;border-radius:9px;min-height:38px;padding:0 16px;font-size:14px;color:var(--muted);font-weight:500}
+.mode button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.modebar{display:flex;justify-content:center;margin-top:24px}
+.sec{margin-top:120px}
+.sec>h2{font-size:clamp(28px,4.6vw,42px);font-weight:600;letter-spacing:-.045em;line-height:1.05;margin:0;text-align:center;text-wrap:balance}
+.lede{color:var(--muted);text-align:center;max-width:46ch;margin:12px auto 0;font-size:16px}
+.scenes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:32px}
+.scene{margin:0;border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden;transition:border-color .4s}
+.scene.on{border-color:#3a3a3a}
+.scene .vis{height:128px;position:relative;overflow:hidden;border-bottom:1px solid var(--line);display:grid;place-items:center}
+.scene figcaption{padding:11px 13px 13px;font-size:14px;line-height:1.4}
+.scene figcaption b{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-bottom:3px}
+.stream{position:absolute;inset:0 18px;mask-image:linear-gradient(transparent,#000 25%,#000 75%,transparent);-webkit-mask-image:linear-gradient(transparent,#000 25%,#000 75%,transparent)}
+.roll{animation:roll 5s linear infinite}
+.roll div{height:5px;border-radius:3px;background:#2e2e2e;margin:6px 0}
+.roll div:nth-child(5n){background:#4a3a1a}
+.lgtm{border:1px solid #2a2a2a;border-radius:10px;padding:10px 12px;font-size:12px;width:78%;background:#0b0b0b;display:grid;gap:6px}
+.lgtm .d{color:var(--muted);font-family:"JetBrains Mono",monospace;font-size:11px}
+.lgtm .ok{display:inline-flex;align-items:center;gap:6px;color:#7fd18b;font-weight:600}
+.clock{line-height:1;font:600 40px/1 Inter,sans-serif;letter-spacing:-.04em;color:var(--coral)}
+.alert{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--coral);margin-top:4px}
+.alert i{width:8px;height:8px;border-radius:50%;background:var(--coral);animation:blinkd 1s infinite}
+.heads{display:flex;gap:8px}
+.heads span{position:relative;width:34px}
+.heads span::before{content:"?";position:absolute;left:50%;top:-18px;transform:translateX(-50%);color:var(--muted);font-weight:600;animation:float 2.4s ease-in-out infinite}
+.heads span:nth-child(2)::before{animation-delay:.4s}.heads span:nth-child(3)::before{animation-delay:.8s}.heads span:nth-child(4)::before{animation-delay:1.2s}
+.heads svg{width:100%;height:auto;display:block;opacity:.75}
+.turn{text-align:center;margin-top:26px;font-size:17px}
+.turn b{color:var(--amber);font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:32px}
+.stat{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:18px 18px 16px;display:flex;flex-direction:column;gap:6px}
+.stat .n{font:600 clamp(36px,6vw,48px)/1 Inter,sans-serif;letter-spacing:-.04em}
+.stat p{color:#cfcfcf;font-size:14.5px;line-height:1.45}
+.stat a{margin-top:auto;padding-top:6px;font-size:12.5px;color:var(--muted);text-decoration:none}
+.stat a:hover{color:var(--ink);text-decoration:underline}
+.bens{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:26px 32px;margin-top:36px}
+.ben{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;animation:pop .35s both}
+.ben .i{width:30px;height:30px;border-radius:9px;border:1px solid #2a2a2a;background:#111;display:grid;place-items:center;color:var(--amber)}
+.ben h3{margin:2px 0 2px;font-size:15.5px;font-weight:600}
+.ben p{color:var(--muted);font-size:14.5px}
+.cmpwrap{margin-top:44px}
+.cmphead{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.cmphead p{font-weight:600}
+.flip{display:inline-flex;border:1px solid #2a2a2a;border-radius:10px;padding:3px;background:#0d0d0d}
+.flip button{border:0;background:none;border-radius:7px;min-height:34px;padding:0 12px;font-size:13px;color:var(--muted)}
+.flip button[aria-pressed=true]{background:#1d1d1d;color:var(--ink)}
+.flip button.w[aria-pressed=true]{background:#2a2111;color:var(--amber)}
+.cmp{position:relative;margin-top:12px;border:1px solid var(--line);border-radius:14px;background:var(--panel);min-height:250px;overflow:hidden;transition:border-color .4s}
+.cmp.with{border-color:#4a3a1a}
+.pane{padding:20px;display:grid;gap:10px;animation:pop .35s both}
+.msg{max-width:88%;padding:9px 13px;border-radius:14px;font-size:14px;line-height:1.45;background:#151515;border:1px solid #262626}
+.msg.me{justify-self:end;background:#16130c;border-color:#3a2f17}
+.msg small{display:block;font-size:11.5px;color:var(--muted);margin-bottom:2px}
+.verdict{justify-self:start;font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:999px}
+.verdict.bad{color:var(--coral);background:#ff6b5514}
+.verdict.good{color:var(--amber);background:#f2ae4214}
+.prc{display:grid;gap:10px}
+.prc .h{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline}
+.prc .h b{font-size:15px}
+.prc .h span{font:12px "JetBrains Mono",monospace;color:var(--muted)}
+.prc blockquote{margin:0;padding-left:12px;border-left:2px solid #3a2f17;color:#ddd;font-size:14px}
+.prc table{border-collapse:collapse;width:100%;font-size:13px}
+.prc td{padding:7px 6px;border-top:1px solid var(--line);vertical-align:top}
+.prc td:first-child{font-family:"JetBrains Mono",monospace;font-size:12px;white-space:nowrap;color:#ddd}
+.prc .q{color:var(--muted);font-size:13.5px}
+.example{margin-top:8px;font-size:12px;color:var(--muted);text-align:end}
+.who{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:32px}
+.card{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:16px 14px;text-align:center;transition:opacity .4s,border-color .4s}
+.card.dim{opacity:.45}
+.card.lit{border-color:#3a3a3a}
+.card .hd{width:52px;margin:0 auto 8px}
+.card .hd svg{width:100%;height:auto;display:block}
+.card h3{margin:0;font-size:15px;font-weight:600}
+.card p{color:var(--muted);font-size:13.5px;line-height:1.45;margin-top:4px}
+.faq{margin-top:28px;border-top:1px solid var(--line)}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:56px;font-weight:500;font-size:15.5px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-size:20px;color:var(--muted);transition:transform .25s}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.ans{display:flex;align-items:flex-end;gap:10px;padding:0 0 18px}
+.ans .hd{width:40px;flex:none}
+.ans .hd svg{width:100%;height:auto;display:block}
+.ans p{background:#151515;border:1px solid #2c2c2c;border-radius:14px 14px 14px 4px;padding:10px 13px;font-size:14.5px;line-height:1.5;animation:pop .3s both}
+.ans p[dir=rtl]{font-family:Cairo,Inter,sans-serif;font-size:15.5px}
+@keyframes roll{to{transform:translateY(-50%)}}
+@keyframes blinkd{50%{opacity:.25}}
+@keyframes float{50%{transform:translate(-50%,-4px)}}
+@media(max-width:720px){.scenes{grid-template-columns:repeat(4,80%);overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px}.scene{scroll-snap-align:start}.who{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.stats,.bens{grid-template-columns:minmax(0,1fr)}}
+.navl{color:var(--muted);text-decoration:none;font-size:14px;min-height:40px;display:flex;align-items:center}
+.navl:hover{color:var(--ink)}
+.steps{margin-top:36px;display:grid;gap:0;position:relative}
+.step{display:grid;grid-template-columns:44px minmax(0,1fr);gap:16px;position:relative;padding-bottom:34px}
+.step::before{content:"";position:absolute;left:21px;top:44px;bottom:0;width:2px;background:#1f1f1f}
+.step:last-child::before{display:none}
+.tick{width:44px;height:44px;border-radius:50%;border:1.5px solid #333;background:#0d0d0d;display:grid;place-items:center;color:var(--muted);font-weight:600;font-size:15px;padding:0;transition:background .25s,border-color .25s,color .25s}
+.tick:hover{border-color:#666}
+.step.done .tick{background:var(--amber);border-color:var(--amber);color:#1b1405}
+.step.done::before{background:#4a3a1a}
+.sbody h3{margin:9px 0 4px;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.sbody>p{color:var(--muted);font-size:14.5px}
+.box{margin-top:12px;border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:14px}
+.say2{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.say2 q{font-size:16px;font-weight:500;color:var(--ink)}
+.or{margin:10px 0 6px;font-size:12.5px;color:var(--muted)}
+.cmd2{display:flex;align-items:center;gap:8px;background:#070707;border:1px solid #1f1f1f;border-radius:10px;padding:6px 6px 6px 12px}
+.cmd2 pre{flex:1;font-size:12.5px;color:#ddd;overflow-x:auto;padding:6px 0}
+.field{display:grid;gap:6px;margin-top:12px}
+.field label,.flabel{font-size:13px;color:var(--muted)}
+.field input[type=text]{font:15px/1.4 "JetBrains Mono",monospace;background:#070707;border:1px solid #2a2a2a;border-radius:10px;color:var(--ink);padding:10px 12px;min-height:44px;width:100%}
+.field input[type=text]:focus{border-color:var(--amber);outline:none}
+.tree{display:grid;gap:2px;font:13px/1.5 "JetBrains Mono",monospace}
+.tree button{display:flex;justify-content:flex-start;align-items:center;gap:10px;text-align:left;background:none;border:0;border-radius:8px;padding:6px 8px;min-height:36px;color:#ddd;font:inherit}
+.tree button:hover,.tree button[aria-pressed=true]{background:#151515}
+.tree button span{color:var(--muted);font-family:Inter,sans-serif;font-size:12.5px;margin-left:auto;text-align:right}
+.tree .k{color:var(--amber)}
+.fileinfo{margin-top:10px;padding:10px 12px;border-radius:10px;background:#16130c;border:1px solid #3a2f17;font-size:13.5px;line-height:1.45;min-height:44px}
+.cfg{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.seg2{display:inline-flex;flex-wrap:wrap;gap:4px}
+.seg2 button{background:#0d0d0d;border:1px solid #2a2a2a;border-radius:9px;min-height:38px;padding:0 12px;font-size:13px;color:var(--muted)}
+.seg2 button[aria-pressed=true]{border-color:var(--amber);color:var(--amber);background:#1a150b}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;background:#151515;border:1px solid #2a2a2a;border-radius:999px;padding:0 4px 0 10px;font:12.5px "JetBrains Mono",monospace;min-height:32px}
+.chip button{background:none;border:0;color:var(--muted);width:26px;height:26px;border-radius:50%;font-size:15px;line-height:1;padding:0}
+.chip button:hover{color:var(--coral)}
+.addrow{display:flex;gap:6px;margin-top:6px}
+.addrow input{flex:1;font:13px "JetBrains Mono",monospace;background:#070707;border:1px solid #2a2a2a;border-radius:9px;color:var(--ink);padding:0 10px;min-height:38px}
+.addrow button{background:#151515;border:1px solid #2a2a2a;border-radius:9px;min-height:38px;padding:0 12px;font-size:13px}
+input[type=range]{width:100%;accent-color:var(--amber);min-height:32px}
+.rv{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.rv b{color:var(--ink);font-weight:600}
+.json{margin:0;background:#070707;border:1px solid #1f1f1f;border-radius:10px;padding:12px;font-size:12.5px;line-height:1.6;color:#ddd;white-space:pre;overflow-x:auto}
+.jhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.rules{display:grid;gap:8px;margin-top:12px}
+.rule{display:flex;align-items:center;gap:10px;font-size:14px}
+.rule i{width:20px;height:20px;border-radius:6px;background:#1a150b;border:1px solid #4a3a1a;display:grid;place-items:center;color:var(--amber);font-style:normal;font-size:12px;flex:none}
+.rule.off{color:var(--muted);text-decoration:line-through}
+.rule.off i{background:#111;border-color:#2a2a2a;color:var(--muted)}
+.chk{display:flex;align-items:center;gap:10px;min-height:44px;font-size:14px;cursor:pointer}
+.chk input{width:20px;height:20px;accent-color:var(--amber)}
+details.free{margin-top:12px;font-size:13.5px;color:var(--muted)}
+details.free summary{cursor:pointer;min-height:36px;display:flex;align-items:center}
+details.free ol{margin:4px 0 0;padding-left:20px;display:grid;gap:4px}
+.mates{display:grid;gap:8px}
+.mate{display:grid;grid-template-columns:120px minmax(0,1fr);gap:4px 12px;font-size:14px;padding:8px 0;border-top:1px solid #1a1a1a}
+.mate:first-child{border-top:0}
+.mate b{font-weight:600}
+.mate span{color:#cfcfcf}
+.progress{display:flex;align-items:center;gap:12px;justify-content:center;margin-top:18px;font-size:13.5px;color:var(--muted)}
+.bar{width:160px;height:6px;border-radius:3px;background:#1d1d1d;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--amber);transition:width .4s}
+.daily{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:18px}
+.daily div{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:14px 16px}
+.daily h4{margin:0 0 4px;font-size:14.5px;font-weight:600}
+.daily p{color:var(--muted);font-size:13.5px;line-height:1.5}
+.daily code{font-size:12px;color:#ddd}
+.subh{margin:46px 0 0;text-align:center;font-size:20px;font-weight:600;letter-spacing:-.02em}
+@media(max-width:600px){.cfg,.daily{grid-template-columns:minmax(0,1fr)}.mate{grid-template-columns:minmax(0,1fr)}.tree button span{display:none}.navl{display:none}}
+@keyframes bob{50%{transform:translateY(-4px)}}
+@keyframes pop{from{opacity:0;transform:translateY(6px) scale(.97)}}
+@keyframes shake{20%{transform:translateX(-7px)}45%{transform:translateX(7px)}70%{transform:translateX(-4px)}}
+@keyframes zz{0%{opacity:0;transform:translate(0,6px)}30%{opacity:1}100%{opacity:0;transform:translate(10px,-18px)}}
+@media(max-width:640px){.three{grid-template-columns:minmax(0,1fr);gap:22px;margin-top:64px}.trow{grid-template-columns:minmax(0,1fr) 40px;row-gap:2px}.trow b{grid-column:1/-1}.slot{height:150px}.hana{width:128px}.key{width:112px;height:106px}.dock .say{max-width:200px}.gh span{display:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#"><svg width="20" height="20" viewBox="0 0 64 64" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" aria-hidden="true"><path d="M20 18 10 32l10 14M44 18l10 14-10 14" stroke="#f2f2f2"/><path d="m25 33 6 6 10-13" stroke="#f2ae42"/></svg>Comprende</a>
+  <a class="navl" href="#setup">Set up a team</a>
+  <div class="lang" role="group" aria-label="Hana's language"><button id="l-en" aria-pressed="true">EN</button><button id="l-ar" aria-pressed="false">عربي</button></div>
+  <a class="gh" href="https://github.com/AbdulrahmanMasoud/comprende"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
+</header>
+
+<main class="wrap">
+  <section aria-label="Meet Hana">
+    <div class="slot"><div class="bubble" id="bubble" aria-live="polite"></div></div>
+    <div class="stage" id="stage">
+      <div class="hana" id="hana" role="button" tabindex="0" aria-label="Hana, the reviewer. Poke her.">
+        <div class="jump" id="jump"><div class="bob" id="hanaSvg"></div></div>
+        <div class="zzz" aria-hidden="true"><span>z</span><span>z</span><span>z</span></div>
+      </div>
+      <button class="key" id="key" aria-label="git push"><span class="glyph" id="glyph"></span><span class="lbl">push</span></button>
+    </div>
+    <p class="hint" id="hint" aria-live="polite"></p>
+    <div class="tricks" data-hana="tricks">
+      <h2>Or try to sneak past Hana</h2>
+      <div class="tbtns" id="tricks"></div>
+      <div class="layers"><span class="layer">Agent hook</span><span class="layer">Git pre-push</span><span class="layer">CI check</span><span class="layer">Required on main</span></div>
+      <button class="playgame" id="playGame">Play 3 rounds with Hana</button>
+    </div>
+  </section>
+
+  <h1 id="title">Push code you can explain.</h1>
+  <p class="sub" id="sub">The agent explains what it writes. Before you push, it asks you about it.</p>
+  <div class="modebar"><div class="mode" role="group" aria-label="Who is it for"><button data-mode="me" aria-pressed="true">For me</button><button data-mode="team" aria-pressed="false">For my team</button></div></div>
+
+  <div class="table" role="table" aria-label="Install" data-hana="install">
+    <div class="trow"><b>Claude Code</b><pre id="i0">claude plugin marketplace add AbdulrahmanMasoud/comprende &amp;&amp; claude plugin install comprende@comprende</pre><button class="copy" data-copy="i0" data-tool="Claude Code" aria-label="Copy the Claude Code command"></button></div>
+    <div class="trow"><b>Cursor</b><pre id="i1">git clone https://github.com/AbdulrahmanMasoud/comprende.git ~/.cursor/plugins/local/comprende</pre><button class="copy" data-copy="i1" data-tool="Cursor" aria-label="Copy the Cursor command"></button></div>
+    <div class="trow"><b>Codex</b><pre id="i2">codex plugin marketplace add AbdulrahmanMasoud/comprende &amp;&amp; codex plugin add comprende@comprende</pre><button class="copy" data-copy="i2" data-tool="Codex" aria-label="Copy the Codex command"></button></div>
+    <div class="trow"><b>Antigravity</b><pre id="i3">agy plugin install https://github.com/AbdulrahmanMasoud/comprende</pre><button class="copy" data-copy="i3" data-tool="Antigravity" aria-label="Copy the Antigravity command"></button></div>
+  </div>
+  <p class="note">Needs Node.js 20+. Linux and macOS; Windows is experimental.</p>
+
+  <section class="sec" data-hana="story" aria-labelledby="storyT">
+    <h2 id="storyT">Every team has had this night.</h2>
+    <div class="scenes" id="scenes">
+      <figure class="scene"><div class="vis"><div class="stream" id="stream"></div></div><figcaption><b>2:14 p.m.</b>The AI writes 300 lines in a minute.</figcaption></figure>
+      <figure class="scene"><div class="vis"><div class="lgtm"><span class="d">+312 −40 in 9 files</span><span class="ok"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="m5 12 5 5 9-11"/></svg>LGTM</span><span class="d">approved in 2 min</span></div></div><figcaption><b>2:31 p.m.</b>The PR gets a "LGTM" in two minutes.</figcaption></figure>
+      <figure class="scene"><div class="vis"><div style="display:grid;place-items:center"><span class="clock">3:07</span><span class="alert"><i></i>checkout is failing</span></div></div><figcaption><b>3:07 a.m.</b>Production is down.</figcaption></figure>
+      <figure class="scene"><div class="vis"><div class="heads" id="heads"></div></div><figcaption><b>3:09 a.m.</b>"Who understands this code?" Nobody does.</figcaption></figure>
+    </div>
+    <p class="turn">Comprende makes sure someone does: <b>the person who shipped it.</b></p>
+  </section>
+
+  <section class="sec" data-hana="stats" aria-labelledby="statsT">
+    <h2 id="statsT">It's not just a feeling.</h2>
+    <p class="lede">More code, written faster, trusted less. Someone still has to understand it.</p>
+    <div class="stats">
+      <div class="stat"><span class="n">46%</span><p>of developers don't trust the accuracy of AI output. A year earlier, it was 31%.</p><a href="https://stackoverflow.co/company/press/archive/stack-overflow-2025-developer-survey/">Stack Overflow Developer Survey, 2025</a></div>
+      <div class="stat"><span class="n">19%</span><p>slower: experienced open-source developers took longer with AI tools, while expecting to be 24% faster.</p><a href="https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/">METR randomized trial, 2025</a></div>
+      <div class="stat"><span class="n">7.2%</span><p>less delivery stability for every 25% rise in AI adoption.</p><a href="https://cloud.google.com/blog/products/devops-sre/announcing-the-2024-dora-report">Google DORA report, 2024</a></div>
+      <div class="stat"><span class="n">4×</span><p>more code cloning in 2024, the first year copy-paste outgrew refactored code.</p><a href="https://www.gitclear.com/ai_assistant_code_quality_2025_research">GitClear AI code quality report, 2025</a></div>
+    </div>
+  </section>
+
+  <section class="sec" data-hana="benefits" aria-labelledby="benT">
+    <h2 id="benT">What changes for you</h2>
+    <div class="modebar"><div class="mode" role="group" aria-label="Who is it for"><button data-mode="me" aria-pressed="true">For me</button><button data-mode="team" aria-pressed="false">For my team</button></div></div>
+    <div class="bens" id="bens"></div>
+    <div class="cmpwrap">
+      <div class="cmphead"><p id="cmpT"></p><div class="flip" role="group" aria-label="Compare"><button data-flip="without" aria-pressed="true">Without Comprende</button><button class="w" data-flip="with" aria-pressed="false">With Comprende</button></div></div>
+      <div class="cmp" id="cmp" aria-live="polite"></div>
+      <p class="example">Example written for this page</p>
+    </div>
+  </section>
+
+  <section class="sec" data-hana="who" aria-labelledby="whoT">
+    <h2 id="whoT">Who it's for</h2>
+    <div class="who" id="who"></div>
+  </section>
+
+  <section class="sec" id="setup" data-hana="setup" aria-labelledby="setupT">
+    <h2 id="setupT">Set it up for your team on GitHub</h2>
+    <p class="lede">Once per repo, by the lead. Tick each step as you go.</p>
+    <div class="progress"><span class="bar"><i id="pbar"></i></span><span id="ptext">0 of 5 done</span></div>
+    <ol class="steps" id="steps" style="list-style:none;padding:0">
+      <li class="step"><button class="tick" data-step="0" aria-label="Mark step done">1</button><div class="sbody">
+        <h3>Install the plugin</h3><p>In the AI tool you use. The commands are in the table above.</p>
+        <div class="box"><div class="cmd2"><pre id="s0">claude plugin marketplace add AbdulrahmanMasoud/comprende &amp;&amp; claude plugin install comprende@comprende</pre><button class="copy" data-copy="s0" data-tool="Claude Code" aria-label="Copy"></button></div></div>
+      </div></li>
+
+      <li class="step"><button class="tick" data-step="1" aria-label="Mark step done">2</button><div class="sbody">
+        <h3>Turn on the gate</h3><p>Open the agent in the repo and say this. It asks who owns the settings, then opens a PR. Review it and merge.</p>
+        <div class="box">
+          <div class="say2"><q id="s1say">Enable the ownership gate in this repo.</q><button class="copy" data-copy="s1say" aria-label="Copy"></button></div>
+          <p class="or">Or by hand, with your leads team as the owner:</p>
+          <div class="field"><label for="owner">Who owns the gate's settings</label><input type="text" id="owner" value="@your-org/leads" spellcheck="false"></div>
+          <div class="cmd2" style="margin-top:8px"><pre id="s1cmd"></pre><button class="copy" data-copy="s1cmd" aria-label="Copy"></button></div>
+          <p class="or">What the PR adds. Tap a file:</p>
+          <div class="tree" id="tree"></div>
+          <p class="fileinfo" id="fileinfo"></p>
+        </div>
+      </div></li>
+
+      <li class="step"><button class="tick" data-step="2" aria-label="Mark step done">3</button><div class="sbody">
+        <h3>Tune the rules</h3><p>Change these keys in <code>.learning/config.json</code>. Leave the rest as it is.</p>
+        <div class="box cfg">
+          <div>
+            <p class="flabel">When a check is missing</p>
+            <div class="seg2" id="cmode"><button data-v="required" aria-pressed="true">Block the merge</button><button data-v="suggested" aria-pressed="false">Only warn</button><button data-v="off" aria-pressed="false">Off</button></div>
+            <p class="flabel" style="margin-top:14px">Sensitive paths always get questions</p>
+            <div class="chips" id="chips"></div>
+            <div class="addrow"><input id="newpath" placeholder="**/billing/**" aria-label="Add a sensitive path" spellcheck="false"><button id="addpath">Add</button></div>
+            <div class="field"><div class="rv"><label for="minsum">Shortest PR summary</label><b id="minsumv"></b></div><input type="range" id="minsum" min="30" max="300" step="10" value="80"></div>
+            <div class="field"><div class="rv"><label for="small">A small change is up to</label><b id="smallv"></b></div><input type="range" id="small" min="0" max="50" step="1" value="10"></div>
+          </div>
+          <div><div class="jhead"><span class="flabel">Merge these keys into .learning/config.json</span><button class="copy" data-copy="json" aria-label="Copy"></button></div><pre class="json" id="json"></pre></div>
+        </div>
+      </div></li>
+
+      <li class="step"><button class="tick" data-step="3" aria-label="Mark step done">4</button><div class="sbody">
+        <h3>Make the check required</h3><p>Without this, CI only warns. It needs admin access and the GitHub CLI.</p>
+        <div class="box">
+          <div class="field"><div class="rv"><label for="appr">Approvals per PR</label><b id="apprv"></b></div><input type="range" id="appr" min="0" max="10" value="1"></div>
+          <label class="chk"><input type="checkbox" id="solo"> One-person repo (a code owner can't approve their own PR)</label>
+          <label class="chk"><input type="checkbox" id="dry"> Dry run first: show the ruleset, change nothing</label>
+          <div class="cmd2"><pre id="s3cmd"></pre><button class="copy" data-copy="s3cmd" aria-label="Copy"></button></div>
+          <div class="rules" id="rules"></div>
+          <details class="free"><summary>Private repo on GitHub's free plan? No rulesets there.</summary><ol><li>Settings, then Branches: add a protection rule for the default branch.</li><li>Turn on "Require a pull request before merging" and "Require review from Code Owners".</li><li>Turn on "Require status checks to pass", with the check <b>Ownership check</b>.</li></ol></details>
+        </div>
+      </div></li>
+
+      <li class="step"><button class="tick" data-step="4" aria-label="Mark step done">5</button><div class="sbody">
+        <h3>Bring the team in</h3><p>Each developer, in the tool they use. One repo works for everyone, and each push is checked once.</p>
+        <div class="box mates">
+          <div class="mate"><b>Claude Code, Cursor</b><span>Install the plugin. Their first session in the repo sets up the rest.</span></div>
+          <div class="mate"><b>Codex</b><span>Install it, then trust the project and the hooks in <code>/hooks</code>. Again after every plugin update.</span></div>
+          <div class="mate"><b>Antigravity</b><span>Install it. Needs <code>agy</code> 1.5.3 or later. On Windows, also run <code>install-hooks</code> once per clone.</span></div>
+          <div class="mate"><b>No plugin</b><span>Run <code>node .learning/gate.mjs install-hooks</code> once per clone. The repo's hooks still stop the agent's push, except in Antigravity.</span></div>
+        </div>
+      </div></li>
+    </ol>
+
+    <h3 class="subh">After that, day to day</h3>
+    <div class="daily">
+      <div><h4>On every PR</h4><p>The Ownership check status, the developer's summary, and the concepts they explained per file.</p></div>
+      <div><h4>Emergencies</h4><p>Add the <code id="skiplbl">skip-ownership-check</code> label. CI skips the check, and the label stays in the timeline.</p></div>
+      <div><h4>Plugin updated?</h4><p>Upgrade the repo's copy in its own PR: <code>node &lt;plugin&gt;/dist/gate.mjs install --upgrade --repo .</code></p></div>
+      <div><h4>Nobody can switch it off in a PR</h4><p>CI runs the gate and the config from the base branch, not from the PR.</p></div>
+    </div>
+  </section>
+
+  <section class="sec" data-hana="faq" aria-labelledby="faqT">
+    <h2 id="faqT">Ask Hana</h2>
+    <div class="faq" id="faq"></div>
+  </section>
+
+  <p class="team" data-hana="team">Leading a team? Say <q>Enable the ownership gate in this repo.</q> <a href="#setup">Set it up</a></p>
+
+  <footer data-hana="bye">
+    <span>MIT licensed. Built by Abdulrahman Masoud.</span>
+    <nav aria-label="Footer"><a href="https://youtu.be/KeoRSyM0zu8">Video</a><a href="https://github.com/AbdulrahmanMasoud/comprende/blob/main/docs/how-it-works.md#limits-honestly">Limits</a><a href="https://github.com/AbdulrahmanMasoud/comprende/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/AbdulrahmanMasoud/comprende/blob/main/README.ar.md">العربية</a></nav>
+  </footer>
+</main>
+
+<div class="game" id="game" hidden role="dialog" aria-modal="true" aria-labelledby="gTitle">
+  <div class="gpanel" tabindex="-1" id="gPanel">
+    <h2 class="vh" id="gTitle">Three rounds with Hana</h2>
+    <button class="gclose" id="gClose" aria-label="Close">×</button>
+    <div class="ghead"><div class="gface" id="gFace"></div><p class="gsay" id="gSay" aria-live="polite"></p></div>
+    <div id="gBody"><p class="gstep" id="gStep"></p><pre class="gcode" id="gCode"></pre><p class="gq" id="gQ"></p><div class="gopts" id="gOpts"></div></div>
+    <button class="gnext" id="gNext" hidden>Next</button>
+  </div>
+</div>
+
+<div class="dock" id="dock" aria-live="polite"><p class="say hide" id="dockSay"></p><button class="head" id="dockHead" aria-label="Back to Hana"></button></div>
+
+<script>
+{
+const $ = s => document.querySelector(s);
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const canHover = matchMedia('(hover: hover)').matches;
+const wait = ms => new Promise(r => setTimeout(r, still ? 0 : ms));
+
+/* what Hana says, in English and Egyptian Arabic */
+const L = {
+  hi: ["Hi, I'm Hana. Try to push this change.", 'أهلا، أنا Hana. جرب تعمل push للتغيير ده.'],
+  guard: ['Not so fast. Do you know what this code does?', 'استنى بس. انت فاهم الكود ده بيعمل ايه؟'],
+  blocked: ['Blocked: no ownership report. One question first.', 'Blocked: مفيش ownership report. سؤال واحد الأول.'],
+  question: ['Without the <code dir="ltr">0</code>, what does <code dir="ltr">xs.reduce(add)</code> do with an empty list?', 'من غير الـ <code dir="ltr">0</code>، <code dir="ltr">xs.reduce(add)</code> هتعمل ايه مع list فاضية؟'],
+  wrong: ['Not quite. <code dir="ltr">reduce</code> has no default start. With none, it takes the first element, and an empty list has none. So?', 'مش بالظبط. <code dir="ltr">reduce</code> مالهاش قيمة بداية default. من غيرها بتاخد أول عنصر، والـ list الفاضية مفيهاش. يبقى؟'],
+  right: ["Right. It's your code now. Go ahead, push.", 'صح. كده الكود بتاعك. اتفضل اعمل push.'],
+  pushed: ['Pushed. The report went in with your code.', 'اتعمل push. والـ report اتحفظ مع الكود بتاعك.'],
+  after: ['Want to sneak past me, or play 3 rounds? Both are below.', 'عايز تحاول تعدي من ورايا، ولا نلعب 3 جولات؟ الاتنين تحت.'],
+  noverify: ['Ha. You skipped the git hook. CI is still waiting for you.', 'هههه. عديت من الـ git hook. بس الـ CI لسه مستنيك.'],
+  config: ['Nope. CI reads the rules from main, not from your branch.', 'لأ. الـ CI بيقرا القواعد من main، مش من الـ branch بتاعك.'],
+  change: ["That's new code. New code, new question.", 'ده كود جديد. كود جديد يبقى سؤال جديد.'],
+  terminal: ['The git pre-push hook is there too. Hi again.', 'الـ pre-push hook بتاع git موجود هناك كمان. أهلا تاني.'],
+  merge: ['The check is required on main. That merge button stays off.', 'الـ check ده required على main. زرار الـ merge هيفضل مقفول.'],
+  copied: ['Copied. See you in {tool}.', 'اتنسخ. نتقابل في {tool}.'],
+  wake: ["Ah! I'm up. I'm up.", 'ها! صاحية، صاحية.'],
+  dizzy: ['Whoa. Slow down.', 'براحة. دوختني.'],
+  lang: ['Okay, English it is.', 'تمام، هنتكلم مصري.'],
+  poke0: ['I only ask about the parts that matter.', 'أنا بسأل بس عن الحاجات المهمة.'],
+  poke1: ["I'm not grading you. Promise.", 'أنا مش بديك درجات. وعد.'],
+  poke2: ['Your lead never sees your wrong answers.', 'الـ lead بتاعك عمره ما هيشوف إجاباتك الغلط.'],
+  poke3: ['Boilerplate? I skip it.', 'Boilerplate؟ بعديه.'],
+  poke4: ['Explaining every line is not my style.', 'أشرح كل سطر؟ مش أسلوبي.'],
+  poke5: ['I speak Arabic too. Try the switch up top.', 'وبتكلم إنجليزي كمان. جرب الزرار اللي فوق.'],
+  tricks: ['Go on, try to get past me.', 'يلا، حاول تعدي من ورايا.'],
+  install: ['Pick your tool. One line each.', 'اختار الـ tool بتاعتك. سطر واحد بس.'],
+  three: ["That's me, in three lines.", 'دي أنا، في تلات سطور.'],
+  team: ["Leads: one sentence, and I'm on for the whole repo.", 'يا lead، جملة واحدة وأشتغل على الـ repo كله.'],
+  modeMe: ["Got it. Let's talk about you.", 'تمام. نتكلم عنك انت.'],
+  modeTeam: ["Got it. Let's talk about your team.", 'تمام. نتكلم عن فريقك.'],
+  story: ['Every team has had this night.', 'كل فريق عدّى بالليلة دي.'],
+  stats: ['Not just a feeling. Real studies.', 'مش إحساس وبس. دي دراسات حقيقية.'],
+  benefits: ['Flip the switch and watch the difference.', 'اقلب الزرار وشوف الفرق.'],
+  who: ['Which one are you?', 'انت مين فيهم؟'],
+  faq: ['Ask me anything. Well, these.', 'اسألني اللي انت عايزه. قصدي الأسئلة دي.'],
+  setup: ['Five steps, and I guard every PR.', 'خمس خطوات، وأبقى بحرس كل PR.'],
+  done5: ['All five done. Your team is set.', 'الخمس خطوات خلصوا. فريقك جاهز.'],
+  bye: ['Bye. Ship code you understand.', 'باي. اعمل ship لكود انت فاهمه.']
+};
+const ANS = [['Returns 0', 'هترجع 0'], ['Throws a TypeError', 'هترمي TypeError']];
+let lang = 'en';
+const t = (k, vars) => { let s = L[k][lang === 'en' ? 0 : 1]; for (const v in vars || {}) s = s.replace('{' + v + '}', vars[v]); return s; };
+
+/* Hana herself */
+function hanaMarkup(full) {
+  return `<svg viewBox="${full ? '-24 0 168 166' : '10 16 100 132'}" aria-hidden="true">
+    ${full ? '<g class="feet"><path d="M47 139v14h-7"/><path d="M73 139v14h7"/></g>' : ''}
+    <circle class="ln" cx="60" cy="31" r="9"/>
+    ${full ? '<path class="arm armL"/><path class="arm armR"/>' : ''}
+    <ellipse class="ln" cx="60" cy="88" rx="44" ry="56"/>
+    <g class="blush" fill="#ff8fa3" opacity="0"><ellipse cx="32" cy="98" rx="7" ry="4"/><ellipse cx="88" cy="98" rx="7" ry="4"/></g>
+    <g class="brows st" opacity="0"><path class="bL"/><path class="bR"/></g>
+    <g class="e e-open"><ellipse cx="44" cy="76" rx="9" ry="11.5" fill="#f2f2f2"/><ellipse cx="76" cy="76" rx="9" ry="11.5" fill="#f2f2f2"/><circle class="pL" cx="44" cy="77" r="4.5" fill="#070707"/><circle class="pR" cx="76" cy="77" r="4.5" fill="#070707"/></g>
+    <g class="e e-closed st" display="none"><path d="M36 78q8 5 16 0"/><path d="M68 78q8 5 16 0"/></g>
+    <g class="e e-happy st" display="none"><path d="M36 80q8-9 16 0"/><path d="M68 80q8-9 16 0"/></g>
+    <g class="e e-wink" display="none"><ellipse cx="44" cy="76" rx="9" ry="11.5" fill="#f2f2f2"/><circle cx="45" cy="77" r="4.5" fill="#070707"/><path class="st" d="M68 80q8-9 16 0"/></g>
+    <g class="e e-dizzy st" display="none"><path d="M44 76m-7 0a7 7 0 1 1 7 7a4.5 4.5 0 1 1-4.5-4.5a2 2 0 1 1 2 2"/><path d="M76 76m-7 0a7 7 0 1 1 7 7a4.5 4.5 0 1 1-4.5-4.5a2 2 0 1 1 2 2"/></g>
+    <path class="mouth st"/>
+  </svg>`;
+}
+const ARMS = {
+  rest: ['M24 100q-14 14-10 34', 'M96 100q14 14 10 34'],
+  block: ['M24 98q-20-4-40-14', 'M96 98q20-4 40-14'],
+  point: ['M24 100q-14 14-10 34', 'M96 98q22-4 42-2'],
+  wave: ['M24 100q-14 14-10 34', 'M96 96q18-10 18-34'],
+  cheer: ['M24 96q-16-12-16-36', 'M96 96q16-12 16-36'],
+  shrug: ['M24 100q-16-2-22-16', 'M96 100q16-2 22-16']
+};
+const BROWS = { up: ['M35 57l16-4', 'M69 53l16 4'], stern: ['M35 57l16 5', 'M69 62l16-5'], worry: ['M35 62l16-5', 'M69 57l16 5'] };
+const MOUTH = { smile: 'M52 104q8 7 16 0', flat: 'M54 106h12', frown: 'M52 109q8-6 16 0', big: 'M49 101q11 16 22 0z', o: 'M56 106a4 5 0 1 0 8 0a4 5 0 1 0-8 0', smirk: 'M53 107q8 3 15-5' };
+const MOODS = {
+  rest: { eyes: 'open', mouth: 'smile', arms: 'rest' },
+  guard: { eyes: 'open', mouth: 'flat', brows: 'stern', arms: 'block' },
+  ask: { eyes: 'open', mouth: 'o', brows: 'up', arms: 'block' },
+  doubt: { eyes: 'open', mouth: 'frown', brows: 'worry', arms: 'shrug' },
+  happy: { eyes: 'happy', mouth: 'smile', arms: 'point', blush: 1 },
+  cheer: { eyes: 'happy', mouth: 'big', arms: 'cheer', blush: 1 },
+  laugh: { eyes: 'happy', mouth: 'big', arms: 'shrug' },
+  smirk: { eyes: 'wink', mouth: 'smirk', brows: 'up', arms: 'block' },
+  stern: { eyes: 'open', mouth: 'flat', brows: 'stern', arms: 'block' },
+  sleep: { eyes: 'closed', mouth: 'flat', arms: 'rest' },
+  startled: { eyes: 'open', mouth: 'o', brows: 'up', arms: 'cheer' },
+  dizzy: { eyes: 'dizzy', mouth: 'frown', arms: 'shrug' },
+  wink: { eyes: 'wink', mouth: 'smile', arms: 'wave', blush: 1 },
+  talk: { eyes: 'open', mouth: 'smile', arms: 'wave' }
+};
+function setMood(root, name) {
+  const m = MOODS[name];
+  root.querySelectorAll('.e').forEach(g => g.setAttribute('display', g.classList.contains('e-' + m.eyes) ? 'inline' : 'none'));
+  const mouth = root.querySelector('.mouth'); mouth.setAttribute('d', MOUTH[m.mouth]); mouth.classList.toggle('fillm', m.mouth === 'big');
+  root.querySelector('.brows').setAttribute('opacity', m.brows ? 1 : 0);
+  if (m.brows) { root.querySelector('.bL').setAttribute('d', BROWS[m.brows][0]); root.querySelector('.bR').setAttribute('d', BROWS[m.brows][1]); }
+  root.querySelector('.blush').setAttribute('opacity', m.blush ? .4 : 0);
+  const aL = root.querySelector('.armL');
+  if (aL) { aL.setAttribute('d', ARMS[m.arms][0]); root.querySelector('.armR').setAttribute('d', ARMS[m.arms][1]); }
+}
+const big = $('#hanaSvg'); big.innerHTML = hanaMarkup(true);
+const small = $('#dockHead'); small.innerHTML = hanaMarkup(false);
+setMood(big, 'rest'); setMood(small, 'rest');
+
+/* her eyes follow the pointer */
+const eyes = [big, small].map(root => ({ root, cur: { x: 0, y: 0 }, to: { x: 0, y: 0 } }));
+addEventListener('pointermove', e => {
+  for (const E of eyes) {
+    const r = E.root.getBoundingClientRect(); if (!r.width) continue;
+    const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height * .45), d = Math.hypot(dx, dy) || 1, k = Math.min(1, d / 240);
+    E.to = { x: dx / d * 4.2 * k, y: dy / d * 5.5 * k };
+  }
+});
+function look() {
+  for (const E of eyes) {
+    E.cur.x += (E.to.x - E.cur.x) * .2; E.cur.y += (E.to.y - E.cur.y) * .2;
+    const pL = E.root.querySelector('.pL'), pR = E.root.querySelector('.pR');
+    pL.setAttribute('cx', 44 + E.cur.x); pL.setAttribute('cy', 77 + E.cur.y); pR.setAttribute('cx', 76 + E.cur.x); pR.setAttribute('cy', 77 + E.cur.y);
+  }
+  requestAnimationFrame(look);
+}
+if (!still) requestAnimationFrame(look);
+function blink() {
+  for (const E of eyes) E.root.querySelectorAll('.e-open ellipse').forEach(el => { el.style.transformBox = 'fill-box'; el.style.transformOrigin = 'center'; if (!still) el.animate([{ transform: 'scaleY(1)' }, { transform: 'scaleY(.1)' }, { transform: 'scaleY(1)' }], { duration: 170 }); });
+  setTimeout(blink, 2600 + Math.random() * 3200);
+}
+setTimeout(blink, 2000);
+
+/* where she stands */
+const stage = $('#stage'), hana = $('#hana'), key = $('#key'), jump = $('#jump');
+function layout() {
+  const W = stage.clientWidth, kw = key.offsetWidth, hw = hana.offsetWidth;
+  const keyLeft = W - kw - Math.max(8, W * .1);
+  key.style.left = keyLeft + 'px';
+  return { rest: Math.max(0, keyLeft - hw - Math.max(16, W * .12)), guard: keyLeft - hw * .34 };
+}
+let spot = 'rest';
+async function moveTo(where) {
+  if (spot === where) return; spot = where;
+  hana.classList.add('walk'); hana.style.transform = `translateX(${layout()[where]}px)`;
+  await wait(560); hana.classList.remove('walk'); placeTail();
+}
+const stageObserver = new ResizeObserver(() => { hana.style.transform = `translateX(${layout()[spot]}px)`; placeTail(); });
+stageObserver.observe(stage);
+function hop(rot) {
+  if (still) return;
+  jump.animate(rot ? [{ transform: 'rotate(0)' }, { transform: 'rotate(-8deg)' }, { transform: 'rotate(8deg)' }, { transform: 'rotate(-5deg)' }, { transform: 'rotate(0)' }]
+    : [{ transform: 'translateY(0)' }, { transform: 'translateY(-18px)' }, { transform: 'translateY(0)' }], { duration: rot ? 900 : 380, easing: 'ease-out' });
+}
+
+/* what she says */
+const bubble = $('#bubble'), hint = $('#hint');
+let shown = { key: 'hi' }, state = 'idle', restoreTimer = 0, wrongPicked = -1;
+function placeTail() {
+  const b = bubble.getBoundingClientRect(), h = hana.getBoundingClientRect();
+  const x = Math.max(18, Math.min(b.width - 18, h.left + h.width / 2 - b.left));
+  bubble.style.setProperty('--tail', x + 'px');
+}
+function render() {
+  const { key: k, vars } = shown;
+  bubble.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  let html = t(k, vars);
+  if (k === 'question' || k === 'wrong') html += `<div class="answers">${ANS.map((a, i) => `<button data-a="${i}" class="${i === wrongPicked ? 'no' : ''}">${a[lang === 'en' ? 0 : 1]}</button>`).join('')}</div>`;
+  bubble.innerHTML = html;
+  bubble.style.animation = 'none'; void bubble.offsetWidth; bubble.style.animation = '';
+  placeTail();
+}
+function say(k, mood, vars) { shown = { key: k, vars }; render(); if (mood) setMood(big, mood); }
+const BASE = { idle: ['hi', 'rest', 'rest'], guarding: ['guard', 'guard', 'guard'], asking: ['question', 'ask', 'guard'], ready: ['right', 'happy', 'rest'], pushed: ['after', 'talk', 'rest'] };
+function clearLayers() { document.querySelectorAll('.layer').forEach(l => l.classList.remove('caught')); }
+function restore() { const [k, m, s] = BASE[state]; if (state === 'asking' && wrongPicked >= 0) say('wrong', 'doubt'); else say(k, m); moveTo(s); clearLayers(); }
+function react(k, mood, ms, vars) { clearTimeout(restoreTimer); say(k, mood, vars); restoreTimer = setTimeout(restore, still ? 2500 : ms); }
+function setHint(html, cls) { hint.className = 'hint' + (cls ? ' ' + cls : ''); hint.innerHTML = html; }
+
+/* she falls asleep when you leave her alone */
+let sleeping = false, idleTimer = 0, dockOn = false;
+function armSleep() { clearTimeout(idleTimer); idleTimer = setTimeout(goSleep, 10000); }
+function goSleep() { if (state === 'asking' || dockOn) return armSleep(); sleeping = true; clearTimeout(restoreTimer); setMood(big, 'sleep'); hana.classList.add('sleeping'); bubble.textContent = '…'; }
+function wake() { armSleep(); if (!sleeping) return; sleeping = false; hana.classList.remove('sleeping'); hop(); react('wake', 'startled', 1800); }
+['pointermove', 'keydown', 'scroll', 'touchstart'].forEach(ev => addEventListener(ev, wake, { passive: true }));
+
+/* the key */
+const LOCK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+const CHECK = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="m5 12 5 5 9-11"/></svg>';
+$('#glyph').innerHTML = LOCK;
+function sparks() {
+  if (still) return;
+  const cx = key.offsetLeft + key.offsetWidth / 2, cy = key.offsetTop + 30;
+  for (let i = 0; i < 14; i++) {
+    const s = document.createElement('span'); s.className = 'spark'; s.style.left = cx + 'px'; s.style.top = cy + 'px'; stage.append(s);
+    const a = Math.PI * (1 + i / 13), d = 50 + Math.random() * 50;
+    s.animate([{ transform: 'translate(0,0) scale(1)', opacity: 1 }, { transform: `translate(${Math.cos(a) * d}px,${Math.sin(a) * d}px) scale(.3)`, opacity: 0 }], { duration: 700 + Math.random() * 300, easing: 'cubic-bezier(.2,.7,.3,1)' }).onfinish = () => s.remove();
+  }
+}
+const AGAIN = 'Pushed. <button id="again" style="background:none;border:0;color:#8a8a8a;text-decoration:underline;padding:0;min-height:24px">Play again</button>';
+async function pressKey() {
+  wake();
+  key.classList.add('down'); await wait(140); key.classList.remove('down');
+  clearTimeout(restoreTimer); clearLayers();
+  if (state === 'pushed') { react('after', 'wink', 3000); return; }
+  if (state === 'ready') {
+    state = 'pushed'; key.classList.add('ok'); $('#glyph').innerHTML = CHECK; sparks(); hop();
+    say('pushed', 'cheer'); setHint(AGAIN, 'ok'); restoreTimer = setTimeout(restore, 3200); return;
+  }
+  key.classList.remove('blocked', 'shake'); void key.offsetWidth; key.classList.add('blocked', 'shake');
+  setHint('Blocked: no ownership report.', 'no');
+  moveTo('guard');
+  if (state !== 'asking') { state = 'asking'; say('blocked', 'stern'); await wait(1400); if (state !== 'asking') return; }
+  wrongPicked = -1; say('question', 'ask');
+}
+key.addEventListener('click', pressKey);
+bubble.addEventListener('click', async e => {
+  const b = e.target.closest('[data-a]'); if (!b || state !== 'asking') return;
+  if (b.dataset.a === '1') {
+    state = 'ready'; wrongPicked = -1; key.classList.remove('blocked'); setHint('Now push again.', 'ok');
+    say('right', 'happy'); hop(); moveTo('rest');
+  } else { wrongPicked = +b.dataset.a; say('wrong', 'doubt'); }
+});
+hint.addEventListener('click', e => {
+  if (e.target.id !== 'again') return;
+  state = 'idle'; wrongPicked = -1; key.classList.remove('ok', 'blocked'); $('#glyph').innerHTML = LOCK; setHint('Press <b>push</b>, or hit <kbd>P</kbd>'); restore();
+});
+addEventListener('keydown', e => { if (!document.getElementById('game').hidden) return; if ((e.key === 'p' || e.key === 'P') && !e.metaKey && !e.ctrlKey && !e.altKey && !/input|textarea/i.test(document.activeElement.tagName)) { e.preventDefault(); pressKey(); } });
+
+/* she steps in front of the key when you reach for it */
+addEventListener('pointermove', e => {
+  if (!canHover || sleeping) return;
+  const r = key.getBoundingClientRect(), d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+  if (state === 'idle' && d < 130) { state = 'guarding'; clearTimeout(restoreTimer); moveTo('guard'); say('guard', 'guard'); }
+  else if (state === 'guarding' && d > 280) { state = 'idle'; restore(); }
+});
+
+/* tricks to get past her, each caught by one layer */
+const TRICKS = [['<code>git push --no-verify</code>', 'noverify', 'laugh', 2], ['Turn the check off in my PR', 'config', 'smirk', 2], ['Change the code after answering', 'change', 'stern', 0], ['Push from my own terminal', 'terminal', 'wink', 1], ['Merge it anyway on GitHub', 'merge', 'stern', 3]];
+$('#tricks').innerHTML = TRICKS.map((x, i) => `<button data-t="${i}">${x[0]}</button>`).join('');
+$('#tricks').addEventListener('click', e => {
+  const b = e.target.closest('[data-t]'); if (!b) return; wake();
+  const [, k, mood, n] = TRICKS[+b.dataset.t], layer = document.querySelectorAll('.layer')[n];
+  clearLayers(); moveTo('guard'); react(k, mood, 4200);
+  layer.classList.add('caught');
+  if (!still) layer.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'translateX(0)' }], { duration: 300 });
+  if (mood === 'laugh') hop(true);
+});
+
+/* poke her */
+let pokeN = 0;
+function poke() {
+  if (spot === 'guard' && (state === 'guarding' || state === 'asking')) return pressKey();
+  wake(); react('poke' + (pokeN % 6), pokeN % 2 ? 'wink' : 'talk', 2800); pokeN++; hop(); }
+hana.addEventListener('click', poke);
+hana.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); poke(); } });
+
+/* the small Hana follows you down the page */
+const dock = $('#dock'), dockText = $('#dockSay');
+let dockTimer = 0;
+function dockSay(k, mood, vars) {
+  if (!dockOn) return;
+  dockText.dir = lang === 'ar' ? 'rtl' : 'ltr'; dockText.innerHTML = t(k, vars); dockText.classList.remove('hide');
+  setMood(small, mood || 'talk'); clearTimeout(dockTimer);
+  dockTimer = setTimeout(() => { dockText.classList.add('hide'); setMood(small, 'rest'); }, 4200);
+}
+const visibleObserver = new IntersectionObserver(([en]) => { dockOn = !en.isIntersecting; dock.classList.toggle('on', dockOn); }, { threshold: .15 });
+visibleObserver.observe(stage);
+const sectionObserver = new IntersectionObserver(list => { for (const en of list) if (en.isIntersecting) dockSay(en.target.dataset.hana); }, { threshold: .6 });
+document.querySelectorAll('[data-hana]').forEach(el => sectionObserver.observe(el));
+$('#dockHead').addEventListener('click', () => stage.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' }));
+
+/* copy, and a wink */
+const copyIcon = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+const doneIcon = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f2ae42" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="m5 12 5 5 9-11"/></svg>';
+document.querySelectorAll('.copy').forEach(b => { b.innerHTML = copyIcon; });
+document.addEventListener('click', async e => {
+  const b = e.target.closest('.copy'); if (!b) return;
+  const el = document.getElementById(b.dataset.copy);
+  try { await navigator.clipboard.writeText(el.textContent); } catch { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  b.innerHTML = doneIcon; setTimeout(() => { b.innerHTML = copyIcon; }, 1400);
+  if (!b.dataset.tool) return;
+  dockSay('copied', 'wink', { tool: b.dataset.tool });
+  if (!dockOn && state !== 'asking') react('copied', 'wink', 2600, { tool: b.dataset.tool });
+});
+
+/* language */
+function setLang(l) {
+  lang = l; $('#l-en').setAttribute('aria-pressed', l === 'en'); $('#l-ar').setAttribute('aria-pressed', l === 'ar');
+  if (state === 'asking') render(); else react('lang', 'wink', 2400);
+  if (!game.hidden) renderGame();
+  renderFaq();
+  hop();
+}
+$('#l-en').addEventListener('click', () => setLang('en'));
+$('#l-ar').addEventListener('click', () => setLang('ar'));
+
+/* and she gets dizzy if you shake the pointer */
+let energy = 0, last = null, dizzyUntil = 0;
+addEventListener('pointermove', e => {
+  const now = performance.now();
+  if (last) { const dt = Math.max(8, now - last.t); energy = energy * .9 + Math.hypot(e.clientX - last.x, e.clientY - last.y) / dt; }
+  last = { x: e.clientX, y: e.clientY, t: now };
+  if (energy > 48 && now > dizzyUntil && state !== 'asking' && !dockOn) { dizzyUntil = now + 7000; energy = 0; react('dizzy', 'dizzy', 2200); hop(true); }
+});
+
+
+/* three rounds with Hana; she keeps no score */
+const GAME = [
+  { code: 'input.oninput = () => {\n  clearTimeout(timer);\n  timer = setTimeout(search, 300);\n};',
+    q: ['You type 5 letters quickly. How many times does search run?', 'كتبت 5 حروف بسرعة. الـ search هتشتغل كام مرة؟'],
+    opts: [['5 times', '5 مرات'], ['Once, 300ms after the last key', 'مرة واحدة، بعد آخر حرف بـ 300ms'], ['Never', 'ولا مرة']], ok: 1,
+    right: ['Right. Each key resets the timer, so it runs once you stop.', 'صح. كل حرف بيصفر الـ timer، فبتشتغل مرة واحدة لما توقف.'],
+    wrong: ['Each key cancels the last timer. Only the final one survives, so search runs once.', 'كل حرف بيلغي الـ timer اللي قبله. آخر واحد بس اللي بيكمل، فالـ search بتشتغل مرة واحدة.'] },
+  { code: 'async function saveAll(items) {\n  items.forEach(async item => {\n    await save(item);\n  });\n  console.log("all saved");\n}',
+    q: ['When does "all saved" print?', '"all saved" هتتطبع امتى؟'],
+    opts: [['After every save finishes', 'بعد ما كل الـ saves تخلص'], ['Before the saves finish', 'قبل ما الـ saves تخلص'], ['It never prints', 'مش هتتطبع خالص']], ok: 1,
+    right: ["Right. forEach doesn't wait for async callbacks.", 'صح. forEach مش بتستنى الـ async callbacks.'],
+    wrong: ["forEach doesn't wait for promises, so the log runs first. Use for...of or Promise.all.", 'forEach مش بتستنى الـ promises، فالـ log بيطلع الأول. استخدم for...of أو Promise.all.'] },
+  { code: '[10, 9, 1].sort()',
+    q: ['What does it return?', 'هترجع ايه؟'],
+    opts: [['[1, 9, 10]', '[1, 9, 10]'], ['[1, 10, 9]', '[1, 10, 9]'], ['[10, 9, 1]', '[10, 9, 1]']], ok: 1,
+    right: ['Right. Without a compare function, sort compares them as strings.', 'صح. من غير compare function، الـ sort بتقارن كـ strings.'],
+    wrong: ["sort() compares strings by default, so '10' comes before '9'. Use sort((a, b) => a - b).", "الـ sort بتقارن كـ strings بشكل default، فـ '10' بتيجي قبل '9'. استخدم sort((a, b) => a - b)."] }
+];
+const GL = { intro: ['Three snippets an AI might write. Do you know what they do?', 'تلات snippets ممكن الـ AI يكتبها. عارف بتعمل ايه؟'], end: ["Done. I don't keep score, and your lead never sees your mistakes.", 'خلصنا. أنا مش بحسب درجات، والـ lead عمره ما هيشوف غلطك.'], next: ['Next', 'اللي بعده'], again: ['Play again', 'نلعب تاني'], step: ['Round {n} of 3', 'الجولة {n} من 3'] };
+const game = $('#game'), gFace = $('#gFace');
+gFace.innerHTML = hanaMarkup(false); setMood(gFace, 'talk');
+eyes.push({ root: gFace, cur: { x: 0, y: 0 }, to: { x: 0, y: 0 } });
+let gi = 0, gPick = -1, gEnd = false, gLine = GL.intro;
+const pick = pair => pair[lang === 'en' ? 0 : 1];
+function renderGame() {
+  const say = $('#gSay'); say.dir = lang === 'ar' ? 'rtl' : 'ltr'; say.textContent = pick(gLine);
+  $('#gBody').hidden = gEnd; $('#gNext').hidden = !gEnd && gPick < 0;
+  $('#gNext').textContent = pick(gEnd ? GL.again : GL.next);
+  if (gEnd) return;
+  const R = GAME[gi];
+  $('#gStep').textContent = pick(GL.step).replace('{n}', gi + 1);
+  $('#gStep').dir = lang === 'ar' ? 'rtl' : 'ltr';
+  $('#gNext').parentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  $('#gCode').textContent = R.code;
+  const q = $('#gQ'); q.dir = lang === 'ar' ? 'rtl' : 'ltr'; q.textContent = pick(R.q);
+  const o = $('#gOpts'); o.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  o.innerHTML = R.opts.map((x, i) => `<button data-g="${i}" ${gPick >= 0 ? 'disabled' : ''} class="${gPick >= 0 && i === R.ok ? 'right' : gPick === i ? 'no' : ''}">${pick(x).replace(/</g, '&lt;')}</button>`).join('');
+}
+function openGame() { gi = 0; gPick = -1; gEnd = false; gLine = GL.intro; setMood(gFace, 'talk'); game.hidden = false; renderGame(); $('#gPanel').focus(); wake(); }
+function closeGame() { game.hidden = true; $('#playGame').focus(); }
+$('#playGame').addEventListener('click', openGame);
+$('#gClose').addEventListener('click', closeGame);
+game.addEventListener('click', e => { if (e.target === game) closeGame(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && !game.hidden) closeGame(); });
+$('#gOpts').addEventListener('click', e => {
+  const b = e.target.closest('[data-g]'); if (!b || gPick >= 0) return;
+  gPick = +b.dataset.g; const ok = gPick === GAME[gi].ok;
+  gLine = ok ? GAME[gi].right : GAME[gi].wrong; setMood(gFace, ok ? 'cheer' : 'doubt'); renderGame(); $('#gNext').focus();
+});
+$('#gNext').addEventListener('click', () => {
+  if (gEnd) return openGame();
+  gPick = -1; gi++;
+  if (gi >= GAME.length) { gEnd = true; gLine = GL.end; setMood(gFace, 'wink'); } else { gLine = GL.intro; setMood(gFace, 'ask'); }
+  renderGame();
+});
+
+/* for me, or for my team */
+const MODE = {
+  me: { title: 'Push code you can explain.', sub: 'The agent explains what it writes. Before you push, it asks you about it.', ben: 'What changes for you', cmp: 'When a reviewer asks you why',
+    bens: [['Learn while you ship', 'The agent explains what is new to you, and skips what you already know.'], ['Answer for your code', 'In review, in an interview, or at 3 a.m., you know why it works.'], ['Less noise every week', 'It remembers what you know, on your machine only.'], ['Mistakes stay private', 'Your wrong answers never reach the report or your lead.']] },
+  team: { title: 'Merge code your team can explain.', sub: 'Every pull request comes with proof that the person who shipped it understands it.', ben: 'What changes for your team', cmp: 'What the reviewer sees',
+    bens: [['Reviews start from intent', "Every PR comes with the developer's own summary and the concepts they explained."], ['Knowledge that stays', 'Who explained what lives in git history, next to the code.'], ['Onboarding by shipping', 'New hires learn the codebase on real changes, one question at a time.'], ['No surveillance', 'Leads see understanding. Never scores, wrong answers or attempts.']] }
+};
+const ICONS = ['<path d="m8 7-5 5 5 5M16 7l5 5-5 5"/>', '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/>', '<path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/>', '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'];
+const LOCKI = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+const CMP = {
+  me: {
+    without: `<div class="msg"><small>Reviewer</small>Why does <code>sum</code> pass <code>0</code> to <code>reduce</code>?</div><div class="msg me"><small>You</small>Not sure, the AI wrote it. Should I remove it?</div><div class="msg"><small>Reviewer</small>Please don't. Let's walk through it on a call.</div><span class="verdict bad">Changes requested</span>`,
+    with: `<div class="msg"><small>Reviewer</small>Why does <code>sum</code> pass <code>0</code> to <code>reduce</code>?</div><div class="msg me"><small>You</small>So an empty list returns 0. Without it, <code>reduce</code> throws a TypeError.</div><div class="msg"><small>Reviewer</small>Makes sense.</div><span class="verdict good">Approved</span>` },
+  team: {
+    without: `<div class="prc"><div class="h"><b>feat: retry failed payments</b><span>+312 −40 in 9 files</span></div><p class="q">No description.</p><div class="msg"><small>Reviewer, 2 minutes later</small>LGTM</div><p class="q">What does it retry? Could a customer be charged twice? The diff is the only answer.</p></div>`,
+    with: `<div class="prc"><div class="h"><b>feat: retry failed payments</b><span>+312 −40 in 9 files</span><span class="verdict good">Ownership check passed</span></div><blockquote>Retries a failed payment up to 3 times with backoff, only on network errors and never on a declined card, so a customer is never charged twice.</blockquote><table><tr><td>${LOCKI} payments/retry.js</td><td>idempotency keys; which errors are safe to retry</td></tr><tr><td>lib/backoff.js</td><td>exponential backoff with jitter</td></tr></table></div>` }
+};
+const WHO = [['me', 'ask', 'The junior', 'Ships with AI and actually learns, one explanation at a time.'], ['me', 'smirk', 'The senior', 'Skips what they know. Gets one line on the risky parts.'], ['team', 'happy', 'The lead', "Reads the developer's own summary before the diff."], ['team', 'stern', 'The maintainer', 'Gets AI-written PRs from strangers. CI asks for the report first.']];
+const FAQ = [
+  ['Will it slow me down?', ['A small change gets one question. Bigger ones get three to six. Paths your team marks sensitive, like auth or payments, always get some.', 'التغيير الصغير بياخد سؤال واحد. الأكبر بياخد من 3 لـ 6. والـ paths اللي الفريق معلّمها sensitive، زي auth أو payments، دايما عليها أسئلة.']],
+  ['Will my lead see my mistakes?', ['No. The report holds your summary and the concepts you explained. Never scores, wrong answers or attempts.', 'لأ. الـ report فيه الـ summary بتاعك والـ concepts اللي شرحتها بس. مفيش درجات ولا إجابات غلط ولا عدد محاولات.']],
+  ["I'm senior. Why would I need this?", ["I judge the code, not you. Say \"I know this\" and I explain less of it from then on. \"just build\" turns explanations off, and risks still get one line.", 'أنا بحكم على الكود مش عليك. قول "I know this" وهشرح أقل في الموضوع ده بعد كده. و"just build" بتوقف الشرح، والمخاطر بس بتاخد سطر.']],
+  ['What about a 3 a.m. hotfix?', ['Add the skip-ownership-check label to the PR. CI skips the check, and the label stays in the timeline. Tell the agent it\'s a hotfix, and I stay quiet until the fix ships.', 'حط الـ label اللي اسمه skip-ownership-check على الـ PR. الـ CI هيعدي الـ check، والـ label بيفضل باين في الـ timeline. وقول للـ agent إنه hotfix، وأنا هسكت لحد ما يتعمله ship.']],
+  ['Can someone cheat?', ['Honestly, yes. A determined developer can write a report by hand. Then skipping is deliberate, and it stays in git history under their name. I\'m a process tool, not a security boundary.', 'بصراحة آه. developer مصمم يقدر يكتب الـ report بإيده. ساعتها التخطي بيبقى بقصد، وبيفضل في git history باسمه. أنا process tool، مش security boundary.']],
+  ['Does my code go anywhere?', ['Comprende has no hosted server. Its small MCP server runs on your machine and keeps what you know in ~/.comprende, and the check runs in your repo and your CI.', 'Comprende مالهاش server على النت. الـ MCP server بتاعها صغير وشغال على جهازك، وبيحفظ اللي انت عارفه في ~/.comprende، والـ check بيشتغل في الـ repo بتاعك والـ CI بتاعك.']]
+];
+let mode = 'me', flipState = 'without', flipTouched = false;
+try { if (localStorage.getItem('comprende-mode') === 'team') mode = 'team'; } catch {}
+function renderCmp() {
+  const c = $('#cmp'); c.classList.toggle('with', flipState === 'with');
+  c.innerHTML = `<div class="pane">${CMP[mode][flipState]}</div>`;
+  document.querySelectorAll('[data-flip]').forEach(b => b.setAttribute('aria-pressed', b.dataset.flip === flipState));
+}
+function renderMode() {
+  const M = MODE[mode];
+  document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === mode));
+  $('#title').textContent = M.title; $('#sub').textContent = M.sub; $('#benT').textContent = M.ben; $('#cmpT').textContent = M.cmp;
+  $('#bens').innerHTML = M.bens.map((b, i) => `<div class="ben" style="animation-delay:${i * 60}ms"><span class="i"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[i]}</svg></span><div><h3>${b[0]}</h3><p>${b[1]}</p></div></div>`).join('');
+  document.querySelectorAll('#who .card').forEach((c, i) => { c.classList.toggle('dim', WHO[i][0] !== mode); c.classList.toggle('lit', WHO[i][0] === mode); });
+  renderCmp();
+}
+function setModeTo(m) {
+  if (m === mode) return; mode = m; flipState = 'without';
+  try { localStorage.setItem('comprende-mode', m); } catch {}
+  renderMode(); wake(); react(m === 'me' ? 'modeMe' : 'modeTeam', 'wink', 2400); hop(); dockSay(m === 'me' ? 'modeMe' : 'modeTeam', 'wink');
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) setModeTo(b.dataset.mode); });
+document.addEventListener('click', e => { const b = e.target.closest('[data-flip]'); if (!b) return; flipTouched = true; flipState = b.dataset.flip; renderCmp(); if (flipState === 'with') dockSay('benefits', 'happy'); });
+/* the comparison flips by itself until you touch it */
+const cmpObserver = new IntersectionObserver(([en]) => {
+  if (!en.isIntersecting || flipTouched || still) return;
+  setTimeout(() => { if (!flipTouched && flipState === 'without') { flipState = 'with'; renderCmp(); } }, 2600);
+}, { threshold: .7 });
+cmpObserver.observe($('#cmp'));
+$('#who').innerHTML = WHO.map(w => `<div class="card"><div class="hd">${hanaMarkup(false)}</div><h3>${w[2]}</h3><p>${w[3]}</p></div>`).join('');
+document.querySelectorAll('#who .card').forEach((c, i) => setMood(c, WHO[i][1]));
+function renderFaq() {
+  const open = [...document.querySelectorAll('#faq details')].map(d => d.open);
+  $('#faq').innerHTML = FAQ.map((f, i) => `<details${open[i] ? ' open' : ''}><summary>${f[0]}</summary><div class="ans"><span class="hd">${hanaMarkup(false)}</span><p dir="${lang === 'ar' ? 'rtl' : 'ltr'}">${f[1][lang === 'en' ? 0 : 1]}</p></div></details>`).join('');
+  document.querySelectorAll('#faq .ans').forEach((a, i) => setMood(a, ['talk', 'happy', 'smirk', 'wink', 'doubt', 'talk'][i]));
+}
+renderFaq();
+$('#heads').innerHTML = [0, 1, 2, 3].map(() => `<span>${hanaMarkup(false)}</span>`).join('');
+document.querySelectorAll('#heads span').forEach(h => setMood(h, 'doubt'));
+{ const rows = Array.from({ length: 16 }, (_, i) => `<div style="width:${30 + ((i * 37) % 65)}%;margin-left:${(i % 4) * 8}%"></div>`).join(''); $('#stream').innerHTML = `<div class="roll">${rows}${rows}</div>`; }
+const sceneObserver = new IntersectionObserver(list => { for (const en of list) en.target.classList.toggle('on', en.isIntersecting); }, { threshold: .8 });
+document.querySelectorAll('.scene').forEach(el => sceneObserver.observe(el));
+renderMode();
+
+/* team setup: a checklist, a file tour, and builders for the config and the ruleset */
+const FILES = [
+  ['.learning/gate.mjs', 'the gate', 'The gate itself. Hooks and CI run this copy.'],
+  ['.learning/config.json', 'the rules', 'The settings from step 3: what blocks, what is sensitive, what counts as small.'],
+  ['.github/workflows/ownership-check.yml', 'CI check', 'The Ownership check on every pull request. It runs the base branch\'s gate.'],
+  ['.claude/settings.json', 'Claude Code', 'A hook that stops Claude Code from pushing unverified code. Your other settings are kept.'],
+  ['.cursor/hooks.json', 'Cursor', 'The same for Cursor, plus its session start. Your other hooks are kept.'],
+  ['.codex/hooks.json', 'Codex', 'The same for Codex, once each developer trusts the project and the hooks in /hooks.'],
+  ['CODEOWNERS', 'review', 'Changes to the gate\'s files need the owner\'s review. Added to your existing CODEOWNERS, never hiding it.'],
+  ['.gitignore, .gitattributes', 'one line each', 'Keeps the local draft out of git, and stops git from rewriting the gate\'s line endings.']
+];
+const tree = $('#tree');
+tree.innerHTML = FILES.map((f, i) => `<button data-f="${i}" aria-pressed="${i === 0}"><span class="k">+</span>${f[0]}<span>${f[1]}</span></button>`).join('');
+const showFile = i => { tree.querySelectorAll('button').forEach((b, j) => b.setAttribute('aria-pressed', i === j)); $('#fileinfo').textContent = FILES[i][2]; };
+tree.addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (b) showFile(+b.dataset.f); });
+tree.addEventListener('pointerover', e => { const b = e.target.closest('[data-f]'); if (b && canHover) showFile(+b.dataset.f); });
+showFile(0);
+const owner = $('#owner');
+const ownerCmd = () => { const o = owner.value.trim().replace(/[^\w@/.-]/g, '') || '@your-org/leads'; $('#s1cmd').textContent = `node <plugin>/dist/gate.mjs install --repo . --owner ${o}`; };
+owner.addEventListener('input', ownerCmd); ownerCmd();
+
+const cfg = { mode: 'required', sensitive: ['**/auth/**', '**/payments/**', '**/migrations/**', '**/security/**'], min: 80, small: 10 };
+function renderCfg() {
+  document.querySelectorAll('#cmode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === cfg.mode));
+  $('#chips').innerHTML = cfg.sensitive.map((p, i) => `<span class="chip">${p.replace(/</g, '&lt;')}<button data-rm="${i}" aria-label="Remove ${p.replace(/"/g, '')}">×</button></span>`).join('');
+  $('#minsumv').textContent = cfg.min + ' characters';
+  $('#smallv').textContent = cfg.small ? cfg.small + ' lines' : 'off';
+  const body = { mode: cfg.mode, sensitive: cfg.sensitive, min_summary_chars: cfg.min, small_change_lines: cfg.small };
+  $('#json').textContent = JSON.stringify({ ownership_check: body }, null, 2).replace(/\[\n\s+([^\]]+?)\n\s+\]/g, (m, inner) => '[' + inner.split(/,\n\s+/).join(', ') + ']');
+}
+$('#cmode').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { cfg.mode = b.dataset.v; renderCfg(); } });
+$('#chips').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (b) { cfg.sensitive.splice(+b.dataset.rm, 1); renderCfg(); } });
+const addPath = () => { const v = $('#newpath').value.trim(); if (v && !cfg.sensitive.includes(v) && v.length < 80) { cfg.sensitive.push(v); $('#newpath').value = ''; renderCfg(); } };
+$('#addpath').addEventListener('click', addPath);
+$('#newpath').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addPath(); } });
+$('#minsum').addEventListener('input', e => { cfg.min = +e.target.value; renderCfg(); });
+$('#small').addEventListener('input', e => { cfg.small = +e.target.value; renderCfg(); });
+renderCfg();
+
+function renderProtect() {
+  const n = +$('#appr').value, solo = $('#solo').checked, dry = $('#dry').checked;
+  $('#apprv').textContent = n;
+  const flags = [dry ? '' : '--apply', n !== 1 ? `--approvals ${n}` : '', solo ? '--no-code-owners' : ''].filter(Boolean).join(' ');
+  $('#s3cmd').textContent = `node .learning/gate.mjs protect${flags ? ' ' + flags : ''}`;
+  const R = [[true, 'A pull request before merging into the default branch'], [n > 0, n > 0 ? `${n} approval${n === 1 ? '' : 's'}` : 'No approvals required'], [!solo && n > 0, 'Including a code owner'], [true, 'The Ownership check must pass']];
+  $('#rules').innerHTML = (dry ? '<p class="flabel">Dry run: prints this ruleset and changes nothing.</p>' : '') + R.map(r => `<div class="rule${r[0] ? '' : ' off'}"><i>${r[0] ? '✓' : '–'}</i>${r[1]}</div>`).join('');
+}
+['appr', 'solo', 'dry'].forEach(id => $('#' + id).addEventListener('input', renderProtect));
+renderProtect();
+
+let done = [];
+try { done = JSON.parse(localStorage.getItem('comprende-setup') || '[]').filter(n => Number.isInteger(n) && n >= 0 && n < 5); } catch {}
+function renderSteps() {
+  document.querySelectorAll('.step').forEach((st, i) => { const d = done.includes(i); st.classList.toggle('done', d); const b = st.querySelector('.tick'); b.textContent = d ? '✓' : i + 1; b.setAttribute('aria-pressed', d); });
+  $('#pbar').style.width = done.length * 20 + '%'; $('#ptext').textContent = `${done.length} of 5 done`;
+}
+$('#steps').addEventListener('click', e => {
+  const b = e.target.closest('.tick'); if (!b) return;
+  const i = +b.dataset.step; done = done.includes(i) ? done.filter(x => x !== i) : [...done, i];
+  try { localStorage.setItem('comprende-setup', JSON.stringify(done)); } catch {}
+  renderSteps();
+  if (done.length === 5) { dockSay('done5', 'cheer'); } else if (done.includes(i)) dockSay('setup', 'happy');
+});
+renderSteps();
+document.querySelectorAll('#setup .copy').forEach(b => { if (!b.innerHTML) b.innerHTML = copyIcon; });
+setHint('Press <b>push</b>, or hit <kbd>P</kbd>');
+say('hi', 'rest');
+armSleep();
+}
+</script>
+</body>
+</html>

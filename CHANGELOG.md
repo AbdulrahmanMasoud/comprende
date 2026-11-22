@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **A website:** [abdulrahmanmasoud.github.io/comprende](https://abdulrahmanmasoud.github.io/comprende/), a single page in `site/`, published to GitHub Pages by `.github/workflows/pages.yml` on every change to `site/` on `main`. Hana, the reviewer, guards a push key you can try, and the page walks a lead through setting up the gate on GitHub. Its numbers link to their studies.
 - **The gate's session-start note no longer sends the agent to a file that may not be there** ([#59](https://github.com/AbdulrahmanMasoud/comprende/issues/59)). The note from a repo's own hook file (Cursor's `.cursor/hooks.json`, Codex's `.codex/hooks.json`) named the skill's `references/ownership-check.md`, which only the plugin installs. Without the plugin, an agent searched the disk for a copy. Now only the plugin's note names that file. The repo's note changes once the repo's copy of the gate is upgraded ([Upgrading the gate](docs/teams.md#upgrading-the-gate)).
 
 ## 0.5.0

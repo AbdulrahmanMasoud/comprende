@@ -4,7 +4,7 @@
 
 <p align="center"><b>Understand the code AI writes for you, and prove it before you merge.</b></p>
 
-<p align="center"><a href="README.ar.md">Arabic</a></p>
+<p align="center"><a href="https://abdulrahmanmasoud.github.io/comprende/">Website</a> · <a href="README.ar.md">Arabic</a></p>
 
 Comprende is a plugin for Claude Code, Cursor, Codex and Antigravity. It does two things:
 
