@@ -277,7 +277,10 @@ tools/e2e-common.mjs  what the end-to-end runs share: the demo repo, the gate's 
 tools/windows-tests.mjs  the tests on Windows, with the known failures in test/windows-known-failures.mjs
 docs/                 the longer docs, the terminal demo (demo.tape, demo.gif), and recordings/cursor/:
                       real Cursor replies, which the READMEs quote
-.github/              CI and release workflows, Dependabot, PR and issue templates
+.github/              CI, release and Pages workflows, Dependabot, PR and issue templates
+site/                 the website: one self-contained index.html, its share image and icons (Pages).
+                      Biome skips it; consistency.test.mjs checks its commands against the docs
+                      Pages needs one repo setting, once: Settings, Pages, Source: GitHub Actions
 .gitattributes        keeps dist/ and the skill's scripts byte for byte (no CRLF on Windows)
 CLAUDE.md             notes for Claude Code when working on this repo (incl. an end-to-end test plan)
 ```

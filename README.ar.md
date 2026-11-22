@@ -6,7 +6,7 @@
 
 <p align="center"><b>افهم الكود اللي الـ AI بيكتبهولك، وأثبت إنك فاهمه قبل الـ merge.</b></p>
 
-<p align="center"><a href="README.md">English</a></p>
+<p align="center"><a href="https://abdulrahmanmasoud.github.io/comprende/">الموقع</a> · <a href="README.md">English</a></p>
 
 **Comprende?** يعني "فاهم؟". وده بالظبط السؤال اللي الأداة دي بتسأله.
 

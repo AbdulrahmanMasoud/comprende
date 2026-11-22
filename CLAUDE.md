@@ -54,8 +54,10 @@ actionlint                        # the GitHub workflows
 - `.github/`:
   - `workflows/ci.yml`: the PR checks
   - `workflows/release.yml`: publishes a GitHub Release when a `v*` tag is pushed
+  - `workflows/pages.yml`: publishes `site/` to GitHub Pages on every change to it on `main`
   - `workflows/windows.yml`: "Windows (experimental)", the tests on Windows, through `tools/windows-tests.mjs`. Not required, and never on PRs (see CONTRIBUTING.md)
   - `dependabot.yml`, the PR template, and the issue templates
+- `site/`: the website, one self-contained `index.html` (its CSS and JS inline, fonts from Google Fonts), plus `og.png` (the share image, 1200x630) and the icons. Claims on it follow the docs, so a user-visible change that touches them updates the page too
 - `tools/release.mjs`: the version check and the release notes, for both workflows
 - `tools/e2e-cursor.mjs`: the end-to-end run in the real Cursor CLI. By hand, since it needs a Cursor login: CONTRIBUTING.md, "Testing in Cursor"
 - `tools/e2e-codex.mjs`: the same in the real Codex CLI: CONTRIBUTING.md, "Testing in Codex"
@@ -87,6 +89,7 @@ actionlint                        # the GitHub workflows
   - `README.md` and `README.ar.md` (Egyptian Arabic, technical terms in English). Keep both short: details go in `docs/`
     - their example conversations are real Claude replies, shortened with "…". If the skill's behavior changes, record new ones (`claude -p` in a scratch repo); never write them by hand. Cursor's come from `tools/e2e-cursor.mjs`, kept in `docs/recordings/cursor/`
   - `docs/teams.md` or `docs/how-it-works.md`, wherever the detail lives
+  - `site/index.html`, if it changes something the website says (install commands, what the gate does, setup steps)
   - `docs/demo.gif`, re-rendered with `vhs docs/demo.tape`, if the gate's output in the demo changes
   - `SECURITY.md`, if it touches the threat model
   - the relevant `skills/comprende/references/*.md`

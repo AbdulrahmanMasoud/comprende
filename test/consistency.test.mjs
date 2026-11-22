@@ -138,6 +138,79 @@ test("both READMEs open with the install commands, then cover both parts", () =>
   assert.ok(read("CONTRIBUTING.md").toString("utf8").includes("docs/demo.tape"), "the demo's source is documented");
 });
 
+// site/ is one hand-written page that Biome skips (see CONTRIBUTING.md, Layout), so
+// these tests keep what it tells users in step with the README and the docs.
+const site = () => read("site/index.html").toString("utf8").replaceAll("&amp;", "&");
+
+test("the website gives the README's install commands", () => {
+  const page = site();
+  const en = read("README.md").toString("utf8");
+  const start = en.indexOf("\n## Install\n");
+  const install = en.slice(start, en.indexOf("\n## ", start + 1));
+  const commands = bashBlocks(install)
+    .flatMap((block) => block.trim().split("\n"))
+    .filter((line) => /^(claude|codex|agy) plugin |^git clone /.test(line));
+  assert.ok(commands.length >= 6, "the README's install section changed shape");
+  for (const command of commands) assert.ok(page.includes(command), `site/index.html no longer gives: ${command}`);
+});
+
+test("the website's setup steps use the gate's real commands, files and settings", () => {
+  const page = site();
+  const docs = read("docs/teams.md").toString("utf8");
+  const shared = [
+    "Enable the ownership gate in this repo.",
+    "install --repo . --owner",
+    "install --upgrade --repo .",
+    "install-hooks",
+    "protect",
+    "--apply",
+    "--approvals",
+    "--no-code-owners",
+    "ownership-check.yml",
+    "Ownership check",
+    "skip-ownership-check",
+    "min_summary_chars",
+    "small_change_lines",
+  ];
+  for (const text of shared) {
+    assert.ok(page.includes(text), `site/index.html: ${text}`);
+    assert.ok(docs.includes(text), `docs/teams.md: ${text}`);
+  }
+});
+
+test("the website's config builder starts from the documented defaults", () => {
+  const docs = read("docs/teams.md").toString("utf8");
+  const block = /## Settings[\s\S]*?```json\n([\s\S]*?)```/.exec(docs);
+  assert.ok(block, "docs/teams.md has a Settings section with a JSON block");
+  const defaults = JSON.parse(block[1]).ownership_check;
+  const builder = /const cfg = (\{.*\});/.exec(site());
+  assert.ok(builder, "site/index.html has its config builder");
+  const start = Function(`return ${builder[1]}`)();
+  assert.equal(start.mode, defaults.mode);
+  assert.deepEqual(start.sensitive, defaults.sensitive);
+  assert.equal(start.min, defaults.min_summary_chars);
+  assert.equal(start.small, defaults.small_change_lines);
+});
+
+test("the website's links into the repo point at files and headings that exist", () => {
+  const links = [...site().matchAll(/github\.com\/AbdulrahmanMasoud\/comprende\/blob\/main\/([^"#]+)(?:#([^"]+))?"/g)];
+  assert.ok(links.length > 0, "site/index.html links into the repo");
+  for (const [, file, heading] of links) {
+    assert.ok(existsSync(join(REPO, file)), `site/index.html links to ${file}`);
+    if (heading) assert.ok(headingAnchors(file).includes(heading), `${file} has no heading #${heading}`);
+  }
+});
+
+test("the website's share image and icons are in site/", () => {
+  const page = site();
+  assert.match(page, /property="og:image" content="https:\/\/abdulrahmanmasoud\.github\.io\/comprende\/og\.png"/);
+  const images = [
+    ...page.matchAll(/(?:href|content)="(?:https:\/\/abdulrahmanmasoud\.github\.io\/comprende\/)?([\w-]+\.png)"/g),
+  ];
+  assert.ok(images.length >= 3, "the share image, the favicon and the touch icon");
+  for (const [, file] of images) assert.ok(existsSync(join(REPO, "site", file)), `site/${file}`);
+});
+
 test("the README's 'try it' script makes a gated repo where an unchecked push is blocked", (t) => {
   const en = read("README.md").toString("utf8");
   const [script] = bashBlocks(en.slice(en.indexOf("\n## Try it in 5 minutes\n")));
